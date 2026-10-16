@@ -75,6 +75,8 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
   const [lastChange, setLastChange] = useState<LastChange | null>(null);
   const [saveState, setSaveState] = useState<SaveState>({ status: 'idle' });
   const savedRevision = useRef<number | null>(null);
+  // Set once the user starts, opens or changes a build, so a slow initial load never overwrites it.
+  const touched = useRef(false);
   const catalogById = catalog.byId;
   const snapshotId = catalog.data?.id;
 
@@ -86,12 +88,12 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
     const fresh = () => createDraft(createBuild({ catalogSnapshotId: snapshotId }));
     (id ? builds.get(id) : Promise.reject(new Error('none')))
       .then((stored) => {
-        if (cancelled) return;
+        if (cancelled || touched.current) return;
         setDraft(stored);
         savedRevision.current = stored.build.revision;
       })
       .catch(() => {
-        if (cancelled) return;
+        if (cancelled || touched.current) return;
         setDraft(fresh());
         savedRevision.current = null;
       })
@@ -160,9 +162,11 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
         build,
         template ? `Created from "${template.name}"` : 'Created build',
       );
+      touched.current = true;
       savedRevision.current = null;
       setLastChange(null);
       setDraft(next);
+      setReady(true);
       void persist(next);
     },
     [persist, snapshotId],
@@ -171,6 +175,7 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
   const open = useCallback<BuilderApi['open']>(
     async (buildId) => {
       const stored = await builds.get(buildId);
+      touched.current = true;
       savedRevision.current = stored.build.revision;
       setLastChange(null);
       setDraft(stored);

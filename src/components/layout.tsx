@@ -257,7 +257,7 @@ export function Layout() {
       </a>
       <DemoBanner />
       <Header />
-      <main id="main" className="w-full flex-1">
+      <main id="main" className="min-h-screen w-full flex-1">
         <Outlet />
       </main>
       <Footer />
