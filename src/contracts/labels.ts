@@ -61,3 +61,19 @@ export const KIND_LABELS: Record<ComponentKind, string> = {
 /** URL slug for a kind (ids use underscores; URLs use hyphens). */
 export const kindSlug = (kind: ComponentKind): string => kind.replace(/_/g, '-');
 export const kindFromSlug = (slug: string): string => slug.replace(/-/g, '_');
+
+/** Lower-cases a label for use mid-sentence while keeping acronyms (AI, MCP, RAG) intact. */
+export const labelInSentence = (label: string): string =>
+  label
+    .split(' ')
+    .map((w) => (/^[A-Z]{2,}/.test(w) ? w : w.toLowerCase()))
+    .join(' ');
+
+/** "a"/"an" + label in sentence case. */
+export const withArticle = (label: string): string => {
+  // Acronyms are read letter by letter ("an MCP server"), words by their first vowel ("an embedding").
+  const vowelSound = /^[A-Z]{2,}/.test(label)
+    ? /^[AEFHILMNORSX]/.test(label)
+    : /^[aeiou]/i.test(label);
+  return `${vowelSound ? 'an' : 'a'} ${labelInSentence(label)}`;
+};

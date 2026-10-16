@@ -1,5 +1,5 @@
 import type { ContractName, ContractTypes } from '../../contracts';
-import { validateContract } from '../../contracts';
+import { validateContract, validatorsReady } from '../../contracts';
 import { DataError } from '../errors';
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -87,6 +87,7 @@ export class ContractHttpClient {
     headers?: Record<string, string>,
   ): Promise<{ value: ContractTypes[N]; response: Response }> {
     const { data, response } = await this.request(method, path, body, headers);
+    await validatorsReady;
     const result = validateContract(name, data);
     if (!result.ok) {
       throw new DataError('malformed', result.summary, {

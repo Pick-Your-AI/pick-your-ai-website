@@ -13,7 +13,7 @@ import type {
   Pricebook,
   Ruleset,
 } from '../../contracts';
-import { BASELINE_GRAPH, BASELINE_RULESET, assertContract } from '../../contracts';
+import { BASELINE_GRAPH, BASELINE_RULESET, assertContract, validatorsReady } from '../../contracts';
 import { estimateCost } from '../../domain/cost';
 import { evaluateBuild } from '../../domain/evaluator';
 import { DataError } from '../errors';
@@ -44,23 +44,28 @@ export interface FixtureOptions {
 const delay = (ms: number) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve());
 
 export class FixtureCatalogRepository implements CatalogRepository {
-  private readonly snapshot: CatalogSnapshot;
-  private readonly graph: DependencyGraph;
-  private readonly ruleset: Ruleset;
+  private readonly data: Promise<{
+    snapshot: CatalogSnapshot;
+    graph: DependencyGraph;
+    ruleset: Ruleset;
+  }>;
   private readonly latency: number;
   constructor(opts: FixtureOptions = {}) {
     // Validate fixtures exactly as live responses would be validated.
-    this.snapshot = assertContract('CatalogSnapshot', opts.catalog ?? DEMO_CATALOG);
-    this.graph = assertContract('DependencyGraph', opts.graph ?? BASELINE_GRAPH);
-    this.ruleset = assertContract('Ruleset', opts.ruleset ?? BASELINE_RULESET);
+    this.data = validatorsReady.then(() => ({
+      snapshot: assertContract('CatalogSnapshot', opts.catalog ?? DEMO_CATALOG),
+      graph: assertContract('DependencyGraph', opts.graph ?? BASELINE_GRAPH),
+      ruleset: assertContract('Ruleset', opts.ruleset ?? BASELINE_RULESET),
+    }));
     this.latency = opts.latencyMs ?? 0;
   }
   async getSnapshot(snapshotId?: string) {
     await delay(this.latency);
-    if (snapshotId && snapshotId !== this.snapshot.id) {
+    const { snapshot } = await this.data;
+    if (snapshotId && snapshotId !== snapshot.id) {
       throw new DataError('not_found', `Catalog snapshot ${snapshotId} is not available.`);
     }
-    return this.snapshot;
+    return snapshot;
   }
   async listItems(kind?: ComponentKind) {
     const s = await this.getSnapshot();
@@ -73,11 +78,11 @@ export class FixtureCatalogRepository implements CatalogRepository {
   }
   async getDependencyGraph() {
     await delay(this.latency);
-    return this.graph;
+    return (await this.data).graph;
   }
   async getRuleset() {
     await delay(this.latency);
-    return this.ruleset;
+    return (await this.data).ruleset;
   }
 }
 
@@ -121,18 +126,21 @@ export class LocalCompatibilityEvaluator implements CompatibilityEvaluator {
 
 export class FixturePricingProvider implements PricingProvider {
   private readonly catalog: CatalogRepository;
-  private readonly pricebook: Pricebook;
+  private readonly pricebook: Promise<Pricebook>;
   private readonly now: () => string;
   constructor(catalog: CatalogRepository, opts: FixtureOptions = {}) {
     this.catalog = catalog;
-    this.pricebook = assertContract('Pricebook', opts.pricebook ?? DEMO_PRICEBOOK);
+    this.pricebook = validatorsReady.then(() =>
+      assertContract('Pricebook', opts.pricebook ?? DEMO_PRICEBOOK),
+    );
     this.now = opts.now ?? (() => new Date().toISOString());
   }
   async getPricebook(pricebookId?: string) {
-    if (pricebookId && pricebookId !== this.pricebook.id) {
+    const pricebook = await this.pricebook;
+    if (pricebookId && pricebookId !== pricebook.id) {
       throw new DataError('not_found', `Pricebook ${pricebookId} is not available.`);
     }
-    return this.pricebook;
+    return pricebook;
   }
   async estimate(build: BuildSnapshot, periodDays = 30): Promise<CostEstimate> {
     const snapshot = await this.catalog.getSnapshot();

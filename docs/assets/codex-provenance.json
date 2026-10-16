@@ -1,0 +1,41 @@
+[
+  {
+    "file": "hero.png",
+    "prompt": "Use case: stylized-concept. Create an ORIGINAL raster technical illustration for PickYour.AI, an engineering tool for assembling compatible AI stacks part by part like a PC parts list. Do not depict the product name. Shared visual identity: clean modern flat-to-soft-isometric illustration, calm professional serious decision-support tool, restrained geometry, subtle soft shadows, generous negative space, subtle grid. Limited palette: deep teal #0f766e, mid teal #14b8a6, slate greys #0f172a #334155 #94a3b8 #e2e8f0, with a single warm amber accent #f59e0b. Absolutely NO text, letters, numbers, logos, watermarks, pseudo-writing, people, robots, glowing brains or sci-fi cliches. Do not imitate any existing brand, logo or website.\nAsset: hero.png. Wide 16:9 landscape, requested 1536x864 pixels. Plain #f8fafc light background suitable for a light webpage. Composition weighted to the RIGHT with approximately the left 45 percent empty for webpage copy (do not draw copy). Show exactly SEVEN clearly separated horizontal layered platforms stacked vertically like modular trays in a shallow isometric exploded stack. The seven trays conceptually represent requirements, models, infrastructure, knowledge, agents, training and operations, without labels. Each tray holds a few distinct simple modular component blocks: chips, database cylinders, small cubes and connector plugs. Thin tidy connector lines link blocks across different layers as a dependency graph, with exactly one amber connector highlighted. Keep all seven trays visible and countable. Subtle grid confined to the illustration area. Clean edges and ample margins.",
+    "tool": "image_gen.imagegen",
+    "model": "GPT Image (built-in; exact model version not reported by tool)",
+    "generation_time": "2026-10-16T15:19:19.75Z",
+    "generation_started_at": "2026-10-16T15:18:55.566Z",
+    "generation_time_basis": "UTC tool-call completion time",
+    "output_size": {
+      "width": 1672,
+      "height": 941
+    }
+  },
+  {
+    "file": "builder-empty.png",
+    "prompt": "Use case: stylized-concept. Create an ORIGINAL raster technical illustration for PickYour.AI, an engineering tool for assembling compatible AI stacks part by part like a PC parts list. Do not depict the product name. Shared visual identity: clean modern flat-to-soft-isometric illustration, calm professional serious decision-support tool, restrained geometry, subtle soft shadows, generous negative space, subtle grid. Limited palette: deep teal #0f766e, mid teal #14b8a6, slate greys #0f172a #334155 #94a3b8 #e2e8f0, with a single warm amber accent #f59e0b. Absolutely NO text, letters, numbers, logos, watermarks, pseudo-writing, people, robots, glowing brains or sci-fi cliches. Do not imitate any existing brand, logo or website.\nAsset: builder-empty.png. Square 1024x1024 pixels. Light #f8fafc background. A single empty modular tray or slot board seen in soft isometric perspective, centered with generous margins. Dashed outlines mark empty sockets on the board. Exactly one teal component block is slightly raised and aligned directly above a matching socket, visibly in the process of being slotted in to suggest starting a build. Keep remaining sockets empty. Tiny restrained amber alignment accent, subtle grid under board. Simple readable forms, crisp quiet illustration.",
+    "tool": "image_gen.imagegen",
+    "model": "GPT Image (built-in; exact model version not reported by tool)",
+    "generation_time": "2026-10-16T15:19:44.077Z",
+    "generation_started_at": "2026-10-16T15:19:22.706Z",
+    "generation_time_basis": "UTC tool-call completion time",
+    "output_size": {
+      "width": 1254,
+      "height": 1254
+    }
+  },
+  {
+    "file": "og-card.png",
+    "prompt": "Use case: stylized-concept. Create an ORIGINAL raster technical illustration for PickYour.AI, an engineering tool for assembling compatible AI stacks part by part like a PC parts list. Do not depict the product name. Shared visual identity: clean modern flat-to-soft-isometric illustration, calm professional serious decision-support tool, restrained geometry, subtle soft shadows, generous negative space, subtle grid. Limited palette: deep teal #0f766e, mid teal #14b8a6, slate greys #0f172a #334155 #94a3b8 #e2e8f0, with a single warm amber accent #f59e0b. Absolutely NO text, letters, numbers, logos, watermarks, pseudo-writing, people, robots, glowing brains or sci-fi cliches. Do not imitate any existing brand, logo or website.\nAsset: og-card.png. Social preview card, requested 1200x630 pixels or nearest supported landscape dimensions. Solid deep teal #0f766e background. Center a simplified bolder version of the seven-layer modular-tray motif, with clear separated slate light-grey horizontal isometric trays, a few chunky teal and slate component blocks, database cylinders and chips. A minimal dependency connector runs between layers with one amber highlighted segment. Strong thumbnail legibility, restrained soft shading, generous negative space surrounding the centered motif, very subtle technical grid in the background. No typography of any kind.",
+    "tool": "image_gen.imagegen",
+    "model": "GPT Image (built-in; exact model version not reported by tool)",
+    "generation_time": "2026-10-16T15:20:07.663Z",
+    "generation_started_at": "2026-10-16T15:19:47.067Z",
+    "generation_time_basis": "UTC tool-call completion time",
+    "output_size": {
+      "width": 1730,
+      "height": 909
+    }
+  }
+]

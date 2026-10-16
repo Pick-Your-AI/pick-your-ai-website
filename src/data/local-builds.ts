@@ -4,7 +4,7 @@
  * not silently dropped or "repaired".
  */
 import type { BuildSnapshot } from '../contracts';
-import { validateContract } from '../contracts';
+import { validateContract, validatorsReady } from '../contracts';
 import { DataError } from './errors';
 import type { BuildRepository, SavedBuildSummary, StoredBuild } from './types';
 
@@ -117,6 +117,7 @@ export class LocalBuildRepository implements BuildRepository {
   }
 
   async list(): Promise<SavedBuildSummary[]> {
+    await validatorsReady;
     const out: SavedBuildSummary[] = [];
     for (const id of this.index()) {
       const raw = this.storage.getItem(PREFIX + id);
@@ -144,12 +145,14 @@ export class LocalBuildRepository implements BuildRepository {
   }
 
   async get(buildId: string): Promise<StoredBuild> {
+    await validatorsReady;
     const raw = this.storage.getItem(PREFIX + buildId);
     if (!raw) throw new DataError('not_found', `No saved build ${buildId} in this browser.`);
     return parseStoredBuild(raw);
   }
 
   async save(stored: StoredBuild, expectedRevision: number | null): Promise<StoredBuild> {
+    await validatorsReady;
     const id = stored.build.id;
     const raw = this.storage.getItem(PREFIX + id);
     if (raw && expectedRevision !== null) {

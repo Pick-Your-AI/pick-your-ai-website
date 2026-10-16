@@ -2,13 +2,125 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * PickYour.AI design tokens. Brand: deep teal + slate with a single amber accent.
+ * Status colours are reserved for compatibility outcomes and always paired with an icon and a word.
+ */
 @theme {
   --font-sans: ui-sans-serif, system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace;
+
+  --color-brand-50: #f0fdfa;
+  --color-brand-100: #ccfbf1;
+  --color-brand-200: #99f6e4;
+  --color-brand-300: #5eead4;
+  --color-brand-400: #2dd4bf;
+  --color-brand-500: #14b8a6;
+  --color-brand-600: #0d9488;
+  --color-brand-700: #0f766e;
+  --color-brand-800: #115e59;
+  --color-brand-900: #134e4a;
+  --color-brand-950: #042f2e;
+  --color-accent-400: #fbbf24;
+  --color-accent-500: #f59e0b;
+  --color-accent-600: #d97706;
 }
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
+}
+.dark {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
+}
+
+/* Visible, consistent focus indicator (WCAG 2.4.7 / 2.4.11). */
+:focus-visible {
+  outline: 3px solid var(--color-brand-500);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Headings focused programmatically after navigation need no ring (they are not interactive). */
+[tabindex='-1']:focus {
+  outline: none;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@utility btn {
+  @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+@layer components {
+  .card {
+    @apply rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900;
+  }
+  .btn-primary {
+    @apply btn bg-brand-700 text-white hover:bg-brand-800 dark:bg-brand-600 dark:text-slate-950 dark:hover:bg-brand-500;
+  }
+  .btn-secondary {
+    @apply btn border border-slate-300 bg-white text-slate-800 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800;
+  }
+  .btn-ghost {
+    @apply btn text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800;
+  }
+  .btn-danger {
+    @apply btn border border-red-300 bg-white text-red-800 hover:bg-red-50 dark:border-red-800 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-950;
+  }
+  .btn-sm {
+    @apply min-h-8 px-2 py-1 text-xs;
+  }
+  .link {
+    @apply font-medium text-brand-800 underline decoration-brand-300 underline-offset-2 hover:decoration-brand-700 dark:text-brand-300 dark:decoration-brand-700 dark:hover:decoration-brand-300;
+  }
+  .input {
+    @apply min-h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-400;
+  }
+  .label {
+    @apply mb-1 block text-sm font-medium text-slate-800 dark:text-slate-200;
+  }
+  .hint {
+    @apply mt-1 text-xs text-slate-600 dark:text-slate-400;
+  }
+  .eyebrow {
+    @apply text-xs font-semibold tracking-wide text-brand-800 uppercase dark:text-brand-300;
+  }
+  .muted {
+    @apply text-slate-600 dark:text-slate-400;
+  }
+  .prose-doc {
+    @apply max-w-3xl space-y-4 leading-relaxed;
+  }
+  .prose-doc h2 {
+    @apply mt-8 text-xl font-semibold;
+  }
+  .prose-doc h3 {
+    @apply mt-6 text-lg font-semibold;
+  }
+  .prose-doc ul {
+    @apply list-disc space-y-1 pl-6;
+  }
+  .prose-doc ol {
+    @apply list-decimal space-y-1 pl-6;
+  }
+  .prose-doc code {
+    @apply rounded bg-slate-100 px-1 py-0.5 font-mono text-sm dark:bg-slate-800;
+  }
+  .data-table {
+    @apply w-full border-collapse text-left text-sm;
+  }
+  .data-table th {
+    @apply border-b border-slate-200 px-3 py-2 text-xs font-semibold tracking-wide text-slate-600 uppercase dark:border-slate-700 dark:text-slate-400;
+  }
+  .data-table td {
+    @apply border-b border-slate-100 px-3 py-2 align-top dark:border-slate-800;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -16,7 +128,14 @@
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
   }
 }

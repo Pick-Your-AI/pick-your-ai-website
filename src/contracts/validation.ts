@@ -12,7 +12,6 @@ import type {
   Selection,
 } from './generated/contract-types';
 import type { ContractValidateFunction, ContractValidationError } from './generated/validators';
-import * as validators from './generated/validators.js';
 
 export interface ContractTypes {
   BuildSnapshot: BuildSnapshot;
@@ -31,19 +30,32 @@ export interface ContractTypes {
 export type ContractName = keyof ContractTypes;
 export type { ContractValidationError };
 
-const VALIDATORS: Record<ContractName, ContractValidateFunction> = {
-  BuildSnapshot: validators.validateBuildSnapshot,
-  CatalogItem: validators.validateCatalogItem,
-  CatalogSnapshot: validators.validateCatalogSnapshot,
-  CostEstimate: validators.validateCostEstimate,
-  DependencyGraph: validators.validateDependencyGraph,
-  DeploymentManifest: validators.validateDeploymentManifest,
-  EvaluationReport: validators.validateEvaluationReport,
-  Pricebook: validators.validatePricebook,
-  ResourceEstimate: validators.validateResourceEstimate,
-  Ruleset: validators.validateRuleset,
-  Selection: validators.validateSelection,
-};
+type ValidatorModule = typeof import('./generated/validators.js');
+
+let VALIDATORS: Record<ContractName, ContractValidateFunction> | null = null;
+
+/*
+ * The generated validators are large (~100 kB gzipped), so they load as a separate chunk that does
+ * not block first paint. Providers await `validatorsReady` before validating; synchronous callers
+ * get an explicit "still loading" failure rather than an unvalidated pass.
+ */
+export const validatorsReady: Promise<void> = import('./generated/validators.js').then(
+  (v: ValidatorModule) => {
+    VALIDATORS = {
+      BuildSnapshot: v.validateBuildSnapshot,
+      CatalogItem: v.validateCatalogItem,
+      CatalogSnapshot: v.validateCatalogSnapshot,
+      CostEstimate: v.validateCostEstimate,
+      DependencyGraph: v.validateDependencyGraph,
+      DeploymentManifest: v.validateDeploymentManifest,
+      EvaluationReport: v.validateEvaluationReport,
+      Pricebook: v.validatePricebook,
+      ResourceEstimate: v.validateResourceEstimate,
+      Ruleset: v.validateRuleset,
+      Selection: v.validateSelection,
+    };
+  },
+);
 
 export type ValidationResult<T> =
   { ok: true; value: T } | { ok: false; errors: ContractValidationError[]; summary: string };
@@ -53,6 +65,13 @@ export function validateContract<N extends ContractName>(
   name: N,
   data: unknown,
 ): ValidationResult<ContractTypes[N]> {
+  if (!VALIDATORS) {
+    return {
+      ok: false,
+      errors: [],
+      summary: 'Contract validators are still loading; try again in a moment.',
+    };
+  }
   const validate = VALIDATORS[name];
   if (validate(data)) return { ok: true, value: data as ContractTypes[N] };
   const errors = validate.errors ?? [];

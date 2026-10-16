@@ -1,0 +1,11 @@
+Use your imagegen skill with the built-in image_gen tool (GPT Image) to create three ORIGINAL raster assets for the website "PickYour.AI", an engineering tool for assembling compatible AI stacks part by part (like a PC parts list, but for AI systems). Do not imitate any existing brand, logo or website, include NO text, letters, numbers, logos or watermarks in any image.
+
+Shared visual identity: clean, modern, flat-to-soft-isometric technical illustration; calm and professional (a serious decision-support tool, not a flashy AI poster); limited palette of deep teal (#0f766e), mid teal (#14b8a6), slate greys (#0f172a, #334155, #94a3b8, #e2e8f0) with a single warm amber accent (#f59e0b); generous negative space; subtle grid; no people, no robots, no glowing brains, no sci-fi clichés.
+
+1. hero.png — wide 16:9 landscape (e.g. 1536x864). Seven horizontal layered platforms stacked like modular trays (representing tiers: requirements, models, infrastructure, knowledge, agents, training, operations). Each tray holds a few distinct, simple modular component blocks (chips, cylinders for databases, small cubes, connector plugs). Thin connector lines link blocks across different layers to show a dependency graph, with one amber connector highlighted. Background must be plain or transparent-friendly light (#f8fafc) so it sits on a light page; keep the composition weighted to the right with empty space on the left.
+
+2. builder-empty.png — square 1024x1024. A single empty modular tray/slot board with dashed outlined empty sockets and one teal component block being slotted in, suggesting "start your build". Light background #f8fafc.
+
+3. og-card.png — 1200x630 (or nearest supported landscape size). A simplified, bolder version of the layered-tray motif centred on a deep teal (#0f766e) background with slate and amber accents, suitable as a social preview card. No text.
+
+After generating, copy the final selected images into the current working directory with exactly those file names (hero.png, builder-empty.png, og-card.png). Then write a file provenance.json in the current directory listing for each file: the exact prompt you sent to image_gen, the tool/model name as reported to you, the output size, and the generation time (ISO-8601). Do not create or modify any other files.
