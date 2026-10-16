@@ -11,3 +11,4 @@ blob-report/
 .DS_Store
 *.tsbuildinfo
 .vite/
+_*.mjs
