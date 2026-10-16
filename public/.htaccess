@@ -1,0 +1,73 @@
+# PickYour.AI — Apache config for the static SPA (owned by operations, see docs/operations/).
+# Served from the cPanel addon docroot public_html/pickyour.ai behind Cloudflare (Full strict).
+# Requires mod_rewrite, mod_headers, mod_expires; all verified present on the host 2026-10-16.
+
+Options -Indexes -MultiViews
+DirectoryIndex index.html
+AddDefaultCharset utf-8
+AddType application/manifest+json .webmanifest
+AddType image/svg+xml .svg
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # cPanel/AutoSSL domain validation and cgi-bin are never redirected or rewritten.
+  RewriteRule ^(\.well-known|cgi-bin)(/|$) - [L]
+
+  # Block other dotfiles (e.g. .htaccess, .git) outright.
+  RewriteRule (^|/)\. - [F,L]
+
+  # Canonical host: www → apex (301, keeps path and query).
+  RewriteCond %{HTTP_HOST} ^www\.pickyour\.ai$ [NC]
+  RewriteRule ^ https://pickyour.ai%{REQUEST_URI} [R=301,L,NE]
+
+  # HTTPS only. Cloudflare already redirects at the edge and connects to the origin over TLS;
+  # this covers direct-to-origin plain HTTP. X-Forwarded-Proto guards against a redirect loop.
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !=https
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L,NE]
+
+  # SPA fallback: anything that is not a real file/dir and does not look like a static file
+  # is served by index.html. Hashed assets, version.json and any path with a file extension
+  # return a real 404 when missing, so stale chunk requests never receive HTML.
+  RewriteCond %{REQUEST_URI} !^/assets/
+  RewriteCond %{REQUEST_URI} !^/version\.json$
+  RewriteCond %{REQUEST_URI} !\.[A-Za-z0-9]{1,8}$
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+# Cache policy: content-hashed /assets/* are immutable; everything else (index.html, SPA
+# routes, version.json, favicon, theme-init.js) must revalidate on every request so a new
+# deploy is picked up immediately. Cloudflare honours these origin headers.
+<IfModule mod_expires.c>
+  ExpiresActive Off
+</IfModule>
+<IfModule mod_headers.c>
+  <If "%{REQUEST_URI} =~ m#^/assets/#">
+    Header always set Cache-Control "public, max-age=31536000, immutable"
+  </If>
+  <Else>
+    Header always set Cache-Control "no-cache, must-revalidate"
+  </Else>
+
+  # Security headers. CSP agreed with the site workstream in HANDOFF.md (no inline scripts;
+  # theme-init.js is an external file). Request changes through HANDOFF.md.
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests"
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "DENY"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "accelerometer=(), autoplay=(), camera=(), display-capture=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), usb=(), browsing-topics=()"
+  Header always set Cross-Origin-Opener-Policy "same-origin"
+  Header always set Cross-Origin-Resource-Policy "same-origin"
+  # HTTPS verified on pickyour.ai and www.pickyour.ai (edge and origin) on 2026-10-16.
+  # No includeSubDomains/preload: other subdomains (cPanel, mail) are not under our control.
+  Header always set Strict-Transport-Security "max-age=31536000"
+  Header unset X-Powered-By
+</IfModule>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/plain application/javascript application/json image/svg+xml application/manifest+json
+</IfModule>

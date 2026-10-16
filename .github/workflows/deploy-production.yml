@@ -1,0 +1,179 @@
+name: Deploy production
+
+# Push to main → full CI (reused via workflow_call) → staged upload to GoDaddy → validate →
+# activate → verify https://pickyour.ai/version.json through Cloudflare → restore on failure.
+# workflow_dispatch: redeploy the current main commit, or roll back with rollback_to=<sha>.
+# Runbook: docs/operations/deployment-runbook.md
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      rollback_to:
+        description: 'Full commit SHA of a retained release to re-activate (leave empty to redeploy main)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: CI
+    if: inputs.rollback_to == '' || inputs.rollback_to == null
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    name: deploy
+    needs: ci
+    if: needs.ci.result == 'success' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL }}
+    concurrency:
+      group: production
+      cancel-in-progress: false
+    env:
+      SHA: ${{ github.sha }}
+      PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download the site-dist artifact built by CI for this commit
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site-dist
+          path: dist/
+
+      - name: Check the artifact is the exact commit
+        run: |
+          test -s dist/index.html && test -s dist/.htaccess && test -d dist/assets
+          built="$(python3 -c 'import json; print(json.load(open("dist/version.json"))["commit"])')"
+          echo "artifact commit: $built"
+          test "$built" = "$SHA"
+
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.GODADDY_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.GODADDY_SSH_KNOWN_HOSTS }}
+          HOST: ${{ vars.GODADDY_HOST }}
+          PORT: ${{ vars.GODADDY_PORT }}
+          USER_NAME: ${{ vars.GODADDY_USERNAME }}
+        run: bash scripts/deploy/setup-ssh.sh
+
+      - name: Upload release to ~/pickyour-releases/<sha>
+        run: |
+          staging="$(ssh pyai-prod 'bash -s' -- prepare "$SHA" < scripts/deploy/remote-release.sh | tail -n 1)"
+          [[ "$staging" == */pickyour-releases/.incoming-"$SHA" ]]
+          rsync -rlptz --delete --chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r -e ssh dist/ "pyai-prod:$staging/"
+          ssh pyai-prod 'bash -s' -- finalize "$SHA" < scripts/deploy/remote-release.sh
+
+      - name: Validate release on host
+        run: ssh pyai-prod 'bash -s' -- validate "$SHA" < scripts/deploy/remote-release.sh
+
+      - name: Activate
+        id: activate
+        run: ssh pyai-prod 'bash -s' -- activate "$SHA" < scripts/deploy/remote-release.sh
+
+      - name: Verify live site through Cloudflare
+        id: verify
+        run: bash scripts/deploy/verify-live.sh "$SHA" "$PRODUCTION_URL"
+
+      - name: Restore previous release on failure
+        if: failure() && (steps.activate.outcome == 'success' || steps.activate.outcome == 'failure')
+        run: |
+          ssh pyai-prod 'bash -s' -- restore < scripts/deploy/remote-release.sh
+          ssh pyai-prod 'bash -s' -- status < scripts/deploy/remote-release.sh
+
+      - name: Prune old releases (keep 5)
+        if: success()
+        run: ssh pyai-prod 'bash -s' -- prune 5 < scripts/deploy/remote-release.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Production deploy"
+            echo "- Commit: \`$SHA\`"
+            echo "- URL: $PRODUCTION_URL"
+            echo "- Activate: ${{ steps.activate.outcome }} · Verify: ${{ steps.verify.outcome }}"
+            echo '```'
+            ssh pyai-prod 'bash -s' -- status < scripts/deploy/remote-release.sh 2>&1 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove SSH key
+        if: always()
+        run: rm -f ~/.ssh/pyai_deploy_key
+
+  rollback:
+    name: rollback
+    if: github.event_name == 'workflow_dispatch' && inputs.rollback_to != '' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL }}
+    concurrency:
+      group: production
+      cancel-in-progress: false
+    env:
+      TARGET: ${{ inputs.rollback_to }}
+      PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
+    steps:
+      - name: Check input
+        run: |
+          [[ "$TARGET" =~ ^[0-9a-f]{40}$ ]] || { echo "rollback_to must be a full 40-char lowercase sha"; exit 1; }
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.GODADDY_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.GODADDY_SSH_KNOWN_HOSTS }}
+          HOST: ${{ vars.GODADDY_HOST }}
+          PORT: ${{ vars.GODADDY_PORT }}
+          USER_NAME: ${{ vars.GODADDY_USERNAME }}
+        run: bash scripts/deploy/setup-ssh.sh
+
+      - name: Validate retained release
+        run: |
+          ssh pyai-prod 'bash -s' -- status < scripts/deploy/remote-release.sh
+          ssh pyai-prod 'bash -s' -- validate "$TARGET" < scripts/deploy/remote-release.sh
+
+      - name: Activate rollback target
+        id: activate
+        run: ssh pyai-prod 'bash -s' -- activate "$TARGET" < scripts/deploy/remote-release.sh
+
+      - name: Verify live site through Cloudflare
+        id: verify
+        run: bash scripts/deploy/verify-live.sh "$TARGET" "$PRODUCTION_URL"
+
+      - name: Restore on failure
+        if: failure() && (steps.activate.outcome == 'success' || steps.activate.outcome == 'failure')
+        run: ssh pyai-prod 'bash -s' -- restore < scripts/deploy/remote-release.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Production rollback"
+            echo "- Target: \`$TARGET\`"
+            echo "- Activate: ${{ steps.activate.outcome }} · Verify: ${{ steps.verify.outcome }}"
+            echo '```'
+            ssh pyai-prod 'bash -s' -- status < scripts/deploy/remote-release.sh 2>&1 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove SSH key
+        if: always()
+        run: rm -f ~/.ssh/pyai_deploy_key
