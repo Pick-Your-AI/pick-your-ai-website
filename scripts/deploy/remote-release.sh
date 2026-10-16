@@ -41,15 +41,17 @@ mkdir -p "$STATE" "$BACKUPS"
 exec 9>"$LOCK"
 flock -w 300 9 || die "timed out waiting for release lock"
 
-excludes() { for p in "${PRESERVE[@]}"; do printf -- '--exclude=/%s\n' "$p"; done; }
-
 sync_into_docroot() {
-  local src="$1"
+  local src="$1" mode ex=() p
   # --delay-updates stages every changed file and renames them all at the end, so the
   # docroot flips from old to new in one short burst; --delete-delay removes stale files
   # afterwards. Excluded paths (.well-known, cgi-bin) are never modified or deleted.
-  mapfile -t ex < <(excludes)
-  rsync -a --delete-delay --delay-updates "${ex[@]}" "$src/" "$DOCROOT/"
+  # -rlt only (no -p/-g/-o): never copy the source dir's mode/group onto the docroot itself.
+  # No process substitution here: CloudLinux CageFS has no /dev/fd.
+  for p in "${PRESERVE[@]}"; do ex+=("--exclude=/$p"); done
+  mode="$(stat -c %a "$DOCROOT")"
+  rsync -rlt --delete-delay --delay-updates "${ex[@]}" "$src/" "$DOCROOT/"
+  [ "$(stat -c %a "$DOCROOT")" = "$mode" ] || chmod "$mode" "$DOCROOT"
 }
 
 backup_docroot() {
@@ -130,7 +132,8 @@ case "$cmd" in
     else
       # First-ever deploy failed: return the docroot to its pre-deploy state
       # (only the preserved .well-known and cgi-bin).
-      empty="$(mktemp -d)"
+      empty="$RELEASES/.empty"
+      rm -rf "$empty"; mkdir -m 755 "$empty"
       sync_into_docroot "$empty"
       rmdir "$empty"
       : >"$STATE/current"
