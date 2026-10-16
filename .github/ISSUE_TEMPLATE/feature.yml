@@ -1,0 +1,35 @@
+name: Implementation task
+description: A website feature or task that traces to research or product requirements.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+    validations:
+      required: true
+  - type: input
+    id: research
+    attributes:
+      label: Research issue(s)
+      description: Link the authoritative research issue(s); do not duplicate them here.
+      placeholder: Pick-Your-AI/pick-your-ai-research#…
+  - type: textarea
+    id: contracts
+    attributes:
+      label: Contract dependencies
+      description: Schemas, baseline graph/ruleset entries, or API endpoints consumed.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: Tests / validation evidence
+  - type: textarea
+    id: unknowns
+    attributes:
+      label: Remaining unknowns

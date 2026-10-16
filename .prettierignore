@@ -1,0 +1,11 @@
+dist/
+coverage/
+node_modules/
+package-lock.json
+contracts/v1/
+src/contracts/generated/
+playwright-report/
+test-results/
+public/.htaccess
+docs/operations/
+docs/research/pcpartpicker-*

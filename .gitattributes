@@ -1,0 +1,6 @@
+* text=auto eol=lf
+# Vendored contract files must stay byte-identical to upstream so SHA-256 verification works.
+contracts/** -text
+*.webp binary
+*.avif binary
+*.png binary

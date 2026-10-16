@@ -1,0 +1,27 @@
+name: Bug report
+description: Something on the website does not work as described.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Steps to reproduce, expected and actual behaviour.
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: Build SHA
+      description: Shown in the site footer (or at https://pickyour.ai/version.json).
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and device
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: I have not pasted private build contents, credentials, or personal data.
+          required: true

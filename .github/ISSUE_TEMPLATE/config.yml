@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Research questions and contract changes
+    url: https://github.com/Pick-Your-AI/pick-your-ai-research/issues
+    about: Component research, compatibility rules, and contract changes (via research issue #40) live in the research repository.
+  - name: Security vulnerability
+    url: https://github.com/Pick-Your-AI/pickyour.ai/security/advisories/new
+    about: Report privately; see SECURITY.md.
