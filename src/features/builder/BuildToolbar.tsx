@@ -10,6 +10,7 @@ import {
   importBuild,
 } from '../../domain/share';
 import { useBuilder } from '../../app/builder-context';
+import { useValidatorsReady } from '../../app/validators';
 import { useData } from '../../app/data-context';
 import { IconDownload, IconHistory, IconLink, IconPlus, IconUpload } from '../../components/icons';
 
@@ -71,6 +72,7 @@ export function BuildToolbar({
   const [name, setName] = useState(build.name);
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  useValidatorsReady(); // re-render once export validation is possible
   const exportProblem = canExport(build);
 
   const commitName = () => {

@@ -67,7 +67,7 @@ function writeCurrentId(id: string) {
 }
 
 export function BuilderProvider({ children }: { children: ReactNode }) {
-  const { builds } = useData();
+  const { builds, catalog: catalogRepo } = useData();
   const catalog = useCatalog();
   const graph = useGraph();
   const [draft, setDraft] = useState<BuildDraft | null>(null);
@@ -144,32 +144,36 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
 
   const startNew = useCallback<BuilderApi['startNew']>(
     (template, name) => {
-      if (!snapshotId) return;
-      const base = createBuild({ catalogSnapshotId: snapshotId, name });
-      const build: BuildSnapshot = template
-        ? {
-            ...template,
-            id: base.id,
-            revision: 1,
-            created_at: base.created_at,
-            updated_at: base.updated_at,
-            lifecycle: 'draft',
-            owner_ref: base.owner_ref,
-            name: name ?? template.name,
-          }
-        : base;
-      const next = createDraft(
-        build,
-        template ? `Created from "${template.name}"` : 'Created build',
-      );
+      // Claim the draft immediately so a slower initial load cannot replace it.
       touched.current = true;
-      savedRevision.current = null;
-      setLastChange(null);
-      setDraft(next);
-      setReady(true);
-      void persist(next);
+      void (async () => {
+        const catalogSnapshotId = snapshotId ?? (await catalogRepo.getSnapshot()).id;
+        const base = createBuild({ catalogSnapshotId, name });
+        const build: BuildSnapshot = template
+          ? {
+              ...template,
+              id: base.id,
+              revision: 1,
+              created_at: base.created_at,
+              updated_at: base.updated_at,
+              lifecycle: 'draft',
+              owner_ref: base.owner_ref,
+              name: name ?? template.name,
+            }
+          : base;
+        const next = createDraft(
+          build,
+          template ? `Created from "${template.name}"` : 'Created build',
+        );
+        touched.current = true;
+        savedRevision.current = null;
+        setLastChange(null);
+        setDraft(next);
+        setReady(true);
+        void persist(next);
+      })();
     },
-    [persist, snapshotId],
+    [persist, snapshotId, catalogRepo],
   );
 
   const open = useCallback<BuilderApi['open']>(

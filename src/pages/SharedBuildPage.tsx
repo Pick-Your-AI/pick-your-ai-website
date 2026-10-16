@@ -8,6 +8,7 @@ import { Link, useLocation, useNavigate } from 'react-router';
 import type { BuildSnapshot } from '../contracts';
 import { KIND_LABELS, TIERS, TIER_LABELS, kindsInTier } from '../contracts';
 import { buildStaleness } from '../domain/freshness';
+import { useValidatorsReady } from '../app/validators';
 import { decodeShareFragment, importBuild, type ImportResult } from '../domain/share';
 import { useBuilder } from '../app/builder-context';
 import { useData } from '../app/data-context';
@@ -27,13 +28,14 @@ const PREVIEW_NOTE = 'Shared builds are previews; there is no server-side sharin
 export default function SharedBuildPage() {
   const location = useLocation();
   const { mode } = useData();
+  const validatorsLoaded = useValidatorsReady();
   const [file, setFile] = useState<{ name: string; result: ImportResult } | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const fromLink = useMemo(
-    () => (location.hash ? decodeShareFragment(location.hash, mode) : null),
-    [location.hash, mode],
+    () => (location.hash && validatorsLoaded ? decodeShareFragment(location.hash, mode) : null),
+    [location.hash, mode, validatorsLoaded],
   );
   const active = file?.result ?? fromLink;
   const build = active?.ok ? active.build : null;
@@ -68,6 +70,14 @@ export default function SharedBuildPage() {
       />
     </>
   );
+
+  if (location.hash && !validatorsLoaded && !file) {
+    return (
+      <div className="mx-auto max-w-7xl px-4">
+        <Loading label="Opening shared build…" />
+      </div>
+    );
+  }
 
   return (
     <>

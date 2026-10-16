@@ -7,6 +7,7 @@ import { Link } from 'react-router';
 import type { BuildSnapshot, CatalogItem, CostEstimate, Money } from '../contracts';
 import { KIND_LABELS, TIERS, TIER_LABELS, kindsInTier } from '../contracts';
 import { buildStaleness } from '../domain/freshness';
+import { useValidatorsReady } from '../app/validators';
 import { canExport, exportBuild, exportFileName } from '../domain/share';
 import { useBuilder } from '../app/builder-context';
 import { useData } from '../app/data-context';
@@ -25,6 +26,7 @@ import { OverallStrip } from '../features/builder/SummaryPanel';
 const formatDate = (iso: string) => new Date(iso).toLocaleString();
 
 export default function BuildSummaryPage() {
+  useValidatorsReady(); // re-render once export validation is possible
   const { draft, ready } = useBuilder();
   const { mode } = useData();
   const catalog = useCatalog();

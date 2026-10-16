@@ -73,6 +73,7 @@ test('builder flow: starter → change → invalidation, unknowns, export and da
   await page.goto('/');
   await page.getByRole('button', { name: 'Open in builder' }).first().click();
   await expect(page).toHaveURL(/\/builder$/);
+  await expect(page.getByText(/Saved in this browser/)).toBeVisible();
   await expect(page.getByTestId('overall-status')).toContainText(/Compatible|pass/i);
   await expect(page.getByTestId('cost-headline').first()).toContainText('$');
 
@@ -111,6 +112,7 @@ test('selection page shows compatibility buckets with text, not colour alone', a
   test.skip(info.project.name.startsWith('mobile'), 'mobile variant below');
   await page.goto('/');
   await page.getByRole('button', { name: 'Open in builder' }).first().click();
+  await expect(page.getByText(/Saved in this browser/)).toBeVisible();
   await page.goto('/catalog/model?show=all');
   const table = page.getByRole('table');
   await expect(table.getByText('Incompatible').first()).toBeVisible();
