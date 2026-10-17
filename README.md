@@ -4,8 +4,11 @@
 
 - Live site: https://pickyour.ai
 - Research and contracts: [Pick-Your-AI/pick-your-ai-research](https://github.com/Pick-Your-AI/pick-your-ai-research)
+- Contributor recognition planning: [pick-your-ai-leaderboard](https://github.com/Pick-Your-AI/pick-your-ai-leaderboard) · [Delivery project](https://github.com/orgs/Pick-Your-AI/projects/6) · [Program](https://github.com/Pick-Your-AI/pick-your-ai-leaderboard/issues/1)
 
 > **Preview status.** The real component catalog is still being researched. Every component, price, and compatibility result on the site today is **synthetic demonstration data**, labelled as such. The data layer is ready to switch to validated research data without UI changes.
+
+Contributor recognition is planned in its dedicated repository. The initial scope defines 98 metrics across pull requests, code changes, reviews, issues, triage, documentation, research, and maintenance, organized into 20 epics, 112 work packages, and 474 implementation checklist tasks. Creating that plan does not add a live leaderboard to this website. Its metric definitions and correction process remain separate from this application's contribution and release workflow.
 
 ## Quick start
 
