@@ -19,7 +19,7 @@ If any step from **Activate** onwards fails in a deploy or rollback run, the wor
 ## Rolling back (recommended path)
 
 1. Find the target SHA in Environments → production, `ssh dpc-godaddy 'bash -s' -- status < scripts/deploy/remote-release.sh`, or the deploy run summary. It must be a **retained** release.
-2. Actions → **Deploy production** → *Run workflow*, with branch **main** and `rollback_to` = the full 40-char SHA.
+2. Actions → **Deploy production** → *Run workflow*, with branch **main** and `rollback_to` = the full 40-char SHA. Your login must be in the `DEPLOY_DISPATCHERS` repository variable, or the `rollback` job is skipped.
 3. The `rollback` job validates the release on the host, activates it, and verifies through Cloudflare that `version.json.commit` equals the target. E2E live runs afterwards.
 4. **Roll forward** the same way, with `rollback_to` = the newer SHA. Or dispatch with `rollback_to` empty to redeploy the current `main`.
 
