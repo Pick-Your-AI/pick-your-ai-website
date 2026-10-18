@@ -21,6 +21,7 @@ export const routes: RouteObject[] = [
         lazy: page(() => import('../features/catalog/ComponentDetailPage')),
       },
       { path: 'compare', lazy: page(() => import('../pages/ComparePage')) },
+      { path: 'templates', lazy: page(() => import('../pages/TemplatesPage')) },
       { path: 'summary', lazy: page(() => import('../pages/BuildSummaryPage')) },
       { path: 'builds', lazy: page(() => import('../pages/MyBuildsPage')) },
       { path: 'shared', lazy: page(() => import('../pages/SharedBuildPage')) },

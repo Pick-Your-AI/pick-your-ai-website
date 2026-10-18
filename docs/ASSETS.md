@@ -1,6 +1,6 @@
 # Image assets and provenance
 
-All AI-generated raster images on the site were created with **OpenAI Codex** (`codex` CLI 0.162.1, `codex exec`, built-in `imagegen` skill / `image_gen` tool, GPT Image). No other image generator was used. UI icons are hand-written inline SVG (`src/components/icons.tsx`); the logo and favicon are hand-written SVG.
+All AI-generated raster images on the site were created with **OpenAI Codex** (`codex` CLI 0.162.1, `codex exec`, built-in `imagegen` skill / `image_gen` tool, GPT Image). No other image generator was used. UI icons are the inline SVG sprite in `src/components/icon.tsx` (ported from the approved design mock); the logo mark and favicon are hand-written SVG.
 
 | File                                                                                  | Used on                        | Source image                                                               | Generated (UTC)      | Alt text                                                                                    |
 | ------------------------------------------------------------------------------------- | ------------------------------ | -------------------------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------- |
@@ -13,3 +13,20 @@ All AI-generated raster images on the site were created with **OpenAI Codex** (`
 - **Optimisation**: ffmpeg 8.1 (`libwebp` at quality 80–82, `libaom-av1` at CRF 32 for AVIF, JPEG at q=4). Each optimised file is 11–54 KB.
 - **Originals**: the full-resolution PNGs (about 1.4 MB each) are not committed. To change an asset, regenerate it with Codex and update this table.
 - **Content rules**: no text, logos, people or third-party marks. The art is original and does not copy PCPartPicker or any other site.
+
+## Fonts
+
+The design's three typefaces are self-hosted from `public/fonts/` (latin subset, woff2) and declared
+in `src/styles/fonts.css`. Serving them from this origin keeps the production
+Content-Security-Policy at `style-src 'self'; font-src 'self'` and means a page load makes no
+third-party request.
+
+| Family        | Weights     | File                                              | Licence                   |
+| ------------- | ----------- | ------------------------------------------------- | ------------------------- |
+| Space Grotesk | 400–700     | `public/fonts/space-grotesk-var.woff2` (variable) | SIL Open Font License 1.1 |
+| DM Sans       | 400–700     | `public/fonts/dm-sans-var.woff2` (variable)       | SIL Open Font License 1.1 |
+| IBM Plex Mono | 400/500/600 | `public/fonts/ibm-plex-mono-{400,500,600}.woff2`  | SIL Open Font License 1.1 |
+
+The OFL permits redistribution and self-hosting, including in a bundled web application, provided
+the fonts are not sold on their own and any modified version is renamed. These files are unmodified
+copies of the upstream releases (Google Fonts, `fonts.gstatic.com`), so no renaming applies.

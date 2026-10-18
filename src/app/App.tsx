@@ -9,12 +9,14 @@ import { createRouter } from './routes';
 
 function ConfigError({ message }: { message: string }) {
   return (
-    <main id="main" className="mx-auto max-w-2xl px-4 py-16">
-      <h1 className="text-2xl font-bold">Site configuration error</h1>
-      <p className="mt-2">{message}</p>
-      <p className="mt-2 text-sm">
-        See docs/DATA_INTEGRATION.md for the supported data-provider settings.
-      </p>
+    <main id="main" className="app-page">
+      <div className="container config-error">
+        <h1>Site configuration error</h1>
+        <p>{message}</p>
+        <p className="hint-text">
+          See docs/DATA_INTEGRATION.md for the supported data-provider settings.
+        </p>
+      </div>
     </main>
   );
 }

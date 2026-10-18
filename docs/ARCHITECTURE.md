@@ -8,13 +8,13 @@
 
 ## Stack
 
-Vite 8 · React 19 · TypeScript 6 (strict, `noUncheckedIndexedAccess`) · Tailwind CSS 4 · React Router 8 (data router, lazy routes) · TanStack Query 5 · Ajv 8 standalone validators · json-schema-to-typescript · Vitest + Testing Library · Playwright + axe-core.
+Vite 8 · React 19 · TypeScript 6 (strict, `noUncheckedIndexedAccess`) · plain CSS design system (`src/styles/mock.css` + `src/styles/index.css`, no utility framework) · React Router 8 (data router, lazy routes) · TanStack Query 5 · Ajv 8 standalone validators · json-schema-to-typescript · Vitest + Testing Library · Playwright + axe-core.
 
 ## Layers
 
 | Layer             | Path                                                     | Responsibility                                                                                                                                                                        |
 | ----------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Presentation      | `src/pages`, `src/features/*`, `src/components`          | Pages, builder UI, catalog UI, primitives (`status.tsx`, `feedback.tsx`, `layout.tsx`, `icons.tsx`)                                                                                   |
+| Presentation      | `src/pages`, `src/features/*`, `src/components`          | Pages, builder UI, catalog UI, primitives (`status.tsx`, `feedback.tsx`, `layout.tsx`, `icon.tsx`) and the view helpers `lib/layers.ts`, `lib/item-cost.ts`, `lib/compat.ts`          |
 | Application       | `src/app`                                                | Routing, `BuilderProvider` (current draft, commit, persistence, invalidation), TanStack Query hooks keyed by build id and revision                                                    |
 | Domain / contract | `src/contracts`, `src/domain`                            | Generated types and validators, registry, baseline graph and ruleset, evaluator (port of `reference/evaluate.py`), activation, invalidation, build operations, cost, freshness, share |
 | Data access       | `src/data`                                               | Provider interfaces (`types.ts`), HTTP client and providers, local build repository, configuration (`config.ts`), `DataError`                                                         |

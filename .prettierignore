@@ -9,3 +9,6 @@ test-results/
 public/.htaccess
 docs/operations/
 docs/research/pcpartpicker-*
+
+# The approved design mock is kept verbatim for reference; do not reformat it.
+docs/design/pickyourai-complete.html

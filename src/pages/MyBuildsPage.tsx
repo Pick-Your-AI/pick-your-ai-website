@@ -1,166 +1,383 @@
 /*
- * My Builds: builds saved in this browser's localStorage. Nothing is synced or uploaded; accounts
- * are a future capability. Destructive actions use an inline confirm step (never a modal dialog),
- * and unreadable records are shown with an explanation rather than hidden.
+ * My Builds (mock: `#buildsScreen` + `renderBuildsPage()` and the `data-saved-action` handlers).
+ *
+ * Builds live in this browser's localStorage only: nothing is synced or uploaded. The page keeps
+ * the safety rules of the previous implementation — every destructive action has an inline confirm
+ * step (never a native confirm), records that cannot be read are explained rather than hidden, and
+ * export is blocked with a reason when the build is not yet a contract-valid snapshot.
  */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
+import type { BuildSnapshot } from '../contracts';
+import { kindDef } from '../contracts';
+import { createDraft, newBuildId } from '../domain/build';
 import { canExport, exportBuild, exportFileName, importBuild } from '../domain/share';
 import type { SavedBuildSummary } from '../data/types';
 import { isDataError } from '../data/errors';
 import { useBuilder } from '../app/builder-context';
 import { useData } from '../app/data-context';
-import { EmptyState, ErrorState, Loading, Notice } from '../components/feedback';
-import { IconDownload, IconTrash, IconUpload } from '../components/icons';
+import { useBuildAnalysis } from '../app/queries';
+import { LAYERS } from '../lib/layers';
+import { ErrorState, Loading, useToast } from '../components/feedback';
+import { Icon } from '../components/icon';
 import { PageHeader } from '../components/layout';
 import { download } from '../features/builder/BuildToolbar';
+import { totalLabel } from '../lib/item-cost';
 
 const LIST_KEY = ['builds', 'list'] as const;
 const UNREADABLE = '(unreadable saved build)';
 
+type SortKey = 'updated' | 'name' | 'cost';
+
+interface BuildDetail {
+  build: BuildSnapshot;
+  /** Illustrative monthly total, or null when the estimator could not price the build. */
+  total: { amount: string; currency: string } | null;
+  conflicts: number;
+}
+
 const errorText = (e: unknown, fallback: string) =>
   isDataError(e) || e instanceof Error ? e.message : fallback;
 
+const isUnreadable = (summary: SavedBuildSummary) =>
+  summary.name === UNREADABLE && summary.revision === 0;
+
+/** Layers filled = distinct tiers with at least one enabled selection. */
+function filledLayers(build: BuildSnapshot): number {
+  return new Set(build.selections.filter((s) => s.enabled).map((s) => kindDef(s.kind).tier)).size;
+}
+
+const formatDate = (iso: string) =>
+  iso
+    ? new Date(iso).toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      })
+    : 'unknown date';
+
 export default function MyBuildsPage() {
-  const { builds, mode } = useData();
+  const { builds, mode, pricing, compatibility } = useData();
   const { draft, open, startNew } = useBuilder();
   const navigate = useNavigate();
+  const toast = useToast();
   const queryClient = useQueryClient();
   const list = useQuery({ queryKey: LIST_KEY, queryFn: () => builds.list() });
-  const [status, setStatus] = useState('');
+  const [sort, setSort] = useState<SortKey>('updated');
   const [importError, setImportError] = useState<string | null>(null);
+  const [importNotice, setImportNotice] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['builds'] });
+  const analysis = useBuildAnalysis(draft?.build ?? null);
+  const invalidate = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ['builds'] }),
+    [queryClient],
+  );
+
+  const summaries = list.data ?? [];
+  const detailsKey = summaries.map((s) => `${s.id}@${s.revision}`).join('|');
+
+  // One batch load of the saved builds so the library can show real estimates and sort by cost.
+  const details = useQuery({
+    queryKey: ['builds', 'details', detailsKey],
+    enabled: summaries.length > 0,
+    queryFn: async () => {
+      const map = new Map<string, BuildDetail>();
+      await Promise.all(
+        summaries.map(async (summary) => {
+          if (isUnreadable(summary)) return;
+          try {
+            const stored = await builds.get(summary.id);
+            const [cost, report] = await Promise.all([
+              pricing.estimate(stored.build),
+              compatibility.evaluate(stored.build),
+            ]);
+            map.set(summary.id, {
+              build: stored.build,
+              total: { amount: cost.total.amount, currency: cost.currency },
+              conflicts: report.summary.failed,
+            });
+          } catch {
+            /* Left out of the map: the card falls back to the summary and stays deletable. */
+          }
+        }),
+      );
+      return map;
+    },
+  });
+
+  // The draft is persisted asynchronously; refresh the library whenever the current build changes.
+  const draftId = draft?.build.id;
+  useEffect(() => {
+    if (draftId) void invalidate();
+  }, [draftId, invalidate]);
 
   const onImport = async (file: File | undefined) => {
     if (!file) return;
     setImportError(null);
+    setImportNotice(null);
     const result = importBuild(await file.text(), mode);
     if (!result.ok) {
       setImportError(`Import failed: ${result.error}`);
       return;
     }
     startNew(result.build, result.build.name);
+    if (result.warnings.length) setImportNotice(result.warnings.join(' '));
     void invalidate();
-    navigate('/builder');
+    void navigate('/builder');
   };
 
-  return (
-    <>
-      <PageHeader eyebrow="My Builds" title="My builds">
-        Builds saved in this browser. Open one to keep editing, duplicate it to try an alternative,
-        or export it as a file.
-      </PageHeader>
-      <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6">
-        <Notice title="Stored only in this browser.">
-          Builds are kept in this browser&apos;s local storage. They are not synced to other devices
-          or uploaded anywhere, and clearing site data deletes them — export a file to keep a copy.
-          Accounts and cloud saving are a future capability; this is a preview.
-        </Notice>
+  const saveCopy = () => {
+    if (!draft) return;
+    startNew(draft.build, `${draft.build.name} (copy)`);
+    toast('Saved a copy of your current build.');
+  };
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Link className="btn-primary" to="/builder">
-            Open the builder
-          </Link>
-          <button type="button" className="btn-secondary" onClick={() => fileRef.current?.click()}>
-            <IconUpload /> Import a build file
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="application/json,.json"
-            className="sr-only"
-            tabIndex={-1}
-            aria-hidden="true"
-            onChange={(e) => {
-              void onImport(e.target.files?.[0]);
-              e.target.value = '';
-            }}
-          />
-          <p className="hint w-full sm:mt-0 sm:w-auto">
-            Imports a PickYour.AI JSON export as a new build and opens it.
-          </p>
+  const duplicate = async (summary: SavedBuildSummary) => {
+    const stored = await builds.get(summary.id);
+    const now = new Date().toISOString();
+    const copy: BuildSnapshot = {
+      ...stored.build,
+      id: newBuildId(),
+      name: `${stored.build.name} (copy)`,
+      revision: 1,
+      lifecycle: 'draft',
+      created_at: now,
+      updated_at: now,
+    };
+    await builds.save(createDraft(copy), null);
+    await invalidate();
+    toast('Build duplicated.');
+  };
+
+  const exportOne = async (summary: SavedBuildSummary) => {
+    const stored = await builds.get(summary.id);
+    const problem = canExport(stored.build);
+    if (problem) throw new Error(problem);
+    download(
+      exportFileName(stored.build),
+      JSON.stringify(exportBuild(stored.build, mode), null, 2) + '\n',
+    );
+    toast('Saved build exported.');
+  };
+
+  const removeOne = async (summary: SavedBuildSummary) => {
+    await builds.remove(summary.id);
+    if (summary.id === draft?.build.id) startNew();
+    await invalidate();
+    toast('Saved build deleted.');
+  };
+
+  const sorted = [...summaries].sort((a, b) => {
+    if (sort === 'name') return a.name.localeCompare(b.name);
+    if (sort === 'cost') {
+      const ca = details.data?.get(a.id)?.total;
+      const cb = details.data?.get(b.id)?.total;
+      if (!ca && !cb) return b.updatedAt.localeCompare(a.updatedAt);
+      if (!ca) return 1;
+      if (!cb) return -1;
+      return Number(ca.amount) - Number(cb.amount);
+    }
+    return b.updatedAt.localeCompare(a.updatedAt);
+  });
+
+  const workingTotal = analysis.costIsCurrent ? analysis.cost : undefined;
+  const workingConflicts = analysis.report?.summary.failed ?? 0;
+  const workingLayers = draft ? filledLayers(draft.build) : 0;
+
+  return (
+    <div className="app-page">
+      <PageHeader
+        compact
+        breadcrumb="WORKSPACE"
+        eyebrow="YOUR WORKSPACE"
+        title={
+          <>
+            Good builds are
+            <br />
+            <span>worth keeping.</span>
+          </>
+        }
+        aside={
+          <div className="builds-header-actions">
+            <button
+              className="btn btn-outline"
+              type="button"
+              onClick={() => fileRef.current?.click()}
+            >
+              ↥ Import JSON
+            </button>
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={() => {
+                startNew();
+                void navigate('/builder');
+                toast('New blank build created.');
+              }}
+            >
+              <Icon name="plus" /> New configuration
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/json,.json"
+              hidden
+              aria-hidden="true"
+              tabIndex={-1}
+              onChange={(e) => {
+                void onImport(e.target.files?.[0]);
+                e.target.value = '';
+              }}
+            />
+          </div>
+        }
+      >
+        Explore iterations, duplicate your ideas, or pick up right where you left off. Stored in
+        your browser for this preview.
+      </PageHeader>
+
+      <div className="container saved-layout">
+        <div className="local-note">
+          <Icon name="info" />
+          <span>
+            <strong>Local workspace.</strong> Your saved configurations live in this browser&apos;s
+            storage. They are not synchronized or backed up. Export JSON to keep a portable copy.
+          </span>
         </div>
+
         {importError ? (
-          <p role="alert" className="text-sm text-red-800 dark:text-red-300">
+          <p className="notice-error" role="alert">
             {importError}
           </p>
         ) : null}
-        <p
-          role="status"
-          aria-live="polite"
-          className="text-sm text-emerald-900 dark:text-emerald-200"
-        >
-          {status}
-        </p>
+        {importNotice ? (
+          <p className="notice-ok" role="status">
+            {importNotice}
+          </p>
+        ) : null}
 
-        <section aria-labelledby="saved-heading">
-          <h2 id="saved-heading" className="text-lg font-semibold">
-            Saved builds{list.data ? ` (${list.data.length})` : ''}
-          </h2>
-          <div className="mt-3">
-            {list.isError ? (
-              <ErrorState error={list.error} onRetry={() => void list.refetch()} />
-            ) : !list.data ? (
-              <Loading label="Loading saved builds…" />
-            ) : list.data.length === 0 ? (
-              <EmptyState
-                title="No saved builds yet"
-                action={
-                  <Link className="btn-primary" to="/builder">
-                    Start a stack
-                  </Link>
-                }
-              >
-                Builds are saved here automatically as you edit them in the builder.
-              </EmptyState>
-            ) : (
-              <ul className="grid gap-3">
-                {list.data.map((summary) => (
-                  <BuildCard
-                    key={summary.id}
-                    summary={summary}
-                    current={summary.id === draft?.build.id}
-                    onOpen={async () => {
-                      await open(summary.id);
-                      navigate('/builder');
-                    }}
-                    onDuplicate={async () => {
-                      const stored = await builds.get(summary.id);
-                      startNew(stored.build, `${stored.build.name} (copy)`);
-                      void invalidate();
-                      navigate('/builder');
-                    }}
-                    onExport={async () => {
-                      const stored = await builds.get(summary.id);
-                      const problem = canExport(stored.build);
-                      if (problem) throw new Error(problem);
-                      download(
-                        exportFileName(stored.build),
-                        JSON.stringify(exportBuild(stored.build, mode), null, 2) + '\n',
-                      );
-                      setStatus(`Exported "${stored.build.name}".`);
-                    }}
-                    onDelete={async () => {
-                      await builds.remove(summary.id);
-                      if (summary.id === draft?.build.id) startNew();
-                      await invalidate();
-                      setStatus(`Deleted "${summary.name}" from this browser.`);
-                    }}
-                  />
-                ))}
-              </ul>
-            )}
+        <div className="saved-section-heading">
+          <div>
+            <span className="eyebrow">CONTINUE WHERE YOU LEFT OFF</span>
+            <h2>Currently editing</h2>
           </div>
-        </section>
+          <span className="workspace-count">{draft ? '01' : '00'} ACTIVE BUILD</span>
+        </div>
+
+        {!draft ? (
+          <Loading label="Loading your working build…" />
+        ) : (
+          <div className="working-card">
+            <div className="working-symbol">
+              <Icon name="layers" />
+            </div>
+            <div>
+              <h3>{draft.build.name}</h3>
+              <p>
+                Your current, editable configuration · {workingLayers} of {LAYERS.length} layers
+                selected
+              </p>
+              <div className="build-meta-row">
+                <span>
+                  {workingTotal
+                    ? `${totalLabel(workingTotal.total.amount, workingTotal.currency)}/mo* example`
+                    : 'Cost not available*'}
+                </span>
+                <span>
+                  {workingConflicts
+                    ? `${workingConflicts} conflict${workingConflicts === 1 ? '' : 's'}`
+                    : 'No demo conflicts'}
+                </span>
+                <span>IN PROGRESS</span>
+              </div>
+            </div>
+            <div className="working-actions">
+              <button className="btn btn-outline btn-small" type="button" onClick={saveCopy}>
+                Save a copy
+              </button>
+              <button
+                className="btn btn-primary btn-small"
+                type="button"
+                onClick={() => void navigate('/builder')}
+              >
+                Continue editing →
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="saved-section-heading lower">
+          <div>
+            <span className="eyebrow">SAVED CONFIGURATIONS</span>
+            <h2>
+              Your library <span className="count-light">({summaries.length})</span>
+            </h2>
+          </div>
+          <div className="saved-sort">
+            <label htmlFor="savedSort">SORT BY</label>
+            <select
+              className="form-select"
+              id="savedSort"
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortKey)}
+            >
+              <option value="updated">Recently edited</option>
+              <option value="name">Name A–Z</option>
+              <option value="cost">Example cost</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="saved-grid">
+          {list.isError ? (
+            <ErrorState error={list.error} onRetry={() => void list.refetch()} />
+          ) : !list.data ? (
+            <Loading label="Loading saved builds…" />
+          ) : sorted.length === 0 ? (
+            <div className="saved-empty">
+              <Icon name="layers" />
+              <h3>No saved configurations yet</h3>
+              <p>
+                Your current stack is ready to save. Give it a name in the builder, then hit Save.
+              </p>
+              <button className="btn btn-primary" type="button" onClick={saveCopy}>
+                Save your current build →
+              </button>
+            </div>
+          ) : (
+            sorted.map((summary) => (
+              <SavedCard
+                key={summary.id}
+                summary={summary}
+                detail={details.data?.get(summary.id)}
+                current={summary.id === draft?.build.id}
+                onOpen={async () => {
+                  await open(summary.id);
+                  void navigate('/builder');
+                }}
+                onDuplicate={() => duplicate(summary)}
+                onExport={() => exportOne(summary)}
+                onDelete={() => removeOne(summary)}
+              />
+            ))
+          )}
+        </div>
+
+        <div className="saved-bottom">
+          <span>Looking for a starting point? Browse complete, editable configurations.</span>
+          <Link to="/templates">
+            View starter builds <Icon name="arrow-right" />
+          </Link>
+        </div>
       </div>
-    </>
+    </div>
   );
 }
 
-function BuildCard({
+function SavedCard({
   summary,
+  detail,
   current,
   onOpen,
   onDuplicate,
@@ -168,6 +385,7 @@ function BuildCard({
   onDelete,
 }: {
   summary: SavedBuildSummary;
+  detail: BuildDetail | undefined;
   current: boolean;
   onOpen: () => Promise<void>;
   onDuplicate: () => Promise<void>;
@@ -178,168 +396,168 @@ function BuildCard({
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const deleteRef = useRef<HTMLButtonElement>(null);
-  const unreadable = summary.name === UNREADABLE && summary.revision === 0;
-  const headingId = `build-${summary.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const unreadable = isUnreadable(summary);
+  const label = unreadable ? 'this unreadable build' : `“${summary.name}”`;
   const exportProblem =
-    summary.selectionCount < 2 ? 'Add at least 2 components before exporting.' : null;
+    detail && detail.build.selections.length < 2
+      ? 'Add at least 2 components before exporting.'
+      : null;
 
-  const run = async (label: string, action: () => Promise<void>) => {
-    setBusy(label);
+  useEffect(() => {
+    if (confirming) cancelRef.current?.focus();
+  }, [confirming]);
+
+  const run = async (labelText: string, action: () => Promise<void>) => {
+    setBusy(labelText);
     setError(null);
     try {
       await action();
     } catch (e) {
-      setError(errorText(e, `${label} failed.`));
+      setError(errorText(e, `${labelText} failed.`));
     } finally {
       setBusy(null);
     }
   };
 
+  const layers = detail ? filledLayers(detail.build) : summary.selectionCount;
+
   return (
-    <li className="card p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 id={headingId} className="font-semibold break-words">
-            {unreadable ? 'Unreadable saved build' : summary.name}
-            {current ? (
-              <span className="ml-2 inline-block rounded-full bg-brand-100 px-2 py-0.5 align-middle text-xs font-semibold text-brand-900 dark:bg-brand-900 dark:text-brand-100">
-                Current
-              </span>
-            ) : null}
-          </h3>
-          {unreadable ? (
-            <p className="mt-1 text-sm text-amber-900 dark:text-amber-200">
-              The saved record <code className="font-mono text-xs break-all">{summary.id}</code> is
-              damaged or no longer matches the build contract, so it cannot be opened. It has not
-              been changed or repaired. You can delete it.
-            </p>
-          ) : (
-            <p className="muted mt-1 text-sm tabular">
-              Revision {summary.revision} · {summary.selectionCount} selection
-              {summary.selectionCount === 1 ? '' : 's'} · updated{' '}
-              {summary.updatedAt ? (
-                <time dateTime={summary.updatedAt}>
-                  {new Date(summary.updatedAt).toLocaleString()}
-                </time>
-              ) : (
-                'unknown'
-              )}
-            </p>
-          )}
+    <article className="saved-card">
+      <div className="saved-card-top">
+        <div className="saved-card-brand">
+          <Icon name={unreadable ? 'alert' : 'layers'} />
         </div>
-        {!confirming ? (
-          <div className="flex flex-wrap gap-2">
-            {!unreadable ? (
-              <>
-                <button
-                  type="button"
-                  className="btn-primary btn-sm"
-                  disabled={Boolean(busy)}
-                  onClick={() => void run('Open', onOpen)}
-                >
-                  Open<span className="sr-only"> {summary.name}</span>
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary btn-sm"
-                  disabled={Boolean(busy)}
-                  onClick={() => void run('Duplicate', onDuplicate)}
-                >
-                  Duplicate<span className="sr-only"> {summary.name}</span>
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary btn-sm"
-                  disabled={Boolean(busy) || Boolean(exportProblem)}
-                  title={exportProblem ?? undefined}
-                  onClick={() => void run('Export', onExport)}
-                >
-                  <IconDownload /> Export JSON<span className="sr-only"> of {summary.name}</span>
-                </button>
-              </>
-            ) : null}
-            <button
-              ref={deleteRef}
-              type="button"
-              className="btn-danger btn-sm"
-              disabled={Boolean(busy)}
-              onClick={() => setConfirming(true)}
-            >
-              <IconTrash /> Delete
-              <span className="sr-only"> {unreadable ? 'unreadable build' : summary.name}</span>
-            </button>
+        <h3>
+          {unreadable ? 'Unreadable saved build' : summary.name}
+          {current ? <span className="count-light"> (current)</span> : null}
+        </h3>
+        {unreadable ? (
+          <p>
+            The saved record <code>{summary.id}</code> is damaged or no longer matches the build
+            contract, so it cannot be opened. It has not been changed or repaired. You can delete
+            it.
+          </p>
+        ) : (
+          <p>
+            Edited {formatDate(summary.updatedAt)} · {layers} of {LAYERS.length} layers configured
+          </p>
+        )}
+        {!unreadable ? (
+          <div className="saved-card-metrics">
+            <div>
+              <small>ESTIMATED BASELINE*</small>
+              <strong>
+                {detail?.total
+                  ? `${totalLabel(detail.total.amount, detail.total.currency)}/mo`
+                  : '—'}
+              </strong>
+            </div>
+            <div>
+              <small>DEMO VALIDATION</small>
+              <strong>
+                {detail
+                  ? detail.conflicts
+                    ? `${detail.conflicts} conflict${detail.conflicts === 1 ? '' : 's'}`
+                    : 'No conflicts'
+                  : 'Not checked'}
+              </strong>
+            </div>
           </div>
         ) : null}
       </div>
-      {exportProblem && !unreadable ? <p className="hint">JSON export: {exportProblem}</p> : null}
+
+      <div className="saved-card-actions">
+        {!unreadable ? (
+          <>
+            <button
+              className="open"
+              type="button"
+              disabled={Boolean(busy)}
+              onClick={() => void run('Open', onOpen)}
+            >
+              Open build →
+            </button>
+            <button
+              type="button"
+              aria-label={`Duplicate ${summary.name}`}
+              title="Duplicate"
+              disabled={Boolean(busy)}
+              onClick={() => void run('Duplicate', onDuplicate)}
+            >
+              <Icon name="copy" />
+            </button>
+            <button
+              type="button"
+              aria-label={`Export JSON of ${summary.name}`}
+              title={exportProblem ?? 'Export JSON'}
+              disabled={Boolean(busy) || Boolean(exportProblem)}
+              onClick={() => void run('Export', onExport)}
+            >
+              <Icon name="download" />
+            </button>
+          </>
+        ) : null}
+        <button
+          ref={deleteRef}
+          type="button"
+          aria-label={`Delete ${unreadable ? 'unreadable saved build' : summary.name}`}
+          title="Delete"
+          disabled={Boolean(busy)}
+          onClick={() => setConfirming(true)}
+        >
+          <Icon name="x" />
+        </button>
+      </div>
+
+      {exportProblem ? <p className="hint-text">JSON export: {exportProblem}</p> : null}
+
       {confirming ? (
-        <ConfirmDelete
-          name={unreadable ? 'this unreadable build' : `“${summary.name}”`}
-          current={current}
-          busy={busy === 'Delete'}
-          onConfirm={() => void run('Delete', onDelete)}
-          onCancel={() => {
-            setConfirming(false);
-            // Return focus to the control that opened the confirm step.
-            requestAnimationFrame(() => deleteRef.current?.focus());
-          }}
-        />
+        <div className="notice-error" role="group" aria-label="Confirm delete">
+          <p>
+            Delete {label} from this browser? This cannot be undone
+            {current ? '; a new empty build will become your current draft' : ''}. Export it first
+            if you need a backup.
+          </p>
+          <p>
+            <button
+              className="btn btn-outline btn-small"
+              type="button"
+              disabled={busy === 'Delete'}
+              onClick={() =>
+                void run('Delete', onDelete).then(() => {
+                  setConfirming(false);
+                })
+              }
+            >
+              Yes, delete
+            </button>{' '}
+            <button
+              ref={cancelRef}
+              className="btn btn-outline btn-small"
+              type="button"
+              disabled={busy === 'Delete'}
+              onClick={() => {
+                setConfirming(false);
+                requestAnimationFrame(() => deleteRef.current?.focus());
+              }}
+            >
+              Cancel
+            </button>
+          </p>
+        </div>
       ) : null}
+
       {busy ? (
-        <p className="muted mt-2 text-sm" role="status">
+        <p className="hint-text" role="status">
           {busy}…
         </p>
       ) : null}
       {error ? (
-        <p role="alert" className="mt-2 text-sm text-red-800 dark:text-red-300">
+        <p className="notice-error" role="alert">
           {error}
         </p>
       ) : null}
-    </li>
-  );
-}
-
-function ConfirmDelete({
-  name,
-  current,
-  busy,
-  onConfirm,
-  onCancel,
-}: {
-  name: string;
-  current: boolean;
-  busy: boolean;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  const cancelRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    cancelRef.current?.focus();
-  }, []);
-  return (
-    <div
-      role="group"
-      aria-label="Confirm delete"
-      className="mt-3 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-950 dark:border-red-800 dark:bg-red-950 dark:text-red-100"
-    >
-      <p>
-        Delete {name} from this browser? This cannot be undone
-        {current ? '; a new empty build will become your current draft' : ''}.
-      </p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <button type="button" className="btn-danger btn-sm" disabled={busy} onClick={onConfirm}>
-          Yes, delete
-        </button>
-        <button
-          ref={cancelRef}
-          type="button"
-          className="btn-secondary btn-sm"
-          disabled={busy}
-          onClick={onCancel}
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
+    </article>
   );
 }

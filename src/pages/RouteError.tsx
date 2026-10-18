@@ -1,5 +1,6 @@
 import { Link, isRouteErrorResponse, useRouteError } from 'react-router';
 
+/** Router-level error boundary: styled like the rest of the site, never a blank screen. */
 export function RouteError() {
   const error = useRouteError();
   const message = isRouteErrorResponse(error)
@@ -8,19 +9,21 @@ export function RouteError() {
       ? error.message
       : 'Unexpected error';
   return (
-    <main id="main" className="mx-auto max-w-3xl px-4 py-16">
-      <h1 className="text-2xl font-bold">Something went wrong</h1>
-      <p className="mt-2 text-slate-700 dark:text-slate-300">{message}</p>
-      <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-        If this followed a site update, reloading the page loads the latest version.
-      </p>
-      <div className="mt-4 flex gap-2">
-        <button type="button" className="btn-primary" onClick={() => location.reload()}>
-          Reload
-        </button>
-        <Link to="/" className="btn-secondary">
-          Home
-        </Link>
+    <main id="main" className="app-page">
+      <div className="container notfound-body">
+        <div className="no-results" role="alert">
+          <strong>Something went wrong</strong>
+          <p className="notice-message">{message}</p>
+          <p>If this followed a site update, reloading the page loads the latest version.</p>
+          <div className="notfound-actions">
+            <button className="btn btn-primary" type="button" onClick={() => location.reload()}>
+              Reload
+            </button>
+            <Link to="/" className="btn btn-outline">
+              Home
+            </Link>
+          </div>
+        </div>
       </div>
     </main>
   );

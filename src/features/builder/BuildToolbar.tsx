@@ -1,19 +1,11 @@
-import { useRef, useState } from 'react';
+/*
+ * Shared build export helpers. The builder toolbar itself now lives in BuilderPage (ported from the
+ * design mock); these functions are reused by My Builds, the summary page and the builder.
+ */
 import type { BuildSnapshot, CatalogItem } from '../../contracts';
 import { KIND_LABELS, TIERS, TIER_LABELS, kindsInTier } from '../../contracts';
-import { rename } from '../../domain/build';
-import {
-  canExport,
-  encodeShareFragment,
-  exportBuild,
-  exportFileName,
-  importBuild,
-} from '../../domain/share';
-import { useBuilder } from '../../app/builder-context';
-import { useValidatorsReady } from '../../app/validators';
-import { useData } from '../../app/data-context';
-import { IconDownload, IconHistory, IconLink, IconPlus, IconUpload } from '../../components/icons';
 
+/** Triggers a client-side file download (no server round trip). */
 export function download(name: string, text: string, type = 'application/json') {
   const url = URL.createObjectURL(new Blob([text], { type }));
   const a = document.createElement('a');
@@ -25,6 +17,7 @@ export function download(name: string, text: string, type = 'application/json') 
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/** Human-readable Markdown summary of a build (kept alongside the JSON export). */
 export function buildMarkdown(
   build: BuildSnapshot,
   byId: ReadonlyMap<string, CatalogItem>,
@@ -58,177 +51,4 @@ export function buildMarkdown(
     '',
   );
   return lines.join('\n');
-}
-
-export function BuildToolbar({
-  build,
-  byId,
-}: {
-  build: BuildSnapshot;
-  byId: ReadonlyMap<string, CatalogItem>;
-}) {
-  const { apply, startNew, saveState, draft, restore } = useBuilder();
-  const { mode } = useData();
-  const [name, setName] = useState(build.name);
-  const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-  useValidatorsReady(); // re-render once export validation is possible
-  const exportProblem = canExport(build);
-
-  const commitName = () => {
-    if (name.trim() && name.trim() !== build.name)
-      apply((b) => rename(b, name), `Renamed build to "${name.trim()}"`, []);
-  };
-
-  const share = async () => {
-    try {
-      const url = `${location.origin}/shared#${encodeShareFragment(build, mode)}`;
-      await navigator.clipboard.writeText(url);
-      setMessage({
-        tone: 'ok',
-        text: 'Share link copied. The build travels in the link itself (after #) and is not uploaded anywhere.',
-      });
-    } catch {
-      setMessage({ tone: 'error', text: 'Could not copy the link. Use Export instead.' });
-    }
-  };
-
-  const onImport = async (file: File | undefined) => {
-    if (!file) return;
-    const result = importBuild(await file.text(), mode);
-    if (!result.ok) {
-      setMessage({ tone: 'error', text: `Import failed: ${result.error}` });
-      return;
-    }
-    startNew(result.build, result.build.name);
-    setMessage({
-      tone: 'ok',
-      text: `Imported "${result.build.name}" as a new local build.${result.warnings.length ? ' ' + result.warnings.join(' ') : ''}`,
-    });
-  };
-
-  return (
-    <div className="grid gap-3">
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="min-w-60 flex-1">
-          <label htmlFor="build-name" className="label">
-            Build name
-          </label>
-          <input
-            id="build-name"
-            className="input text-base font-semibold"
-            value={name}
-            maxLength={160}
-            onChange={(e) => setName(e.target.value)}
-            onBlur={commitName}
-            onKeyDown={(e) => e.key === 'Enter' && commitName()}
-          />
-        </div>
-        <p className="muted text-sm tabular" role="status" aria-live="polite">
-          Revision {build.revision} ·{' '}
-          {saveState.status === 'saving'
-            ? 'Saving…'
-            : saveState.status === 'error'
-              ? `Not saved: ${saveState.message}`
-              : saveState.status === 'saved'
-                ? 'Saved in this browser'
-                : 'Not saved yet'}
-        </p>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <button type="button" className="btn-secondary" onClick={() => startNew()}>
-          <IconPlus /> New build
-        </button>
-        <button
-          type="button"
-          className="btn-secondary"
-          disabled={Boolean(exportProblem)}
-          title={exportProblem ?? undefined}
-          onClick={() =>
-            download(
-              exportFileName(build),
-              JSON.stringify(exportBuild(build, mode), null, 2) + '\n',
-            )
-          }
-        >
-          <IconDownload /> Export JSON
-        </button>
-        <button
-          type="button"
-          className="btn-secondary"
-          disabled={!build.selections.length}
-          onClick={() =>
-            download(
-              exportFileName(build).replace(/\.json$/, '.md'),
-              buildMarkdown(build, byId),
-              'text/markdown',
-            )
-          }
-        >
-          <IconDownload /> Export Markdown
-        </button>
-        <button type="button" className="btn-secondary" onClick={() => fileRef.current?.click()}>
-          <IconUpload /> Import
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="application/json,.json"
-          className="sr-only"
-          tabIndex={-1}
-          aria-hidden="true"
-          onChange={(e) => {
-            void onImport(e.target.files?.[0]);
-            e.target.value = '';
-          }}
-        />
-        <button
-          type="button"
-          className="btn-secondary"
-          disabled={Boolean(exportProblem)}
-          title={exportProblem ?? undefined}
-          onClick={share}
-        >
-          <IconLink /> Copy share link
-        </button>
-      </div>
-      {exportProblem ? <p className="hint">{exportProblem}</p> : null}
-      {message ? (
-        <p
-          role="status"
-          className={`text-sm ${message.tone === 'error' ? 'text-red-800 dark:text-red-300' : 'text-emerald-900 dark:text-emerald-200'}`}
-        >
-          {message.text}
-        </p>
-      ) : null}
-      {draft && draft.changes.length > 1 ? (
-        <details className="text-sm">
-          <summary className="flex cursor-pointer items-center gap-1 font-medium">
-            <IconHistory /> Revision history ({draft.revisions.length} kept)
-          </summary>
-          <ol className="mt-2 max-h-64 space-y-1 overflow-auto">
-            {[...draft.changes].reverse().map((c) => (
-              <li key={c.revision} className="flex flex-wrap items-center gap-2">
-                <span className="font-mono text-xs tabular">r{c.revision}</span>
-                <span>{c.summary}</span>
-                <time className="muted text-xs" dateTime={c.at}>
-                  {new Date(c.at).toLocaleString()}
-                </time>
-                {c.revision !== build.revision &&
-                draft.revisions.some((r) => r.revision === c.revision) ? (
-                  <button
-                    type="button"
-                    className="btn-ghost btn-sm"
-                    onClick={() => restore(c.revision)}
-                  >
-                    Restore as new revision
-                  </button>
-                ) : null}
-              </li>
-            ))}
-          </ol>
-        </details>
-      ) : null}
-    </div>
-  );
 }

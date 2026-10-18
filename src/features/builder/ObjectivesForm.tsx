@@ -81,16 +81,13 @@ export function ObjectivesForm({
 
   const field = (key: string, label: string, input: React.ReactNode, hint?: string) => (
     <div>
-      <label htmlFor={`${id}-${key}`} className="label">
+      <label htmlFor={`${id}-${key}`} className="field-label">
         {label}
       </label>
       {input}
-      {hint ? <p className="hint">{hint}</p> : null}
+      {hint ? <p className="hint-text">{hint}</p> : null}
       {errors[key] ? (
-        <p
-          id={`${id}-${key}-err`}
-          className="mt-1 text-xs font-medium text-red-800 dark:text-red-300"
-        >
+        <p id={`${id}-${key}-err`} className="field-error">
           {errors[key]}
         </p>
       ) : null}
@@ -107,14 +104,14 @@ export function ObjectivesForm({
       onSubmit={submit}
       noValidate
       aria-label="Build objectives"
-      className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+      className="settings-grid three"
     >
       {field(
         'region',
         'Region / residency',
         <input
           {...a11y('region')}
-          className="input"
+          className="control-input"
           list={`${id}-regions`}
           value={form.region}
           onChange={set('region')}
@@ -131,7 +128,7 @@ export function ObjectivesForm({
         'Currency',
         <input
           {...a11y('currency')}
-          className="input"
+          className="control-input"
           value={form.currency}
           onChange={set('currency')}
           maxLength={3}
@@ -142,7 +139,7 @@ export function ObjectivesForm({
         'Data classification',
         <select
           {...a11y('data_classification')}
-          className="input"
+          className="control-input"
           value={form.data_classification}
           onChange={set('data_classification')}
         >
@@ -158,7 +155,7 @@ export function ObjectivesForm({
         'Monthly budget',
         <input
           {...a11y('monthly_budget_amount')}
-          className="input"
+          className="control-input"
           inputMode="decimal"
           value={form.monthly_budget_amount}
           onChange={set('monthly_budget_amount')}
@@ -171,7 +168,7 @@ export function ObjectivesForm({
           n.label,
           <input
             {...a11y(n.key)}
-            className="input"
+            className="control-input"
             inputMode="numeric"
             value={form[n.key]}
             onChange={set(n.key)}
@@ -183,7 +180,7 @@ export function ObjectivesForm({
         'Minimum capacity-evidence confidence',
         <select
           {...a11y('min_resource_confidence')}
-          className="input"
+          className="control-input"
           value={form.min_resource_confidence}
           onChange={set('min_resource_confidence')}
         >
@@ -199,7 +196,7 @@ export function ObjectivesForm({
         'Treat any unknown as blocking',
         <select
           {...a11y('fail_on_unknown')}
-          className="input"
+          className="control-input"
           value={form.fail_on_unknown}
           onChange={set('fail_on_unknown')}
         >
@@ -207,8 +204,8 @@ export function ObjectivesForm({
           <option value="true">Yes — unknowns block readiness</option>
         </select>,
       )}
-      <div className="flex items-end sm:col-span-2 lg:col-span-3">
-        <button type="submit" className="btn-primary">
+      <div className="settings-actions">
+        <button type="submit" className="btn btn-primary">
           Apply objectives
         </button>
       </div>
