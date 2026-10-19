@@ -19,6 +19,18 @@ const PAGES: [string, RegExp][] = [
 ];
 
 async function axe(page: Page) {
+  // A theme class can change before its finite color transitions finish.
+  // Audit the settled view while keeping the normal-motion user journey.
+  await page.evaluate(async () => {
+    const finiteAnimations = document
+      .getAnimations()
+      .filter(
+        (animation) =>
+          animation.playState === 'running' &&
+          Number.isFinite(animation.effect?.getComputedTiming().endTime),
+      );
+    await Promise.all(finiteAnimations.map((animation) => animation.finished.catch(() => {})));
+  });
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
     .analyze();
