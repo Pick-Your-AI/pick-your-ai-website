@@ -9,6 +9,10 @@
 @import './fonts.css';
 @import './mock.css';
 /*
+ * `mock-legacy.css` is deliberately never imported: it holds the mock's screens this app does not
+ * implement. See its header for how those rules were verified dead.
+ */
+/*
  * `dense.css` is deliberately NOT imported here. It is the parts-register visual language used only
  * by the builder, catalog and compare routes, so those modules import it directly and the browser
  * loads it as a route-level chunk. Keeping it out of this bundle stops the marketing pages, which

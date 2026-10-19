@@ -27,6 +27,36 @@ third-party request.
 | DM Sans       | 400–700 | `public/fonts/dm-sans-var.woff2` (variable)       | SIL Open Font License 1.1 |
 | IBM Plex Mono | 400/600 | `public/fonts/ibm-plex-mono-{400,600}.woff2`      | SIL Open Font License 1.1 |
 
+### Subsetting
+
+`public/fonts/` holds **generated** subsets, not the upstream files. `fonts-src/` holds the pristine
+upstream faces (outside `public/`, so never served or copied into `dist/`). Regenerate the shipped
+files with:
+
+```sh
+npm run fonts:subset
+```
+
+The glyph set lives in `scripts/font-charset.mjs`: printable ASCII plus the punctuation and math
+characters the UI renders (`—`, `·`, `…`, `→`, `×`, `§`, `≥`, `≠`, `≤`, `⊆`, `✓`, `✕`, …). Shipping
+the full faces cost ~91 kB, most of one performance point on the parts routes; the subset is ~58 kB.
+`tests/unit/font-subset.test.ts` fails if new copy uses a character outside the set, and fails if the
+payload creeps back over 64 kB, so neither regression can land silently.
+
 The OFL permits redistribution and self-hosting, including in a bundled web application, provided
-the fonts are not sold on their own and any modified version is renamed. These files are unmodified
-copies of the upstream releases (Google Fonts, `fonts.gstatic.com`), so no renaming applies.
+the fonts are not sold on their own and any modified version is renamed. The upstream files in
+`fonts-src/` are unmodified copies of the Google Fonts releases (`fonts.gstatic.com`). The subset is
+a binary subset of an unmodified font — glyph outlines and names are not altered, only omitted — so
+the reserved-font-name rule does not apply and no renaming is required.
+
+## Stylesheet layers
+
+`src/styles/index.css` imports `fonts.css` and `mock.css` only.
+
+- `mock.css` is the design system ported from the mock, restricted to the screens this app renders.
+- `mock-legacy.css` holds the mock's screens the app does not implement (the multi-step builder
+  wizard, the old catalog directory and compare panels, the marketing masthead). It is **not**
+  imported, so it ships nothing; it exists because the README calls `mock.css` a faithful port.
+  Rules were moved there only after being verified dead across 444 route loads in both themes, and
+  the move is confirmed by the six visual baselines and both axe suites still passing.
+- `dense.css` is the parts-register layer and is imported per route module, not globally.
