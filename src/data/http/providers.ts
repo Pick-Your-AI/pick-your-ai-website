@@ -172,7 +172,7 @@ export class HttpPricingProvider implements PricingProvider {
       { build_revision: build.revision, pricebook_id: pricebookId, period_days: periodDays },
       { 'Idempotency-Key': idempotencyKey() },
     );
-    if (value.build_revision !== build.revision) {
+    if (value.build_id !== build.id || value.build_revision !== build.revision) {
       throw new DataError('malformed', 'Cost estimate is for a different build revision.', {
         contract: 'CostEstimate',
       });
