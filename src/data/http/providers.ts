@@ -12,7 +12,7 @@
  * There is no read endpoint for resource estimates or a "current snapshot" in v1; the snapshot id
  * and graph/ruleset ids are configuration (see docs/DATA_INTEGRATION.md).
  */
-import type { BuildSnapshot, CatalogSnapshot, ComponentKind } from '../../contracts';
+import type { BuildSnapshot, CatalogSnapshot, ComponentKind, ContractName } from '../../contracts';
 import { BASELINE_GRAPH, BASELINE_RULESET } from '../../contracts';
 import { DataError } from '../errors';
 import { LocalBuildRepository } from '../local-builds';
@@ -46,6 +46,17 @@ export interface HttpProviderConfig {
 
 const enc = encodeURIComponent;
 
+function requireArtifactId<T extends { id: string }>(
+  contract: ContractName,
+  value: T,
+  requestedId: string,
+): T {
+  if (value.id !== requestedId) {
+    throw new DataError('malformed', `${contract} does not match the requested ID.`, { contract });
+  }
+  return value;
+}
+
 export class HttpCatalogRepository implements CatalogRepository {
   private snapshot: Promise<CatalogSnapshot> | null = null;
   private readonly client: ContractHttpClient;
@@ -59,11 +70,11 @@ export class HttpCatalogRepository implements CatalogRepository {
     if (snapshotId && snapshotId !== this.cfg.catalogSnapshotId) {
       return this.client
         .contract('CatalogSnapshot', 'GET', `/catalog/snapshots/${enc(id)}`)
-        .then((r) => r.value);
+        .then((r) => requireArtifactId('CatalogSnapshot', r.value, id));
     }
     this.snapshot ??= this.client
       .contract('CatalogSnapshot', 'GET', `/catalog/snapshots/${enc(id)}`)
-      .then((r) => r.value)
+      .then((r) => requireArtifactId('CatalogSnapshot', r.value, id))
       .catch((e) => {
         this.snapshot = null; // allow retry after failure
         throw e;
@@ -81,14 +92,27 @@ export class HttpCatalogRepository implements CatalogRepository {
   }
   async getDependencyGraph() {
     const id = this.cfg.dependencyGraphId ?? BASELINE_GRAPH.id;
-    return (await this.client.contract('DependencyGraph', 'GET', `/dependencies/${enc(id)}`)).value;
+    const { value } = await this.client.contract(
+      'DependencyGraph',
+      'GET',
+      `/dependencies/${enc(id)}`,
+    );
+    return requireArtifactId('DependencyGraph', value, id);
   }
   async getRuleset() {
     const id = this.cfg.rulesetId ?? BASELINE_RULESET.id;
     const version = this.cfg.rulesetVersion ?? BASELINE_RULESET.version;
-    return (
-      await this.client.contract('Ruleset', 'GET', `/rulesets/${enc(id)}?version=${enc(version)}`)
-    ).value;
+    const { value } = await this.client.contract(
+      'Ruleset',
+      'GET',
+      `/rulesets/${enc(id)}?version=${enc(version)}`,
+    );
+    if (value.id !== id || value.version !== version) {
+      throw new DataError('malformed', 'Ruleset does not match the requested ID and version.', {
+        contract: 'Ruleset',
+      });
+    }
+    return value;
   }
 }
 
@@ -160,7 +184,8 @@ export class HttpPricingProvider implements PricingProvider {
   async getPricebook(pricebookId?: string) {
     const id = pricebookId ?? this.cfg.pricebookId;
     if (!id) throw new DataError('unsupported', 'No pricebook is configured.');
-    return (await this.client.contract('Pricebook', 'GET', `/pricebooks/${enc(id)}`)).value;
+    const { value } = await this.client.contract('Pricebook', 'GET', `/pricebooks/${enc(id)}`);
+    return requireArtifactId('Pricebook', value, id);
   }
   async estimate(build: BuildSnapshot, periodDays = 30) {
     const pricebookId = build.locks.pricebook_id ?? this.cfg.pricebookId;
