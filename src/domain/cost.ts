@@ -74,7 +74,8 @@ function project(
         };
       }
       const instances = settings.instances ?? 1;
-      const hours = settings.reserved_hours_per_month ?? 24 * periodDays;
+      // Both explicit and default hours are monthly before the period is prorated below.
+      const hours = settings.reserved_hours_per_month ?? 24 * 30;
       const devices = typeof spec.accelerator_count === 'number' ? spec.accelerator_count : 1;
       return {
         quantity: trimDecimal(instances * devices * hours * (periodDays / 30)),
@@ -85,7 +86,7 @@ function project(
     }
     case 'cpu_hour': {
       const instances = settings.instances ?? 1;
-      const hours = settings.reserved_hours_per_month ?? 24 * periodDays;
+      const hours = settings.reserved_hours_per_month ?? 24 * 30;
       return {
         quantity: trimDecimal(instances * hours * (periodDays / 30)),
         assumptions: ['Always-on instances.'],
