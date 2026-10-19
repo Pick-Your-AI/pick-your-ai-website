@@ -11,6 +11,7 @@
  */
 import type { BuildSnapshot, CatalogItem, CostEstimate, Pricebook, Selection } from '../contracts';
 import { addDecimals, decimalString, multiplyDecimals } from './decimal';
+import { compareDateTimes } from './date-time';
 
 type Line = CostEstimate['line_items'][number];
 type Meter = Line['meter'];
@@ -109,8 +110,9 @@ function rateApplies(
   build: BuildSnapshot,
   now: string,
 ): string | null {
-  if (r.valid_from > now) return 'not yet valid';
-  if (r.valid_until && r.valid_until < now) return `expired ${r.valid_until.slice(0, 10)}`;
+  if (compareDateTimes(r.valid_from, now) > 0) return 'not yet valid';
+  if (r.valid_until && compareDateTimes(r.valid_until, now) < 0)
+    return `expired ${r.valid_until.slice(0, 10)}`;
   const region = (sel.settings as { region?: string }).region ?? build.objectives.region;
   if (r.region && r.region !== region) return `region ${r.region} ≠ ${region}`;
   if (r.unit_price.currency !== build.objectives.currency) {
