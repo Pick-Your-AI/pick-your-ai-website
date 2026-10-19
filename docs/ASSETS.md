@@ -21,11 +21,11 @@ in `src/styles/fonts.css`. Serving them from this origin keeps the production
 Content-Security-Policy at `style-src 'self'; font-src 'self'` and means a page load makes no
 third-party request.
 
-| Family        | Weights     | File                                              | Licence                   |
-| ------------- | ----------- | ------------------------------------------------- | ------------------------- |
-| Space Grotesk | 400–700     | `public/fonts/space-grotesk-var.woff2` (variable) | SIL Open Font License 1.1 |
-| DM Sans       | 400–700     | `public/fonts/dm-sans-var.woff2` (variable)       | SIL Open Font License 1.1 |
-| IBM Plex Mono | 400/500/600 | `public/fonts/ibm-plex-mono-{400,500,600}.woff2`  | SIL Open Font License 1.1 |
+| Family        | Weights | File                                              | Licence                   |
+| ------------- | ------- | ------------------------------------------------- | ------------------------- |
+| Space Grotesk | 400–700 | `public/fonts/space-grotesk-var.woff2` (variable) | SIL Open Font License 1.1 |
+| DM Sans       | 400–700 | `public/fonts/dm-sans-var.woff2` (variable)       | SIL Open Font License 1.1 |
+| IBM Plex Mono | 400/600 | `public/fonts/ibm-plex-mono-{400,600}.woff2`      | SIL Open Font License 1.1 |
 
 The OFL permits redistribution and self-hosting, including in a bundled web application, provided
 the fonts are not sold on their own and any modified version is renamed. These files are unmodified
