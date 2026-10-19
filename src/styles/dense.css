@@ -77,6 +77,9 @@
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: thin;
+  /* The tabs are a scroller, so they must not also widen their grid/flex parent. */
+  min-width: 0;
+  max-width: 100%;
 }
 .parts-tab {
   flex: none;
@@ -155,12 +158,20 @@
   flex-wrap: wrap;
   margin-left: auto;
 }
+/* `abbr[title]` carries the long form of the legend terms; dotted underline + help cursor keeps it
+   distinguishable from a link, which is solid and accent-coloured. */
+.pbar-meta abbr[title] {
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: help;
+}
 .pbar-meta {
   font: 10px var(--mono);
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--dim);
-  white-space: nowrap;
+  /* Wraps rather than forcing the parts table wider than the viewport on a phone. */
+  min-width: 0;
 }
 
 /* Status strip: worst outcome across the evaluation, plus live estimates (research §3.3, §3.4). */
@@ -172,6 +183,17 @@
   border-top: 0;
   background: var(--bg2);
   flex-wrap: wrap;
+}
+/*
+ * The headline grows from one line ("5 required components missing") to three once an evaluation
+ * lands ("Incomplete — 0 of 4 required choices made …"), and because the strip wraps, that pushed the
+ * whole parts table down by ~32 px on mobile. Reserve the taller state so the row count of the page
+ * is stable while that async result arrives.
+ */
+@media (max-width: 700px) {
+  .pstatus-main {
+    min-height: calc(4 * 1.45em + 22px);
+  }
 }
 .pstatus-main {
   display: flex;
@@ -618,6 +640,15 @@
   gap: 16px;
   align-items: start;
 }
+/*
+ * Grid and flex children default to `min-width: auto`, so a track can be forced wider than the
+ * viewport by its content's min-content size. That made the whole page scroll horizontally on a
+ * 320 px screen: the rail's `minmax(220px, 1fr)` collapsed to 2 x 220 px and pushed the document to
+ * 456 px wide. Every direct child here is allowed to shrink instead.
+ */
+.parts-cols > * {
+  min-width: 0;
+}
 .prail {
   display: grid;
   gap: 10px;
@@ -674,6 +705,14 @@
   font-size: 10.5px;
   line-height: 1.5;
   color: var(--dim);
+}
+/*
+ * The builder-context status line is the one note whose length depends on asynchronous evaluation,
+ * so it reserves its tallest state. Without this the catalog rail grows by ~47 px when the evaluation
+ * lands and pushes the parts table down (the largest layout shift on the parts routes).
+ */
+.pbox-note-reserved {
+  min-height: calc(4 * 1.5em + 8px);
 }
 
 /* Compatibility filter with separate buckets (research §4.1). Unknown is its own bucket. */
@@ -1275,7 +1314,8 @@ html.light .pnotice-fail {
   }
   .prail {
     position: static;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    /* `min(220px, 100%)` keeps one column readable when the viewport is narrower than 220 px. */
+    grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
   }
 }
 

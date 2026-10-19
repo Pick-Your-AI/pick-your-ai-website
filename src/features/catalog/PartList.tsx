@@ -48,7 +48,7 @@ import { KEY_FIELDS, itemPath, kindPath, rowSubtitle, specValue } from '../../li
 import { useCompatByKind, verdictFor } from '../../lib/compat';
 import { LAYERS, headlineKind, itemLogo, layerOf } from '../../lib/layers';
 import { humanize, formatValue } from '../../lib/schema-fields';
-import { useToast } from '../../components/feedback';
+import { Loading, useToast } from '../../components/feedback';
 
 const MAX_COMPARE = 3;
 
@@ -135,7 +135,61 @@ export function PartList({
         </span>
       </div>
     );
-  if (!catalog.data || !build || !ctx || !cov) return null;
+  /*
+   * Paint the page identity before the catalog resolves. The parts table needs data, but the
+   * heading, breadcrumb and actions do not — and holding all of it back delayed first paint by the
+   * whole fixture latency plus the validators chunk.
+   */
+  const singleKind = mode === 'kind' && kind ? kind : undefined;
+  const pageHeading = singleKind
+    ? `Choose ${withArticle(KIND_LABELS[singleKind])}`
+    : layer
+      ? `Choose ${labelInSentence(layerOf(layer).name)}`
+      : 'All components';
+
+  const head = (
+    <PartsHead
+      crumbs={
+        <>
+          <Link to="/">PickYour.AI</Link> <span>/</span>
+          <Link to="/catalog">Component catalog</Link>
+          {singleKind ? (
+            <>
+              <span>/</span> {KIND_LABELS[singleKind]}
+            </>
+          ) : layer ? (
+            <>
+              <span>/</span> {layerOf(layer).name}
+            </>
+          ) : null}
+        </>
+      }
+      title={pageHeading}
+      description={
+        singleKind
+          ? `Part of ${layerOf(kindDef(singleKind).tier).name}. Columns are contract spec fields; a value the catalog does not record shows as "—", never as zero.`
+          : 'Every component kind, grouped by layer. The compatibility filter is on by default, and unknown is its own bucket.'
+      }
+      actions={
+        <>
+          <Link className="pbtn" to="/builder">
+            <Icon name="layers" /> Back to builder
+          </Link>
+          <Link className="pbtn pbtn-primary" to="/compare">
+            <Icon name="compare" /> Compare
+          </Link>
+        </>
+      }
+    />
+  );
+
+  if (!catalog.data || !build || !ctx || !cov)
+    return (
+      <>
+        {head}
+        <Loading label="Loading the parts register…" />
+      </>
+    );
 
   // ---- rows --------------------------------------------------------------------------------
   const pool = catalog.data.items.filter((i) =>
@@ -248,51 +302,13 @@ export function PartList({
     });
 
   const layerOfRow = (tier: Tier) => layerOf(tier);
-  const single = mode === 'kind' && kind ? kind : undefined;
-  // "Choose an AI model", "Choose a hosting platform" — articles handled by the contract labels.
-  const heading = single
-    ? `Choose ${withArticle(KIND_LABELS[single])}`
-    : layer
-      ? `Choose ${labelInSentence(layerOf(layer).name)}`
-      : 'All components';
+  const single = singleKind;
 
   const requiredFor = (k: ComponentKind) => kindNeed(k, ctx.mode) === 'needed';
 
   return (
     <>
-      <PartsHead
-        crumbs={
-          <>
-            <Link to="/">PickYour.AI</Link> <span>/</span>
-            <Link to="/catalog">Component catalog</Link>
-            {single ? (
-              <>
-                <span>/</span> {KIND_LABELS[single]}
-              </>
-            ) : layer ? (
-              <>
-                <span>/</span> {layerOf(layer).name}
-              </>
-            ) : null}
-          </>
-        }
-        title={heading}
-        description={
-          single
-            ? `Part of ${layerOf(kindDef(single).tier).name}. Columns are contract spec fields; a value the catalog does not record shows as "—", never as zero.`
-            : 'Every component kind, grouped by layer. The compatibility filter is on by default, and unknown is its own bucket.'
-        }
-        actions={
-          <>
-            <Link className="pbtn" to="/builder">
-              <Icon name="layers" /> Back to builder
-            </Link>
-            <Link className="pbtn pbtn-primary" to="/compare">
-              <Icon name="compare" /> Compare
-            </Link>
-          </>
-        }
-      />
+      {head}
 
       <p className="pbox-note" style={{ marginBottom: 12 }}>
         Snapshot <code className="mono">{catalog.data.id}</code> r{catalog.data.revision} ·{' '}
@@ -400,7 +416,7 @@ export function PartList({
 
         <div>
           <div className="plist-head">
-            <h2>{heading}</h2>
+            <h2>{pageHeading}</h2>
             <span className="count" aria-live="polite">
               {sorted.length} of {rows.length} products · {bucketCount.compatible} compatible ·{' '}
               {bucketCount.unknown} unknown · {bucketCount.incompatible} incompatible
@@ -651,10 +667,17 @@ export function PartList({
           </div>
 
           <div className="pt-foot">
+            {/*
+              Kept to one short line: this block only paints with the table, so a long footnote
+              becomes the largest-contentful element and pushes LCP out to whenever the rows land.
+              The legend detail lives in the column headers' titles instead.
+            */}
             <span className="pbar-meta">
-              Estimates from synthetic demo data · not a quote · <strong>Included*</strong> means
-              free/included billing on an unverified record the build policy admits, and{' '}
-              <strong>≥</strong> marks a component with an unpriced meter
+              Synthetic demo estimates · not a quote ·{' '}
+              <abbr title="Free or included billing on an unverified record that the build policy admits">
+                Included*
+              </abbr>{' '}
+              · <abbr title="A component with at least one unpriced meter">≥</abbr> = partial
             </span>
             <button
               type="button"

@@ -255,6 +255,19 @@ button:disabled {
 .hamburger {
   display: none;
 }
+/*
+ * The full navigation needs ~424 px and the actions ~186 px; with the brand and gaps the header
+ * overflowed the document by 32 px between 761 and 820 px, so the page scrolled sideways on a
+ * tablet-portrait screen. Collapse to the menu button from 820 px down instead of 760.
+ */
+@media (max-width: 820px) {
+  .main-nav {
+    display: none;
+  }
+  .hamburger {
+    display: grid;
+  }
+}
 .btn {
   display: inline-flex;
   align-items: center;

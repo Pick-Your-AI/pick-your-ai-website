@@ -262,7 +262,12 @@ export function MiniBuild({
         <span>Est. {cost?.period_days ?? 30}-day cost</span>
         <strong>{total}</strong>
       </div>
-      <p className="pbox-note" data-testid="overall-status">
+      {/*
+        The status line grows from one line to three once an evaluation lands, which used to push the
+        whole table down by ~47 px on mobile (CLS 0.066, the largest layout shift on the parts routes).
+        Reserving the taller box keeps the row count stable through that transition.
+      */}
+      <p className="pbox-note pbox-note-reserved" data-testid="overall-status">
         {incomplete
           ? `Incomplete — ${incomplete.chosen} of ${incomplete.total} required choices made. ${incomplete.remediation} Provisional inference from presence rules; the contract finding is unchanged.`
           : outcome === 'fail'

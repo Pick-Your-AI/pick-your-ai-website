@@ -114,9 +114,17 @@ function Header() {
           <Link className="header-build" to="/builder">
             <Icon name="layers" />
             Your stack
-            <span className="tiny-counter">
+            {/*
+              The count is exposed with aria-label rather than an inner `.sr-only` span: an
+              absolutely-positioned visually-hidden span at the end of this right-aligned counter is
+              laid out past the viewport edge and extended the document's scroll width, so the page
+              scrolled sideways on a phone.
+            */}
+            <span
+              className="tiny-counter"
+              aria-label={`${filledLayers} of ${LAYERS.length} layers selected`}
+            >
               {filledLayers}
-              <span className="sr-only"> of {LAYERS.length} layers selected</span>
             </span>
           </Link>
           <button
