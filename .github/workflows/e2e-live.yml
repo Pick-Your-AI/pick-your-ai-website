@@ -1,7 +1,8 @@
 name: E2E live
 
 # Playwright checks against the production site after every successful deploy, daily, and on demand.
-# Read-only: no secrets, no write permissions. Specs live in tests/e2e-live/.
+# Read-only repository token for admission; no deployment secrets or write permissions.
+# Specs live in tests/e2e-live/. Delayed-event admission: issue #318.
 
 on:
   # Runs trusted code from the default branch only; it never checks out code from the triggering run.
@@ -14,9 +15,12 @@ on:
 
 permissions:
   contents: read
+  actions: read # Read canonical deployment run/attempt/job metadata for admission.
 
 concurrency:
-  group: e2e-live
+  # Delayed events from different deploys cannot cancel one another. Only duplicate checks of
+  # the same triggering execution share a group; scheduled/manual checks have separate groups.
+  group: e2e-live-${{ github.event_name }}-${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -37,10 +41,27 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      - name: Admit live release
+        id: admission
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ADMISSION_RECEIPT: ${{ runner.temp }}/live-admission.json
+        run: node scripts/deploy/live-admission.mjs
+      - if: steps.admission.outputs.decision == 'run'
+        run: npm ci
+      - if: steps.admission.outputs.decision == 'run'
+        run: npx playwright install --with-deps chromium
       - name: Playwright against production
+        if: steps.admission.outputs.decision == 'run'
         run: npx playwright test -c tests/e2e-live/playwright.live.config.ts
+      - name: Retain live admission receipt
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: live-admission
+          path: ${{ runner.temp }}/live-admission.json
+          if-no-files-found: error
+          retention-days: 7
       - if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
