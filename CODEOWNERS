@@ -1,8 +1,8 @@
-# Default owner: the Pick-Your-AI organization owner (mirrors pick-your-ai-research CODEOWNERS).
-# The @Pick-Your-AI/maintainers team has no access to this repository yet, so it is not listed;
-# add it once it is granted write access. Later, more specific rules take precedence.
-*                     @CompleteDotTech
+# Default owners: the Lead Maintainers (@CompleteDotTech, @BunsDev). Mirrors pick-your-ai-research CODEOWNERS.
+# The Websites team has write access; Lead Maintainers have admin. Team handles are not listed so that
+# review routing stays explicit per person. Later, more specific rules take precedence.
+*                     @CompleteDotTech @BunsDev
 
 # Vendored research contract: change only through `npm run contracts:update` at a reviewed upstream SHA.
-/contracts/           @CompleteDotTech
-/.github/workflows/   @CompleteDotTech
+/contracts/           @CompleteDotTech @BunsDev
+/.github/workflows/   @CompleteDotTech @BunsDev
