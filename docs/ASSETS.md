@@ -38,8 +38,21 @@ npm run fonts:subset
 ```
 
 The glyph set lives in `scripts/font-charset.mjs`: printable ASCII plus the punctuation and math
-characters the UI renders (`—`, `·`, `…`, `→`, `×`, `§`, `≥`, `≠`, `≤`, `⊆`, `✓`, `✕`, …). Shipping
-the full faces cost ~91 kB, most of one performance point on the parts routes; the subset is ~58 kB.
+characters the UI renders (`—`, `·`, `…`, `→`, `×`, `§`, `≥`, `≠`, `≤`, `⊆`, `✓`, `✕`, …).
+
+Two reductions apply, and both are verified rather than assumed:
+
+- **Glyph subset.** Shipping the full faces cost ~91 kB; the glyph subset is ~59 kB.
+- **Clipped `wght` axis.** The two variable faces are clipped to 400–700, the only span the
+  stylesheet selects, which drops the unused masters (DM Sans 25.9 kB → 16.1 kB, and all four
+  faces together 59.4 kB → 49.4 kB). All four weights
+  in use still interpolate distinctly, and the visual baselines are pixel-identical after clipping.
+  Weights outside the range clamp to the nearest master; nothing in the UI asks for one.
+
+`src/styles/fonts.css` deliberately declares **no `unicode-range`**. It previously carried Google
+Fonts' default _latin_ range, which stops at U+2193, so nine characters the UI renders (`→ ↗ ↥ ≠ ≤ ≥
+⊆ ✓ ✕`) silently fell back to a system font even though the subset contained them. The files here are
+already subset to exactly what the app uses, so the font's own cmap is the correct authority.
 `tests/unit/font-subset.test.ts` fails if new copy uses a character outside the set, and fails if the
 payload creeps back over 64 kB, so neither regression can land silently.
 

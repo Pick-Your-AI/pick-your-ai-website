@@ -1248,89 +1248,109 @@ function CompareStart() {
   }));
 
   return (
-    <div className="parts-sections">
-      <section aria-labelledby="modes-heading">
-        <h2 id="modes-heading" className="parts-h2">
-          Two ways to compare
-        </h2>
-        <div className="parts-cols">
-          <div className="pbox">
-            <div className="pbox-head">Components</div>
-            <div className="pbox-body">
-              <p className="pbox-note">
-                Pick 2–{SLOTS} catalog components with the compare checkboxes on a selection page.
-                They line up field by field with differences marked, and each column can be added to
-                your stack.
-              </p>
-              <Link className="pbtn" to="/catalog">
-                Browse the catalog
-              </Link>
+    <div className="app-page parts-page">
+      <div className="container">
+        {/* Every route needs exactly one h1; this chooser previously rendered none. */}
+        <PartsHead
+          crumbs={
+            <>
+              <Link to="/">PickYour.AI</Link> <span>/</span>
+              <Link to="/compare">Compare</Link> <span>/</span> Builds
+            </>
+          }
+          title="Compare builds"
+          description="Diff two revisions of your current build, or two saved builds: selections per tier, objectives, compatibility outcomes and estimated cost."
+          actions={
+            <Link className="pbtn" to="/compare">
+              <Icon name="search" /> Compare components
+            </Link>
+          }
+        />
+        <div className="parts-sections">
+          <section aria-labelledby="modes-heading">
+            <h2 id="modes-heading" className="parts-h2">
+              Two ways to compare
+            </h2>
+            <div className="parts-cols">
+              <div className="pbox">
+                <div className="pbox-head">Components</div>
+                <div className="pbox-body">
+                  <p className="pbox-note">
+                    Pick 2–{SLOTS} catalog components with the compare checkboxes on a selection
+                    page. They line up field by field with differences marked, and each column can
+                    be added to your stack.
+                  </p>
+                  <Link className="pbtn" to="/catalog">
+                    Browse the catalog
+                  </Link>
+                </div>
+              </div>
+              <div className="pbox">
+                <div className="pbox-head">Builds</div>
+                <div className="pbox-body">
+                  <p className="pbox-note">
+                    Diff two revisions of your current build, or two saved builds: selections per
+                    tier, objectives, compatibility outcomes and estimated cost.
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
-          <div className="pbox">
-            <div className="pbox-head">Builds</div>
-            <div className="pbox-body">
+          </section>
+
+          <section aria-labelledby="rev-heading">
+            <h2 id="rev-heading" className="parts-h2">
+              Revisions of your current build
+            </h2>
+            {!draft ? (
+              <Loading label="Loading your current build…" />
+            ) : draft.revisions.length < 2 ? (
               <p className="pbox-note">
-                Diff two revisions of your current build, or two saved builds: selections per tier,
-                objectives, compatibility outcomes and estimated cost.
+                &ldquo;{draft.build.name}&rdquo; has only one kept revision. Every change in the{' '}
+                <Link to="/builder">builder</Link> creates a new one.
               </p>
-            </div>
-          </div>
+            ) : (
+              <PickTwo
+                id="pick-revisions"
+                legend={`Revisions of “${draft.build.name}”`}
+                options={revisionOptions}
+                onCompare={([x, y]) => {
+                  const [lo, hi] = [Number(x), Number(y)].sort((m, n) => m - n);
+                  void navigate(`/compare?revisions=${lo},${hi}`);
+                }}
+              />
+            )}
+          </section>
+
+          <section aria-labelledby="saved-heading">
+            <h2 id="saved-heading" className="parts-h2">
+              Saved builds
+            </h2>
+            {saved.isError ? (
+              <ErrorState error={saved.error} onRetry={() => void saved.refetch()} />
+            ) : !saved.data ? (
+              <Loading label="Loading saved builds…" />
+            ) : readable.length < 2 ? (
+              <p className="pbox-note">
+                You need at least two saved builds in this browser. See{' '}
+                <Link to="/builds">My Builds</Link>.
+              </p>
+            ) : (
+              <PickTwo
+                id="pick-builds"
+                legend="Saved builds in this browser"
+                options={readable.map((s) => ({
+                  value: s.id,
+                  label: s.name,
+                  detail: `Revision ${s.revision} · ${s.selectionCount} selection${s.selectionCount === 1 ? '' : 's'}`,
+                }))}
+                onCompare={([x, y]) =>
+                  void navigate(`/compare?builds=${encodeURIComponent(x)},${encodeURIComponent(y)}`)
+                }
+              />
+            )}
+          </section>
         </div>
-      </section>
-
-      <section aria-labelledby="rev-heading">
-        <h2 id="rev-heading" className="parts-h2">
-          Revisions of your current build
-        </h2>
-        {!draft ? (
-          <Loading label="Loading your current build…" />
-        ) : draft.revisions.length < 2 ? (
-          <p className="pbox-note">
-            &ldquo;{draft.build.name}&rdquo; has only one kept revision. Every change in the{' '}
-            <Link to="/builder">builder</Link> creates a new one.
-          </p>
-        ) : (
-          <PickTwo
-            id="pick-revisions"
-            legend={`Revisions of “${draft.build.name}”`}
-            options={revisionOptions}
-            onCompare={([x, y]) => {
-              const [lo, hi] = [Number(x), Number(y)].sort((m, n) => m - n);
-              void navigate(`/compare?revisions=${lo},${hi}`);
-            }}
-          />
-        )}
-      </section>
-
-      <section aria-labelledby="saved-heading">
-        <h2 id="saved-heading" className="parts-h2">
-          Saved builds
-        </h2>
-        {saved.isError ? (
-          <ErrorState error={saved.error} onRetry={() => void saved.refetch()} />
-        ) : !saved.data ? (
-          <Loading label="Loading saved builds…" />
-        ) : readable.length < 2 ? (
-          <p className="pbox-note">
-            You need at least two saved builds in this browser. See{' '}
-            <Link to="/builds">My Builds</Link>.
-          </p>
-        ) : (
-          <PickTwo
-            id="pick-builds"
-            legend="Saved builds in this browser"
-            options={readable.map((s) => ({
-              value: s.id,
-              label: s.name,
-              detail: `Revision ${s.revision} · ${s.selectionCount} selection${s.selectionCount === 1 ? '' : 's'}`,
-            }))}
-            onCompare={([x, y]) =>
-              void navigate(`/compare?builds=${encodeURIComponent(x)},${encodeURIComponent(y)}`)
-            }
-          />
-        )}
-      </section>
+      </div>
     </div>
   );
 }

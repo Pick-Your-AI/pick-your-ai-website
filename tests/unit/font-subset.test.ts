@@ -67,7 +67,9 @@ describe('subset web fonts', () => {
     // Full faces totalled ~91 kB, which cost ~4 performance points on the parts routes.
     // The subset lands near 59 kB; the ceiling leaves headroom for a future weight, not for a revert.
     const total = Object.values(sizes).reduce((sum, n) => sum + n, 0);
-    expect(total, `fonts: ${JSON.stringify(sizes)}`).toBeLessThan(64 * 1024);
+    // Full faces ~91 kB; glyph-subset ~59 kB; glyph-subset + clipped wght axis ~44 kB.
+    // The ceiling guards against a revert to unclipped or unsubset faces.
+    expect(total, `fonts: ${JSON.stringify(sizes)}`).toBeLessThan(50 * 1024);
   });
 
   it('declares no unicode-range that would exclude a glyph the UI renders', () => {
