@@ -7,6 +7,7 @@
 | Push to `main` (every merged PR) | CI → build → deploy → verify. Fully automatic. |
 | `workflow_dispatch` on `main`, `rollback_to` empty | Redeploys the current `main` commit (CI runs again first). |
 | `workflow_dispatch` on `main`, `rollback_to=<sha>` | Re-activates a retained release, then verifies it. No build. See [backup-and-rollback.md](backup-and-rollback.md). |
+| Dispatch or re-run by someone not in `DEPLOY_DISPATCHERS` | Never deploys or rolls back. Only a merge to `main`, run as the merging user, deploys without the allowlist. |
 | PRs, feature branches, dispatch on any other ref | Never deploy. The `deploy` and `rollback` jobs require `refs/heads/main`, and the `production` environment only admits `main`. |
 
 ## Workflow: `.github/workflows/deploy-production.yml`

@@ -80,7 +80,7 @@ export function ObjectivesForm({
   };
 
   const field = (key: string, label: string, input: React.ReactNode, hint?: string) => (
-    <div>
+    <div key={key}>
       <label htmlFor={`${id}-${key}`} className="field-label">
         {label}
       </label>

@@ -12,7 +12,7 @@ import { useValidatorsReady } from '../app/validators';
 import { decodeShareFragment, importBuild, type ImportResult } from '../domain/share';
 import { useBuilder } from '../app/builder-context';
 import { useData } from '../app/data-context';
-import { useBuildAnalysis, useCatalog } from '../app/queries';
+import { useBuildAnalysis, useCatalog, useRuleset } from '../app/queries';
 import { itemPath } from '../lib/catalog-view';
 import { humanize } from '../lib/schema-fields';
 import { EmptyState, ErrorState, Loading, Notice } from '../components/feedback';
@@ -20,6 +20,7 @@ import { Icon } from '../components/icon';
 import { PageHeader } from '../components/layout';
 import { OutcomeBadge, SyntheticBadge } from '../components/status';
 import { costHeadline, flaggedFindings, overall } from '../features/builder/analysis';
+import { incompleteBuild } from '../features/builder/incomplete';
 
 const PREVIEW_NOTE = 'Shared builds are previews; there is no server-side sharing yet.';
 
@@ -158,6 +159,7 @@ function SharedPreview({
   filePicker: React.ReactNode;
 }) {
   const catalog = useCatalog();
+  const ruleset = useRuleset();
   const analysis = useBuildAnalysis(build);
   const { startNew } = useBuilder();
   const { mode } = useData();
@@ -172,6 +174,7 @@ function SharedPreview({
   const unresolved = build.selections.filter((s) => !byId.has(s.catalog_item_id)).length;
   const headline = costHeadline(analysis.costIsCurrent ? analysis.cost : undefined);
   const report = analysis.reportIsCurrent ? analysis.report : undefined;
+  const incomplete = incompleteBuild(build, report, ruleset.data);
   const outcome = overall(report);
   const flagged = flaggedFindings(report);
 
@@ -200,11 +203,8 @@ function SharedPreview({
           {warnings.join(' ')}
         </Notice>
       ) : null}
-      {staleness.snapshotMismatch || staleness.driftedSelectionIds.length || unresolved ? (
+      {staleness.driftedSelectionIds.length || unresolved ? (
         <Notice tone="warning" title="May not match this catalog.">
-          {staleness.snapshotMismatch
-            ? `This build is locked to catalog snapshot ${build.locks.catalog_snapshot_id}; this site has ${catalog.data.id}. `
-            : ''}
           {unresolved
             ? `${unresolved} selection${unresolved === 1 ? ' is' : 's are'} not in this catalog. `
             : ''}
@@ -215,37 +215,51 @@ function SharedPreview({
           author saw.
         </Notice>
       ) : null}
-      {staleness.catalog.state === 'stale' ? (
-        <Notice tone="warning">
-          Catalog evidence is {staleness.catalog.ageDays} days old (stale).
-        </Notice>
-      ) : null}
+      <p className="text-sm">
+        Catalog captured{' '}
+        <time dateTime={catalog.data.captured_at}>{catalog.data.captured_at.slice(0, 10)}</time>.
+        Capture date does not establish currentness or independent verification.
+        {staleness.snapshotMismatch
+          ? ` This build is locked to snapshot ${build.locks.catalog_snapshot_id}; this site has ${catalog.data.id}. A different snapshot alone does not invalidate this build.`
+          : ''}
+      </p>
 
       <div
-        className={`compat-panel${outcome === 'fail' ? ' danger' : outcome === 'unknown' ? ' warning' : ''}`}
+        className={`compat-panel${outcome === 'fail' && !incomplete ? ' danger' : outcome === 'unknown' || incomplete ? ' warning' : ''}`}
+        data-testid="overall-status"
       >
         <div className="compat-title">
           <Icon
             name={
-              outcome === 'fail' ? 'x-circle' : outcome === 'unknown' ? 'alert' : 'check-circle'
+              incomplete
+                ? 'alert'
+                : outcome === 'fail'
+                  ? 'x-circle'
+                  : outcome === 'unknown'
+                    ? 'alert'
+                    : 'check-circle'
             }
           />
           {!report
             ? 'Evaluating this build…'
-            : outcome === 'fail'
-              ? `${report.summary.failed} failing check${report.summary.failed === 1 ? '' : 's'}`
-              : outcome === 'unknown'
-                ? `${report.summary.unknown} check${report.summary.unknown === 1 ? '' : 's'} unknown`
-                : `${report.summary.passed} checks pass, ${report.summary.skipped} do not apply`}
+            : incomplete
+              ? `Incomplete — ${incomplete.chosen} of ${incomplete.total} required choices made`
+              : outcome === 'fail'
+                ? `${report.summary.failed} failing check${report.summary.failed === 1 ? '' : 's'}`
+                : outcome === 'unknown'
+                  ? `${report.summary.unknown} check${report.summary.unknown === 1 ? '' : 's'} unknown`
+                  : `${report.summary.passed} checks pass, ${report.summary.skipped} do not apply`}
         </div>
         <p>
           {!report
             ? 'The published rules are being evaluated against this site’s catalog.'
-            : outcome === 'fail'
-              ? 'This stack is not compatible as configured.'
-              : outcome === 'unknown'
-                ? 'No failures, but missing information is not treated as compatible.'
-                : 'Compatibility is not proof of quality or production readiness.'}
+            : incomplete
+              ? `${incomplete.remediation} Provisional inference from presence rules; the contract findings below are unchanged.`
+              : outcome === 'fail'
+                ? 'This stack is not compatible as configured.'
+                : outcome === 'unknown'
+                  ? 'No failures, but missing information is not treated as compatible.'
+                  : 'Compatibility is not proof of quality or production readiness.'}
         </p>
       </div>
       {analysis.evaluation.isError ? (

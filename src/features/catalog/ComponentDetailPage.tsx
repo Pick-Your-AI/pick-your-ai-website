@@ -18,7 +18,7 @@ import {
 } from '../../contracts';
 import type { CatalogItem } from '../../contracts';
 import { addOrReplace } from '../../domain/build';
-import { itemFreshness } from '../../domain/freshness';
+import { evidenceDateLabel, itemFreshness } from '../../domain/freshness';
 import { useBuilder } from '../../app/builder-context';
 import { useCatalog, useCompatibleOptions, usePricebook } from '../../app/queries';
 import { ErrorState, Loading, useToast } from '../../components/feedback';
@@ -28,7 +28,7 @@ import { itemPrice } from '../../lib/item-cost';
 import { itemLogo } from '../../lib/layers';
 import { type FieldDef, formatValue, specFields } from '../../lib/schema-fields';
 import NotFoundPage from '../../pages/NotFoundPage';
-import { isOpenSource, licenseLine, strongestVerification, verificationLabel } from './shared';
+import { accessSummary, licenseLine, strongestVerification, verificationLabel } from './shared';
 
 export default function ComponentDetailPage() {
   const { kindSlug = '', itemSlug = '' } = useParams();
@@ -132,7 +132,7 @@ export default function ComponentDetailPage() {
     { label: 'Catalog version', value: item.version },
     {
       label: 'Provenance',
-      value: `${verificationLabel(verification)} · checked ${new Date(freshness.checkedAt).toLocaleDateString()} (${freshness.ageDays} days, ${freshness.state})`,
+      value: `${verificationLabel(verification)} · ${evidenceDateLabel(freshness)}`,
     },
     {
       label: 'Illustrative baseline',
@@ -176,9 +176,7 @@ export default function ComponentDetailPage() {
                 {(item.tags ?? []).map((tag) => (
                   <span key={tag}>{tag}</span>
                 ))}
-                <span>
-                  {isOpenSource(item) ? 'Open source or weights' : 'Managed or proprietary'}
-                </span>
+                <span>{accessSummary(item)}</span>
               </div>
             </div>
             <h2 className="detail-subhead">At a glance</h2>
@@ -207,6 +205,38 @@ export default function ComponentDetailPage() {
                 </div>
               ))}
             </div>
+
+            <h2 className="detail-subhead">Evidence &amp; provenance</h2>
+            <p className="detail-provenance-status">
+              Recorded provenance status: <strong>{verificationLabel(verification)}</strong>
+            </p>
+            <div className="detail-note">
+              <Icon name="info" />
+              <div>
+                This date does not establish currentness or independent verification. Historical
+                verified labels may record source checks only. Independent verification requires
+                linked reproduction or corroboration; the recorded status alone is not proof.
+              </div>
+            </div>
+            <ul className="detail-provenance">
+              {item.provenance.length ? (
+                item.provenance.map((entry, index) => (
+                  <li key={`${entry.checked_at}-${index}`}>
+                    {entry.source_uri ? (
+                      <a className="text-link" href={entry.source_uri} rel="noopener noreferrer">
+                        Source
+                      </a>
+                    ) : (
+                      <span className="dim">No source URL recorded</span>
+                    )}{' '}
+                    · {entry.verification_status} · checked {entry.checked_at.slice(0, 10)}
+                    {entry.notes ? <span className="pt-sub">{entry.notes}</span> : null}
+                  </li>
+                ))
+              ) : (
+                <li className="dim">No provenance records in this demo item.</li>
+              )}
+            </ul>
           </div>
           <aside className="detail-aside">
             <div className="detail-buy">

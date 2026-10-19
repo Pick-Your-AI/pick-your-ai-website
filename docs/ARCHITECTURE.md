@@ -35,12 +35,12 @@ user action (Add / Replace / Configure / Remove / Objectives)
       useBuildAnalysis(build):
         ['cost', id, rev]       PricingProvider.estimate
         ['resources', id, rev]  ResourceEstimateProvider.estimate
-        ['evaluation', id, rev] CompatibilityEvaluator.evaluate(build, {cost, resources})
-      the previous revision's results stay on screen, explicitly labelled "re-evaluating"
-  → aria-live announcement: "Revision N evaluated: X failing, Y unknown"
+        ['evaluation', id, rev, costId, resourceId] CompatibilityEvaluator.evaluate(build, {cost, resources})
+      prior-evaluation metadata is labelled stale; findings, verdicts, counts and readiness await the current report
+  → current-report aria-live announcement: "Revision N evaluated: X failing, Y unknown"
 ```
 
-Results are keyed by `(build id, revision)`, so a result for an older revision is never presented as current. The evaluator itself ignores cost and resource evidence whose `build_revision` does not match.
+Build-derived results are keyed by `(build id, revision)`, and evaluation also includes the admitted immutable cost and resource evidence IDs. Late or replacement evidence triggers reevaluation. The query layer excludes evidence from another build or revision and marks previous reports as stale. The builder withholds previous findings, summary outcomes, counts, readiness and screen-reader announcements until the current report is available.
 
 ## Contracts and versioning
 

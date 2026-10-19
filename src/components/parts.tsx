@@ -220,6 +220,7 @@ export function MiniBuild({
   cost,
   conflicts,
   unknown,
+  incomplete,
 }: {
   selected: number;
   required: { done: number; total: number };
@@ -227,12 +228,16 @@ export function MiniBuild({
   cost: CostEstimate | undefined;
   conflicts: number;
   unknown: number;
+  /** Presence-only incompleteness (#294): a missing required pick is not an incompatibility. */
+  incomplete?: { chosen: number; total: number; remediation: string } | undefined;
 }) {
-  const total = cost
-    ? cost.coverage === 'complete'
-      ? `$${cost.total.amount}`
-      : `≥ $${cost.total.amount}`
-    : '—';
+  // An empty stack has no cost yet — `$0.00` would read as a measured zero.
+  const total =
+    selected === 0 || !cost
+      ? '—'
+      : cost.coverage === 'complete'
+        ? `$${cost.total.amount}`
+        : `≥ $${cost.total.amount}`;
   return (
     <Box title="Your stack">
       <div className="pbox-row">
@@ -257,14 +262,16 @@ export function MiniBuild({
         <span>Est. {cost?.period_days ?? 30}-day cost</span>
         <strong>{total}</strong>
       </div>
-      <p className="pbox-note">
-        {outcome === 'fail'
-          ? 'Failing checks block this configuration.'
-          : outcome === 'unknown'
-            ? 'Some checks cannot be decided yet.'
-            : outcome === 'pass'
-              ? 'No published rule fails for this revision.'
-              : 'Not evaluated yet.'}{' '}
+      <p className="pbox-note" data-testid="overall-status">
+        {incomplete
+          ? `Incomplete — ${incomplete.chosen} of ${incomplete.total} required choices made. ${incomplete.remediation} Provisional inference from presence rules; the contract finding is unchanged.`
+          : outcome === 'fail'
+            ? 'Failing checks block this configuration.'
+            : outcome === 'unknown'
+              ? 'Some checks cannot be decided yet.'
+              : outcome === 'pass'
+                ? 'No published rule fails for this revision.'
+                : 'Not evaluated yet.'}{' '}
         Estimates are synthetic demo data, not quotes.
       </p>
       <div style={{ padding: '0 10px 10px' }}>

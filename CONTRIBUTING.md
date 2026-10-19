@@ -15,11 +15,13 @@ Copy `.env.example` to `.env.local` to change the data provider (`VITE_DATA_MODE
 ## Workflow
 
 1. Open or pick an issue. Implementation issues link their research counterpart in `Pick-Your-AI/pick-your-ai-research`; do not duplicate research issues here.
-2. Branch from `main` (`feat/…`, `fix/…`, `docs/…`, `ci/…`).
+2. Branch from `main`. Maintainers use `feat/…`, `fix/…`, `docs/…` or `ci/…`; early contributors use `contrib/<your-login>/<topic>`; other contributors work from a fork.
 3. Keep changes small. Follow the existing code style; Prettier and ESLint are enforced.
 4. Run the checks listed in `AGENTS.md`.
 5. Open a PR using the template. Fill in traceability (research issues, contract dependencies, acceptance criteria, tests, unknowns).
-6. `main` is protected: merging requires the `ci-required` check. Every merge to `main` deploys to production automatically.
+6. `main` is protected: merging requires one approval from someone other than the author and the `ci-required` check, and only maintainers merge. Every merge to `main` deploys to production automatically.
+
+The [organization contributing rules](https://github.com/Pick-Your-AI/.github/blob/main/CONTRIBUTING.md) define roles, credentials and enforcement.
 
 ## npm scripts
 
@@ -47,6 +49,12 @@ The contract is owned by the research repository. To adopt a new upstream versio
 3. Fix any type errors and fixture validation failures, update `CHANGELOG.md`, and open a PR.
 
 See `docs/DATA_INTEGRATION.md` for the full process.
+
+## Toolchain major upgrades
+
+[Issue #20](https://github.com/Pick-Your-AI/pickyour.ai/issues/20) tracks deliberate evaluation of major toolchain upgrades. The earlier Dependabot PRs [#3](https://github.com/Pick-Your-AI/pickyour.ai/pull/3), [#4](https://github.com/Pick-Your-AI/pickyour.ai/pull/4), [#5](https://github.com/Pick-Your-AI/pickyour.ai/pull/5) and [#6](https://github.com/Pick-Your-AI/pickyour.ai/pull/6) were closed because they targeted the pre-bootstrap tree; closing them did not establish upgrade compatibility. [PR #28](https://github.com/Pick-Your-AI/pickyour.ai/pull/28) added the current Dependabot major-version ignores for TypeScript, ESLint, `@eslint/js` and `@types/node`. Node types follow the Node 22 runtime baseline.
+
+Before adopting a major, record its migration requirements and compatibility with the actual runtime, TypeScript/ESLint configuration, plugins and generated contract tooling. Test the proposed lockfile with the full `AGENTS.md` checks, document failures or deferral reasons in #20, and submit a focused PR. The ignore rules are a deferral mechanism, not evidence that the evaluation is complete.
 
 ## Commit messages
 

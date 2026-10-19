@@ -13,7 +13,7 @@ import { useValidatorsReady } from '../app/validators';
 import { canExport, exportBuild, exportFileName } from '../domain/share';
 import { useBuilder } from '../app/builder-context';
 import { useData } from '../app/data-context';
-import { useBuildAnalysis, useCatalog } from '../app/queries';
+import { useBuildAnalysis, useCatalog, useRuleset } from '../app/queries';
 import { itemPath } from '../lib/catalog-view';
 import { formatValue, humanize } from '../lib/schema-fields';
 import { EmptyState, ErrorState, Loading, Notice } from '../components/feedback';
@@ -21,6 +21,7 @@ import { Icon } from '../components/icon';
 import { PageHeader } from '../components/layout';
 import { OutcomeBadge, SyntheticBadge } from '../components/status';
 import { buildMarkdown, download } from '../features/builder/BuildToolbar';
+import { incompleteBuild } from '../features/builder/incomplete';
 import { costHeadline, flaggedFindings, formatMoney, overall } from '../features/builder/analysis';
 
 const formatDate = (iso: string) => new Date(iso).toLocaleString();
@@ -41,6 +42,7 @@ export default function BuildSummaryPage() {
   const { draft, ready } = useBuilder();
   const { mode } = useData();
   const catalog = useCatalog();
+  const ruleset = useRuleset();
   const build = draft?.build;
   const analysis = useBuildAnalysis(build);
 
@@ -69,6 +71,7 @@ export default function BuildSummaryPage() {
   const stalePicks = [...staleness.driftedSelectionIds, ...staleness.missingSelectionIds];
   const resources = analysis.resources;
   const report = analysis.reportIsCurrent ? analysis.report : undefined;
+  const incomplete = incompleteBuild(build, report, ruleset.data);
   const outcome = overall(report);
   const flagged = flaggedFindings(report);
 
@@ -138,32 +141,60 @@ export default function BuildSummaryPage() {
         ) : null}
 
         <div
-          className={`compat-panel${outcome === 'fail' ? ' danger' : outcome === 'unknown' ? ' warning' : ''}`}
+          className={`compat-panel${outcome === 'fail' && !incomplete ? ' danger' : outcome === 'unknown' || incomplete ? ' warning' : ''}`}
           data-testid="overall-status"
         >
           <div className="compat-title">
             <Icon
               name={
-                outcome === 'fail' ? 'x-circle' : outcome === 'unknown' ? 'alert' : 'check-circle'
+                incomplete
+                  ? 'alert'
+                  : outcome === 'fail'
+                    ? 'x-circle'
+                    : outcome === 'unknown'
+                      ? 'alert'
+                      : 'check-circle'
               }
             />
+            <strong>
+              {!report
+                ? 'Not evaluated yet'
+                : incomplete
+                  ? 'Incomplete'
+                  : outcome === 'fail'
+                    ? 'Incompatible'
+                    : outcome === 'unknown'
+                      ? 'Unknowns'
+                      : 'Compatible (rules pass)'}
+            </strong>
             {!report
-              ? 'Not evaluated yet'
-              : outcome === 'fail'
-                ? `${report.summary.failed} failing check${report.summary.failed === 1 ? '' : 's'}`
-                : outcome === 'unknown'
-                  ? `${report.summary.unknown} check${report.summary.unknown === 1 ? '' : 's'} unknown`
-                  : `${report.summary.passed} checks pass, ${report.summary.skipped} do not apply`}
+              ? null
+              : incomplete
+                ? ` — ${incomplete.chosen} of ${incomplete.total} required choices made`
+                : outcome === 'fail'
+                  ? ` — ${report.summary.failed} failing check${report.summary.failed === 1 ? '' : 's'}`
+                  : outcome === 'unknown'
+                    ? ` — ${report.summary.unknown} check${report.summary.unknown === 1 ? '' : 's'} unknown`
+                    : ` — ${report.summary.passed} checks pass, ${report.summary.skipped} do not apply`}
           </div>
           <p>
             {!report
               ? 'Add components and the published rules will be evaluated for this revision.'
-              : outcome === 'fail'
-                ? 'This stack is not compatible as configured. Fixes are listed below.'
-                : outcome === 'unknown'
-                  ? 'No failures, but missing information is not treated as compatible.'
-                  : 'Compatibility is not proof of quality or production readiness.'}
+              : incomplete
+                ? `${incomplete.remediation} Provisional inference from presence rules; the contract findings below are unchanged.`
+                : outcome === 'fail'
+                  ? 'This stack is not compatible as configured. Fixes are listed below.'
+                  : outcome === 'unknown'
+                    ? 'No failures, but missing information is not treated as compatible.'
+                    : 'Compatibility is not proof of quality or production readiness.'}
           </p>
+          {!analysis.reportIsCurrent && analysis.report ? (
+            <p className="hint-text" role="status">
+              Previous evaluation: revision {analysis.report.build_revision}
+              {analysis.report.build_id !== build.id ? ' of another build' : ''}. These results are
+              not current.
+            </p>
+          ) : null}
         </div>
         {analysis.evaluation.isError ? (
           <ErrorState
@@ -371,24 +402,18 @@ export default function BuildSummaryPage() {
           </section>
 
           <section className="panel" aria-labelledby="freshness-heading">
-            <h2 id="freshness-heading">Evidence freshness</h2>
+            <h2 id="freshness-heading">Evidence dates</h2>
             <p>
               Catalog {catalog.data.id} captured{' '}
               <time dateTime={staleness.catalog.checkedAt}>
-                {new Date(staleness.catalog.checkedAt).toLocaleDateString()}
-              </time>{' '}
-              ({staleness.catalog.ageDays} day{staleness.catalog.ageDays === 1 ? '' : 's'} ago) —{' '}
-              {staleness.catalog.state === 'stale' ? (
-                <strong className="severity severity-warning">stale</strong>
-              ) : (
-                'fresh'
-              )}
-              .
+                {staleness.catalog.checkedAt.slice(0, 10)}
+              </time>
+              . Capture date does not establish currentness or independent verification.
             </p>
             {staleness.snapshotMismatch ? (
               <p className="severity severity-warning">
-                This build is locked to snapshot {build.locks.catalog_snapshot_id}, not the current
-                one.
+                This build is locked to snapshot {build.locks.catalog_snapshot_id}; this site has{' '}
+                {catalog.data.id}. A different snapshot alone does not invalidate this build.
               </p>
             ) : null}
             {stalePicks.length ? (

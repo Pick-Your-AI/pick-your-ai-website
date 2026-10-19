@@ -26,6 +26,19 @@ const PAGES: [string, RegExp][] = [
 ];
 
 async function axe(page: Page) {
+  // A theme class can change before its finite color transitions finish.
+  // Audit the settled view while keeping the normal-motion user journey.
+  // Re-read the active animations each frame instead of retaining completion promises.
+  await page.waitForFunction(
+    () =>
+      !document
+        .getAnimations()
+        .some(
+          (animation) =>
+            animation.playState === 'running' &&
+            Number.isFinite(animation.effect?.getComputedTiming().endTime),
+        ),
+  );
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
     .analyze();
@@ -130,6 +143,15 @@ test('builder: parts table, running total, findings, export and theme', async ({
     info.project.name.startsWith('mobile'),
     'table interactions are covered on desktop; mobile renders the same data as cards',
   );
+  // The builder opens an empty canvas (no prefilled recommendation), so seed two choices first.
+  await page.goto('/catalog/workload?show=all');
+  await page
+    .getByRole('row', { name: /Demo Customer Support Chat/ })
+    .getByRole('button', { name: /^Add$/ })
+    .click();
+  await page.goto('/catalog/model?show=all');
+  await page.getByRole('button', { name: /^Add$/ }).first().click();
+
   await page.goto('/builder');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Choose your parts/i);
 
@@ -286,7 +308,7 @@ test('share link round-trips into a read-only shared view', async ({ page, conte
     .getByRole('button', { name: /Provider-API support chat/ })
     .first()
     .click();
-  await page.getByRole('button', { name: /^Share$/ }).click();
+  await page.getByRole('button', { name: 'Copy share link' }).click();
   await expect(page.getByText(/Share link copied/)).toBeVisible();
   const url = await page.evaluate(() => navigator.clipboard.readText());
   expect(url).toContain('/shared#b1.');
@@ -311,4 +333,43 @@ test('mobile: the shell collapses to a hamburger and the builder stacks its colu
   await expect(page.locator('.pt tbody tr.pt-group').first()).toBeVisible();
   await expect(page.getByTestId('overall-status')).toBeVisible();
   await axe(page);
+});
+
+test('incomplete guidance survives choosing, reloading and sharing without blaming the chosen row', async ({
+  page,
+  context,
+}, info) => {
+  test.skip(
+    info.project.name.startsWith('mobile'),
+    'desktop row interactions; mobile banner covered by route smoke',
+  );
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/builder');
+  await expect(page.getByTestId('overall-status')).toContainText('0 of 4 required choices made');
+  await expect(page.getByTestId('overall-status')).toContainText('Provisional inference');
+  await page.goto('/catalog/workload?show=all');
+  await page
+    .getByRole('row', { name: /Demo Customer Support Chat/ })
+    .getByRole('button', { name: /^Add$/ })
+    .click();
+  await expect(page.getByTestId('overall-status')).toContainText('1 of 4 required choices made');
+  // The dense catalog adds in place; the row-level blame check belongs on the builder.
+  await page.goto('/builder');
+  await expect(page.locator('[data-kind="workload"]')).not.toContainText('Fail');
+  await expect(page.getByText('rule.required.foundation', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByTestId('overall-status')).toContainText('1 of 4 required choices made');
+  await page.goto('/catalog/deployment-mode?show=all');
+  await page
+    // Contract semantics (research #297): `api` is a provider API on shared capacity.
+    .getByRole('row', { name: /Provider API \(shared capacity\)/ })
+    .getByRole('button', { name: /^Add$/ })
+    .click();
+  await expect(page.getByTestId('overall-status')).toContainText('2 of 4 required choices made');
+  await page.goto('/builder');
+  await page.getByRole('button', { name: 'Copy share link' }).click();
+  await expect(page.getByText(/Share link copied/)).toBeVisible();
+  const url = await page.evaluate(() => navigator.clipboard.readText());
+  await page.goto(url);
+  await expect(page.getByTestId('overall-status')).toContainText('2 of 4 required choices made');
 });

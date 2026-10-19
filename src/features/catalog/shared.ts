@@ -11,11 +11,18 @@ import { KEY_FIELDS, specValue } from '../../lib/catalog-view';
 import { formatValue, specFields } from '../../lib/schema-fields';
 
 /**
- * An item counts as open source / open weights when it declares an SPDX licence id. That is the
- * only distribution signal the contract records, and it is deliberately not guessed from tags.
+ * The contract records a declared licence (SPDX id) and two permission flags, nothing more. An SPDX
+ * id is not proof of open-source distribution, and it says nothing about model weights: only the
+ * explicit `self_hosting_allowed` / `commercial_use_allowed` flags carry permission meaning.
  */
-export function isOpenSource(item: CatalogItem): boolean {
+export function declaresLicence(item: CatalogItem): boolean {
   return Boolean(item.license?.spdx_id);
+}
+
+/** Short access summary: the declared licence, or an explicit "not declared". */
+export function accessSummary(item: CatalogItem): string {
+  const spdx = item.license?.spdx_id;
+  return spdx ? `Declared licence ${spdx}` : 'No licence declared in this demo record';
 }
 
 const VERIFICATION_ORDER: Provenance['verification_status'][] = [

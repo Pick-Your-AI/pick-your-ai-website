@@ -15,3 +15,6 @@ _*.mjs
 
 # scratch artefacts
 .tmp-shots/
+lighthouse-report/
+test-results-visual/
+playwright-report-visual/

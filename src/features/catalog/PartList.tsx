@@ -24,7 +24,7 @@ import {
 import { buildContext, coverage, kindNeed } from '../../domain/activation';
 import { addOrReplace, replaceSelection } from '../../domain/build';
 import { useBuilder } from '../../app/builder-context';
-import { useBuildAnalysis, useCatalog, usePricebook } from '../../app/queries';
+import { useBuildAnalysis, useCatalog, usePricebook, useRuleset } from '../../app/queries';
 import { Icon } from '../../components/icon';
 import {
   ActiveFilters,
@@ -41,6 +41,7 @@ import {
   type SortDir,
   type Verdict,
 } from '../../components/parts';
+import { incompleteBuild } from '../builder/incomplete';
 import { itemPrice } from '../../lib/item-cost';
 import { KEY_FIELDS, itemPath, kindPath, rowSubtitle, specValue } from '../../lib/catalog-view';
 import { useCompatByKind, verdictFor } from '../../lib/compat';
@@ -75,6 +76,7 @@ export function PartList({
   const catalog = useCatalog();
   const pricebook = usePricebook();
   const analysis = useBuildAnalysis(draft?.build);
+  const ruleset = useRuleset();
 
   const build = draft?.build;
 
@@ -83,9 +85,14 @@ export function PartList({
   const sort = params.get('sort') ?? 'recommended';
   const dir: SortDir = params.get('dir') === 'desc' ? 'desc' : 'asc';
   const bucketParam = params.get('show');
-  const buckets: Verdict[] = bucketParam
-    ? (bucketParam.split(',').filter(Boolean) as Verdict[])
-    : ['compatible', 'unknown'];
+  // `show=all` is the explicit "no bucket filter" form (deep links and the empty-state CTA use it);
+  // otherwise `show` is a comma list of verdicts. The default keeps the filter on (research §4.1).
+  const buckets: Verdict[] =
+    bucketParam === 'all'
+      ? ['compatible', 'unknown', 'incompatible']
+      : bucketParam
+        ? (bucketParam.split(',').filter(Boolean) as Verdict[])
+        : ['compatible', 'unknown'];
   const ossOnly = params.get('oss') === '1';
   // Deep links from the builder's "Change" action: replace an existing selection, then return.
   const replaceId = params.get('replace');
@@ -152,6 +159,7 @@ export function PartList({
 
   const filtered = rows.filter(({ item, verdict }) => {
     if (!buckets.includes(verdict)) return false;
+    // A declared SPDX id is a licence declaration, not proof of open-source distribution.
     if (ossOnly && !item.license?.spdx_id) return false;
     if (!query) return true;
     return [item.name, item.description, KIND_LABELS[item.kind], ...(item.tags ?? [])]
@@ -228,8 +236,10 @@ export function PartList({
 
   const activeFilters: ActiveFilter[] = [];
   if (query) activeFilters.push({ key: 'q', label: 'Search', value: q });
-  if (ossOnly) activeFilters.push({ key: 'oss', label: 'Licence', value: 'Open source only' });
-  if (bucketParam)
+  if (ossOnly) activeFilters.push({ key: 'oss', label: 'Licence', value: 'Declared licence only' });
+  if (bucketParam === 'all')
+    activeFilters.push({ key: 'show', label: 'Outcome', value: 'All outcomes' });
+  else if (bucketParam)
     activeFilters.push({
       key: 'show',
       label: 'Outcome',
@@ -283,6 +293,13 @@ export function PartList({
         }
       />
 
+      <p className="pbox-note" style={{ marginBottom: 12 }}>
+        Snapshot <code className="mono">{catalog.data.id}</code> r{catalog.data.revision} ·{' '}
+        {catalog.data.items.length} records · captured{' '}
+        <time dateTime={catalog.data.captured_at}>{catalog.data.captured_at.slice(0, 10)}</time>.
+        Capture date does not establish currentness or independent verification.
+      </p>
+
       {replaceId ? (
         <div className="pnotice" style={{ marginBottom: 12 }}>
           <Icon name="arrow-right" />
@@ -313,6 +330,13 @@ export function PartList({
             cost={analysis.costIsCurrent ? analysis.cost : undefined}
             conflicts={analysis.report?.summary.failed ?? 0}
             unknown={analysis.report?.summary.unknown ?? 0}
+            incomplete={
+              incompleteBuild(
+                build,
+                analysis.reportIsCurrent ? analysis.report : undefined,
+                ruleset.data,
+              ) ?? undefined
+            }
           />
 
           <CompatFilter
@@ -335,7 +359,7 @@ export function PartList({
                     checked={ossOnly}
                     onChange={(e) => update({ oss: e.target.checked ? '1' : null })}
                   />
-                  Open source only
+                  Declared licence only
                 </label>
               </div>
             </div>
@@ -567,9 +591,25 @@ export function PartList({
                           </td>
                           <td className="num" data-label="Est. cost">
                             {price.amount === null ? (
-                              <span className="pchip pchip-unknown">Unknown</span>
-                            ) : Number(price.amount) === 0 ? (
-                              <span className="dim">Included</span>
+                              <span className="pchip pchip-unknown" title={price.note}>
+                                Unknown
+                              </span>
+                            ) : price.included ? (
+                              <span
+                                className={price.label.endsWith('*') ? 'pchip' : 'dim'}
+                                title={price.note}
+                              >
+                                {price.label}
+                              </span>
+                            ) : price.partial ? (
+                              <span className="pchip pchip-unknown" title={price.note}>
+                                <Money
+                                  amount={price.amount}
+                                  currency={price.currency}
+                                  approximate
+                                />{' '}
+                                partial
+                              </span>
                             ) : (
                               <Money amount={price.amount} currency={price.currency} />
                             )}
@@ -610,7 +650,11 @@ export function PartList({
           </div>
 
           <div className="pt-foot">
-            <span className="pbar-meta">Estimates from synthetic demo data · not a quote</span>
+            <span className="pbar-meta">
+              Estimates from synthetic demo data · not a quote · <strong>Included*</strong> means
+              free/included billing on an unverified record the build policy admits, and{' '}
+              <strong>≥</strong> marks a component with an unpriced meter
+            </span>
             <button
               type="button"
               className="pbtn"

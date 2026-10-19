@@ -18,7 +18,6 @@ import { buildContext } from '../domain/activation';
 import { type BuildDraft, commit, createBuild, createDraft } from '../domain/build';
 import { affectedByChange, type InvalidationResult } from '../domain/invalidation';
 import { isDataError } from '../data/errors';
-import { STARTERS } from '../data/fixture/starters';
 import { useData } from './data-context';
 import { useCatalog, useGraph } from './queries';
 
@@ -87,29 +86,11 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     const id = readCurrentId();
     /*
-     * The first visit opens a prefilled demonstration stack (as the design presents it) instead of
-     * an empty canvas. "New build" in the builder starts from blank; nothing here is a
-     * recommendation, and every component is synthetic demo data.
+     * The first visit opens an empty canvas, not a prefilled stack: a preselected demo stack would
+     * read as a recommendation, and "unknown is not pass" applies to a build nobody has configured.
+     * Templates remain an explicit choice on /templates.
      */
-    const fresh = () => {
-      const starter = STARTERS[0];
-      if (!starter) return createDraft(createBuild({ catalogSnapshotId: snapshotId }));
-      const template = starter.build();
-      const base = createBuild({ catalogSnapshotId: snapshotId, name: 'My first AI stack' });
-      return createDraft(
-        {
-          ...template,
-          id: base.id,
-          revision: 1,
-          created_at: base.created_at,
-          updated_at: base.updated_at,
-          lifecycle: 'draft',
-          owner_ref: base.owner_ref,
-          name: 'My first AI stack',
-        },
-        `Created from "${template.name}"`,
-      );
-    };
+    const fresh = () => createDraft(createBuild({ catalogSnapshotId: snapshotId }));
     (id ? builds.get(id) : Promise.reject(new Error('none')))
       .then((stored) => {
         if (cancelled || touched.current) return;

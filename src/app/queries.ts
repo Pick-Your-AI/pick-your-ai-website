@@ -1,7 +1,7 @@
 /*
  * TanStack Query hooks. Every key that depends on a build includes (build id, revision), so results
- * for an earlier revision are never shown as current; previous data is kept only as an explicitly
- * flagged "stale" placeholder while the new revision is evaluated.
+ * for another build or revision are never shown as current. Previous cost/report data is kept as
+ * an explicitly flagged stale placeholder; capacity evidence is hidden until it is current.
  */
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
@@ -70,14 +70,22 @@ export function useBuildAnalysis(build: BuildSnapshot | null | undefined) {
     placeholderData: keepPreviousData,
     retry: 1,
   });
-  const costReady = cost.data && cost.data.build_revision === build?.revision;
+  const costReady =
+    build && cost.data?.build_id === build.id && cost.data.build_revision === build.revision;
   const resourceEstimate =
+    build &&
     resources.data?.status === 'available' &&
-    resources.data.estimate.build_revision === build?.revision
+    resources.data.estimate.build_id === build.id &&
+    resources.data.estimate.build_revision === build.revision
       ? resources.data.estimate
       : null;
   const evaluation = useQuery({
-    queryKey: ['evaluation', ...buildKey(build), costReady ? 'with-cost' : 'no-cost'],
+    queryKey: [
+      'evaluation',
+      ...buildKey(build),
+      costReady ? cost.data?.id : null,
+      resourceEstimate?.id ?? null,
+    ],
     queryFn: () =>
       data.compatibility.evaluate(build!, {
         costEstimate: costReady ? cost.data : null,
@@ -88,7 +96,13 @@ export function useBuildAnalysis(build: BuildSnapshot | null | undefined) {
     retry: 1,
   });
   const report = evaluation.data;
-  const reportIsCurrent = Boolean(report && build && report.build_revision === build.revision);
+  const reportIsCurrent = Boolean(
+    !evaluation.isPlaceholderData &&
+    report &&
+    build &&
+    report.build_id === build.id &&
+    report.build_revision === build.revision,
+  );
   const costIsCurrent = Boolean(costReady);
   return {
     report,
@@ -97,7 +111,12 @@ export function useBuildAnalysis(build: BuildSnapshot | null | undefined) {
     cost: cost.data,
     costIsCurrent,
     costQuery: cost,
-    resources: resources.data,
+    resources:
+      build &&
+      !resources.isPlaceholderData &&
+      (resources.data?.status === 'unavailable' || resourceEstimate)
+        ? resources.data
+        : undefined,
     resourcesQuery: resources,
   };
 }

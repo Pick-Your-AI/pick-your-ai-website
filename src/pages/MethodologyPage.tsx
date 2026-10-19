@@ -471,17 +471,27 @@ function Evidence() {
       </p>
       <dl className="kv">
         <dt className="mono">verified</dt>
-        <dd>Confirmed against a primary source.</dd>
+        <dd>
+          For new claims, supported by linked independent reproduction or corroboration. Historical
+          verified labels may record source checks only; the label alone is not proof of independent
+          verification.
+        </dd>
         <dt className="mono">user_supplied</dt>
         <dd>Provided by a user or contributor and not independently checked.</dd>
         <dt className="mono">estimated</dt>
         <dd>Derived from a model or an estimate rather than measured.</dd>
         <dt className="mono">unverified</dt>
-        <dd>Not yet checked. Every item in this preview is unverified.</dd>
+        <dd>
+          No independent verification recorded. This includes source-checked claims without
+          independent support. Every item in this preview is unverified.
+        </dd>
       </dl>
       <p>
-        The preview flags facts and catalog snapshots older than 30 days as stale, and it shows the
-        check date next to the status. That window is provisional pending <IssueLink n={41} />.
+        Evidence dates describe when sources were checked or catalogs captured; they do not prove
+        that facts are current or independently verified. Version-pinned facts do not expire with
+        age. Current-state facts, such as prices and availability, retain their as-of dates. No
+        time-to-live has been adopted by <IssueLink n={41} />; price-specific refresh policy remains
+        open. A newer snapshot alone does not invalidate a pinned build.
       </p>
       <p>
         Provenance attaches to the catalog snapshot as well as to individual items, so a result can

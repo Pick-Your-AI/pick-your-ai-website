@@ -20,11 +20,13 @@ import { removeSelection, rename, updateObjectives, updateSettings } from '../..
 import { canExport, encodeShareFragment, exportBuild, exportFileName } from '../../domain/share';
 import { useBuilder } from '../../app/builder-context';
 import { useData } from '../../app/data-context';
-import { useBuildAnalysis, useCatalog, usePricebook } from '../../app/queries';
+import { useBuildAnalysis, useCatalog, usePricebook, useRuleset } from '../../app/queries';
 import { ErrorState, Loading, Modal, useToast } from '../../components/feedback';
 import { Icon } from '../../components/icon';
 import { Findings, Money, NotEvaluated, PartsHead, StatusStrip } from '../../components/parts';
 import { flaggedFindings, costHeadline } from './analysis';
+import { evidenceLine } from './evidence';
+import { incompleteBuild } from './incomplete';
 import { itemPrice } from '../../lib/item-cost';
 import { kindPath, rowSubtitle } from '../../lib/catalog-view';
 import { settingsFields } from '../../lib/schema-fields';
@@ -32,30 +34,6 @@ import { LAYERS, itemLogo, layerOf } from '../../lib/layers';
 import { download } from './BuildToolbar';
 import { ObjectivesForm } from './ObjectivesForm';
 import { SettingsForm } from './SettingsForm';
-
-const VERIFICATION: Record<string, string> = {
-  verified: 'Verified',
-  user_supplied: 'User supplied',
-  estimated: 'Estimated',
-  unverified: 'Unverified',
-};
-
-/** Evidence line for one catalog item: how it was verified and when. */
-function evidenceLine(item: CatalogItem): { label: string; stale: boolean } {
-  const statuses = item.provenance.map((p) => p.verification_status);
-  const best = ['verified', 'user_supplied', 'estimated', 'unverified'].find((s) =>
-    statuses.includes(s as never),
-  );
-  const checked = item.provenance
-    .map((p) => p.checked_at)
-    .sort()
-    .at(-1);
-  const days = checked ? Math.floor((Date.now() - Date.parse(checked)) / 86_400_000) : undefined;
-  return {
-    label: `${VERIFICATION[best ?? 'unverified'] ?? 'Unverified'}${days === undefined ? '' : ` · ${days}d`}`,
-    stale: days !== undefined && days > 30,
-  };
-}
 
 function GroupRow({
   tier,
@@ -119,7 +97,7 @@ function ComponentRow({
   const evidence = item ? evidenceLine(item) : undefined;
   const logo = item ? itemLogo(item) : undefined;
   return (
-    <tr>
+    <tr data-kind={kind}>
       <th scope="row" data-label="Component">
         <span className="pt-name">
           <span className="dim" style={{ fontSize: 11 }}>
@@ -155,7 +133,9 @@ function ComponentRow({
       </td>
       <td data-label="Evidence">
         {evidence ? (
-          <span className={evidence.stale ? 'pchip pchip-unknown' : 'pchip'}>{evidence.label}</span>
+          <span className="pchip" title={evidence.detail}>
+            {evidence.label}
+          </span>
         ) : (
           <span className="dim">—</span>
         )}
@@ -198,19 +178,39 @@ function ComponentRow({
 }
 
 /**
- * Price cell. `Included` and `Free` are words, not "$0": a zero would read as a measured charge.
- * A metered component with no applicable rate is `Unknown`, never zero.
+ * Price cell.
+ *
+ * `Included` is a word, not "$0": a zero would read as a measured charge. An unverified free item
+ * that the build policy does not admit is `Unknown`, not `Included`. A component whose meters were
+ * only partly priced is marked as a lower bound so a partial charge is never read as the full
+ * monthly price.
  */
 function CostCell({ price }: { price: ReturnType<typeof itemPrice> | undefined }) {
   if (!price) return <span className="dim">—</span>;
-  if (price.amount === null) return <span className="pchip pchip-unknown">Unknown</span>;
-  if (Number(price.amount) === 0) return <span className="dim">Included</span>;
+  if (price.amount === null)
+    return (
+      <span className="pchip pchip-unknown" title={price.note}>
+        Unknown
+      </span>
+    );
+  if (price.included)
+    return (
+      <span className={price.label.endsWith('*') ? 'pchip' : 'dim'} title={price.note}>
+        {price.label}
+      </span>
+    );
+  if (price.partial)
+    return (
+      <span className="pchip pchip-unknown" title={price.note}>
+        <Money amount={price.amount} currency={price.currency} approximate /> partial
+      </span>
+    );
   return <Money amount={price.amount} currency={price.currency} />;
 }
 
 function EmptyRow({ kind, onChoose }: { kind: ComponentKind; onChoose: () => void }) {
   return (
-    <tr>
+    <tr data-kind={kind}>
       <th scope="row" data-label="Component">
         <span className="dim" style={{ fontSize: 11 }}>
           {KIND_LABELS[kind]}
@@ -231,10 +231,11 @@ function EmptyRow({ kind, onChoose }: { kind: ComponentKind; onChoose: () => voi
 export default function BuilderPage() {
   const navigate = useNavigate();
   const toast = useToast();
-  const { draft, ready, apply, startNew, saveState } = useBuilder();
+  const { draft, ready, apply, startNew, saveState, lastChange } = useBuilder();
   const { mode } = useData();
   const catalog = useCatalog();
   const pricebook = usePricebook();
+  const ruleset = useRuleset();
   const build = draft?.build;
   const analysis = useBuildAnalysis(build);
 
@@ -280,15 +281,30 @@ export default function BuilderPage() {
   const headline = costHeadline(total);
   const selectedCount = build.selections.filter((s) => s.enabled).length;
   const requiredDone = cov.needed.length - cov.missing.length;
-  const outcome: 'pass' | 'fail' | 'unknown' | 'none' = failed
-    ? 'fail'
-    : unknown
-      ? 'unknown'
-      : report
-        ? cov.missing.length
-          ? 'unknown'
-          : 'pass'
-        : 'none';
+  /*
+   * A build that is merely missing a required pick is *incomplete*, not incompatible: the frozen
+   * presence rule legitimately fails its existence assertion, so the raw finding is preserved and
+   * the incompleteness is a presentation distinction (#294).
+   */
+  const incomplete = incompleteBuild(build, report, ruleset.data);
+  const outcome: 'pass' | 'fail' | 'unknown' | 'none' = incomplete
+    ? 'unknown'
+    : failed
+      ? 'fail'
+      : unknown
+        ? 'unknown'
+        : report
+          ? cov.missing.length
+            ? 'unknown'
+            : 'pass'
+          : 'none';
+  const announcement = report
+    ? `Revision ${report.build_revision} evaluated: ${failed} failing, ${unknown} unknown.`
+    : '';
+  const affected =
+    lastChange && lastChange.revision === build.revision
+      ? [...new Set([...lastChange.affectedKinds, ...lastChange.changedKinds])]
+      : [];
 
   const commitName = () => {
     const next = (name ?? build.name).trim();
@@ -379,7 +395,7 @@ export default function BuilderPage() {
                 <Icon name="code" /> View JSON
               </button>
               <button type="button" className="pbtn" onClick={() => void share()}>
-                <Icon name="copy" /> Share
+                <Icon name="copy" /> Copy share link
               </button>
               <button type="button" className="pbtn pbtn-primary" onClick={exportJson}>
                 <Icon name="download" /> Export
@@ -431,24 +447,28 @@ export default function BuilderPage() {
         <StatusStrip
           outcome={outcome}
           headline={
-            failed
-              ? `${failed} compatibility error${failed === 1 ? '' : 's'}`
-              : unknown
-                ? `${unknown} check${unknown === 1 ? '' : 's'} unknown`
-                : cov.missing.length
-                  ? `${cov.missing.length} required component${cov.missing.length === 1 ? '' : 's'} missing`
-                  : report
-                    ? 'No compatibility errors'
-                    : 'Not evaluated yet'
+            incomplete
+              ? `Incomplete — ${incomplete.chosen} of ${incomplete.total} required choices made`
+              : failed
+                ? `Incompatible — ${failed} compatibility error${failed === 1 ? '' : 's'}`
+                : unknown
+                  ? `Unknowns — ${unknown} check${unknown === 1 ? '' : 's'} unknown`
+                  : cov.missing.length
+                    ? `${cov.missing.length} required component${cov.missing.length === 1 ? '' : 's'} missing`
+                    : report
+                      ? 'Compatible (rules pass) — no compatibility errors'
+                      : 'Not evaluated yet'
           }
           detail={
-            failed
-              ? 'See the compatibility notes below.'
-              : unknown
-                ? 'Unknown is not a pass.'
-                : cov.missing.length
-                  ? 'The rows marked Required are still empty.'
-                  : undefined
+            incomplete
+              ? `${incomplete.remediation} Provisional inference from presence rules; the contract finding below is unchanged.`
+              : failed
+                ? 'See the compatibility notes below.'
+                : unknown
+                  ? 'Unknown is not a pass.'
+                  : cov.missing.length
+                    ? 'The rows marked Required are still empty.'
+                    : undefined
           }
           stats={[
             { label: 'Required', value: `${requiredDone}/${cov.needed.length}` },
@@ -461,6 +481,38 @@ export default function BuilderPage() {
             { label: 'Unknown checks', value: String(unknown), unknown: unknown > 0 },
           ]}
         />
+
+        <p className="sr-only" aria-live="polite" role="status">
+          {announcement}
+        </p>
+
+        {!analysis.reportIsCurrent && analysis.report ? (
+          <p className="pbox-note" role="status">
+            Previous evaluation: revision {analysis.report.build_revision}
+            {analysis.report.build_id !== build.id ? ' of another build' : ''}. These results are
+            not current, so they are withheld below until this revision is evaluated.
+          </p>
+        ) : null}
+
+        {affected.length ? (
+          <div className="pnotice" style={{ marginTop: 10 }}>
+            <Icon name="workflow" />
+            <span>
+              <strong>{lastChange?.summary}.</strong> Through the dependency graph this re-checks:{' '}
+              {affected.map((k) => KIND_LABELS[k]).join(', ')}. Earlier evaluations, estimates and
+              quotes for this build are now stale.
+            </span>
+          </div>
+        ) : null}
+
+        {analysis.evaluation.isError ? (
+          <div style={{ marginTop: 10 }}>
+            <ErrorState
+              error={analysis.evaluation.error}
+              onRetry={() => void analysis.evaluation.refetch()}
+            />
+          </div>
+        ) : null}
 
         <div className="pt-wrap">
           <div className="pt-scroll" tabIndex={0} role="region" aria-label="Scrollable parts table">
@@ -526,10 +578,14 @@ export default function BuilderPage() {
             <h2 id="notes-heading" className="parts-h2">
               Compatibility notes
             </h2>
-            <Findings
-              report={report}
-              lettered={flagged.map((f) => ({ rule_id: f.rule_id, letter: f.letter }))}
-            />
+            {!report && build.selections.length && !analysis.evaluation.isError ? (
+              <Loading label={`Evaluating revision ${build.revision}…`} />
+            ) : (
+              <Findings
+                report={report}
+                lettered={flagged.map((f) => ({ rule_id: f.rule_id, letter: f.letter }))}
+              />
+            )}
             <div style={{ marginTop: 8 }}>
               <NotEvaluated report={report} />
             </div>
