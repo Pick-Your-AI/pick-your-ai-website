@@ -19,7 +19,7 @@
     "contracts:verify": "node scripts/contracts.mjs verify",
     "contracts:update": "node scripts/contracts.mjs update",
     "contracts:types": "node scripts/generate-contract-types.mjs",
-    "test": "vitest run",
+    "test": "node --test scripts/deploy/live-admission.test.mjs && vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "audit": "npm audit --omit=dev --audit-level=high",

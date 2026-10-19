@@ -131,20 +131,35 @@ export class HttpCompatibilityEvaluator implements CompatibilityEvaluator {
     this.client = client;
   }
   async evaluate(build: BuildSnapshot, evidence: EvaluationEvidence = {}) {
-    const body: Record<string, unknown> = { build_revision: build.revision };
+    const { id, revision } = build;
+    const locks = { ...build.locks };
+    const body: Record<string, unknown> = { build_revision: revision };
     if (evidence.resourceEstimate) body.resource_estimate_id = evidence.resourceEstimate.id;
     if (evidence.costEstimate) body.cost_estimate_id = evidence.costEstimate.id;
     const { value } = await this.client.contract(
       'EvaluationReport',
       'POST',
-      `/builds/${enc(build.id)}/evaluate`,
+      `/builds/${enc(id)}/evaluate`,
       body,
       { 'Idempotency-Key': idempotencyKey() },
     );
-    if (value.build_id !== build.id || value.build_revision !== build.revision) {
+    if (value.build_id !== id || value.build_revision !== revision) {
       throw new DataError('malformed', 'Evaluation report is for a different build revision.', {
         contract: 'EvaluationReport',
       });
+    }
+    if (
+      value.catalog_snapshot_id !== locks.catalog_snapshot_id ||
+      value.ruleset_id !== locks.ruleset_id ||
+      value.ruleset_version !== locks.ruleset_version ||
+      value.dependency_graph_id !== locks.dependency_graph_id ||
+      value.dependency_graph_revision !== locks.dependency_graph_revision
+    ) {
+      throw new DataError(
+        'malformed',
+        'Evaluation report does not match the requested catalog, ruleset, and dependency graph.',
+        { contract: 'EvaluationReport' },
+      );
     }
     return value;
   }
@@ -201,19 +216,27 @@ export class HttpPricingProvider implements PricingProvider {
     return requireArtifactId('Pricebook', value, id);
   }
   async estimate(build: BuildSnapshot, periodDays = 30) {
+    const { id, revision } = build;
     const pricebookId = build.locks.pricebook_id ?? this.cfg.pricebookId;
     if (!pricebookId) throw new DataError('unsupported', 'Build has no pricebook lock.');
     const { value } = await this.client.contract(
       'CostEstimate',
       'POST',
-      `/builds/${enc(build.id)}/estimate-cost`,
-      { build_revision: build.revision, pricebook_id: pricebookId, period_days: periodDays },
+      `/builds/${enc(id)}/estimate-cost`,
+      { build_revision: revision, pricebook_id: pricebookId, period_days: periodDays },
       { 'Idempotency-Key': idempotencyKey() },
     );
-    if (value.build_id !== build.id || value.build_revision !== build.revision) {
+    if (value.build_id !== id || value.build_revision !== revision) {
       throw new DataError('malformed', 'Cost estimate is for a different build revision.', {
         contract: 'CostEstimate',
       });
+    }
+    if (value.pricebook_id !== pricebookId || value.period_days !== periodDays) {
+      throw new DataError(
+        'malformed',
+        'Cost estimate does not match the requested pricebook and period.',
+        { contract: 'CostEstimate' },
+      );
     }
     return value;
   }
