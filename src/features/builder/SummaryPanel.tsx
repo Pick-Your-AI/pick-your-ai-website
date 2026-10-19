@@ -74,8 +74,8 @@ export function OverallStrip({
       {!current && previousReport ? (
         <span className="muted text-xs" role="status">
           Previous evaluation: revision {previousReport.build_revision}
-          {build && previousReport.build_id !== build.id ? ' of another build' : ''}. These
-          results are not current.
+          {build && previousReport.build_id !== build.id ? ' of another build' : ''}. These results
+          are not current.
         </span>
       ) : null}
     </div>
