@@ -40,6 +40,9 @@ describe('incomplete build wording', () => {
   it('does not infer incomplete from a stale report', () => {
     show(buildWith([]), false);
     expect(screen.getByTestId('overall-status')).not.toHaveTextContent('Incomplete');
-    expect(screen.getByTestId('overall-status')).toHaveTextContent('Showing revision');
+    expect(screen.getByTestId('overall-status')).toHaveTextContent('Previous evaluation');
+    expect(screen.getByTestId('overall-status')).toHaveTextContent(
+      'These results are not current.',
+    );
   });
 });

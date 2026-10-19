@@ -1,6 +1,6 @@
 /* Data providers: fixture ↔ HTTP interchangeability, malformed responses and failed requests. */
 import { describe, expect, it, vi } from 'vitest';
-import { BASELINE_GRAPH, BASELINE_RULESET } from '../../src/contracts';
+import { BASELINE_GRAPH, BASELINE_RULESET, assertContract } from '../../src/contracts';
 import { createDraft } from '../../src/domain/build';
 import { createProviders, DataConfigError } from '../../src/data/config';
 import { DataError } from '../../src/data/errors';
@@ -82,6 +82,25 @@ async function runAll(p: DataProviders, build: ReturnType<typeof apiChat>) {
 }
 
 describe('fixture and HTTP providers are interchangeable', () => {
+  it('accepts a cost estimate for the requested build and revision', async () => {
+    const build = apiChat();
+    const fixture = createFixtureProviders({ now: () => NOW });
+    const estimate = await fixture.pricing.estimate(build, 14);
+    const api = fakeApi({ [`POST /builds/${build.id}/estimate-cost`]: () => json(estimate) });
+    await expect(httpProviders(api).pricing.estimate(build, 14)).resolves.toEqual(estimate);
+    expect(api).toHaveBeenCalledWith(
+      `https://api.test/v1/builds/${build.id}/estimate-cost`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          build_revision: build.revision,
+          pricebook_id: DEMO_PRICEBOOK.id,
+          period_days: 14,
+        }),
+      }),
+    );
+  });
+
   it('return equivalent contract data for the same build', async () => {
     const build = contradictory();
     const fixture = createFixtureProviders({ now: () => NOW });
@@ -148,6 +167,24 @@ describe('malformed API responses', () => {
     const p = httpProviders(fakeApi({ [`POST /builds/${build.id}/evaluate`]: () => json(stale) }));
     await expectDataError(p.compatibility.evaluate(build), 'malformed');
   });
+
+  it.each(['build_id', 'build_revision'] as const)(
+    'schema-valid cost estimate with a different %s → malformed',
+    async (field) => {
+      const build = apiChat();
+      const fixture = createFixtureProviders({ now: () => NOW });
+      const mismatched = assertContract('CostEstimate', {
+        ...(await fixture.pricing.estimate(build)),
+        [field]: field === 'build_id' ? 'build.other' : build.revision + 1,
+      });
+      const p = httpProviders(
+        fakeApi({ [`POST /builds/${build.id}/estimate-cost`]: () => json(mismatched) }),
+      );
+      const err = await expectDataError(p.pricing.estimate(build), 'malformed');
+      expect(err.contract).toBe('CostEstimate');
+      expect(err.validationErrors).toBeUndefined();
+    },
+  );
 
   it('malformed compatible-options → malformed', async () => {
     const build = apiChat();
