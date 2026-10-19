@@ -19,6 +19,19 @@ const PAGES: [string, RegExp][] = [
 ];
 
 async function axe(page: Page) {
+  // A theme class can change before its finite color transitions finish.
+  // Audit the settled view while keeping the normal-motion user journey.
+  // Re-read the active animations each frame instead of retaining completion promises.
+  await page.waitForFunction(
+    () =>
+      !document
+        .getAnimations()
+        .some(
+          (animation) =>
+            animation.playState === 'running' &&
+            Number.isFinite(animation.effect?.getComputedTiming().endTime),
+        ),
+  );
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
     .analyze();
