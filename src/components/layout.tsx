@@ -5,7 +5,7 @@ import { buildVersion, shortSha } from '../lib/version';
 import { useData } from '../app/data-context';
 import { useBuilder } from '../app/builder-context';
 import { LAYERS } from '../lib/layers';
-import { Icon } from './icon';
+import { Icon, IconSprite } from './icon';
 import { ToastProvider } from './feedback';
 
 const NAV = [
@@ -199,6 +199,7 @@ function RouteFocus() {
 export function Layout() {
   return (
     <ToastProvider>
+      <IconSprite />
       <a href="#main" className="sr-only sr-only-focusable">
         Skip to content
       </a>
