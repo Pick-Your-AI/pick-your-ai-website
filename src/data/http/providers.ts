@@ -230,19 +230,43 @@ export class HttpBuildRepository implements BuildRepository {
   }
   async get(buildId: string): Promise<StoredBuild> {
     const { value } = await this.client.contract('BuildSnapshot', 'GET', `/builds/${enc(buildId)}`);
+    requireArtifactId('BuildSnapshot', value, buildId);
     return { build: value, revisions: [value], changes: [] };
   }
   async save(stored: StoredBuild, expectedRevision: number | null): Promise<StoredBuild> {
     const b = stored.build;
+    const { id, revision } = b;
+    // A saved revision must permit an exact +1 step in JavaScript. Capture the
+    // submitted identity before awaiting so caller mutation cannot retarget it.
+    const nextRevision = expectedRevision === null ? 1 : expectedRevision + 1;
+    if (
+      (expectedRevision !== null &&
+        (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1)) ||
+      revision !== nextRevision
+    ) {
+      throw new DataError(
+        'malformed',
+        expectedRevision === null
+          ? 'A new remote build must start at revision 1.'
+          : 'A remote build update must use the next revision after a valid saved revision.',
+        { contract: 'BuildSnapshot' },
+      );
+    }
     const { value } =
       expectedRevision === null
         ? await this.client.contract('BuildSnapshot', 'POST', '/builds', b, {
             'Idempotency-Key': idempotencyKey(),
           })
-        : await this.client.contract('BuildSnapshot', 'PUT', `/builds/${enc(b.id)}`, b, {
+        : await this.client.contract('BuildSnapshot', 'PUT', `/builds/${enc(id)}`, b, {
             'If-Match': `"${expectedRevision}"`,
             'Idempotency-Key': idempotencyKey(),
           });
+    requireArtifactId('BuildSnapshot', value, id);
+    if (value.revision !== revision) {
+      throw new DataError('malformed', 'BuildSnapshot does not match the submitted revision.', {
+        contract: 'BuildSnapshot',
+      });
+    }
     const saved = { ...stored, build: value };
     await this.local.save(saved, null);
     return saved;
