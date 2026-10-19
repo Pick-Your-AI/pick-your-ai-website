@@ -10,5 +10,5 @@ public/.htaccess
 docs/operations/
 docs/research/pcpartpicker-*
 
-# The approved design mock is kept verbatim for reference; do not reformat it.
+# Keep the standalone design concept's compact source formatting; review semantic edits directly.
 docs/design/pickyourai-complete.html

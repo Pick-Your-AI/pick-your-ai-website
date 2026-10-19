@@ -18,7 +18,7 @@ import type {
   Ruleset,
   Selection,
 } from '../contracts';
-import { compareScaled, toScaled } from './decimal';
+import { EvaluationNumber } from './evaluation-number';
 
 /** The third truth value. */
 export const UNKNOWN: unique symbol = Symbol('unknown');
@@ -61,15 +61,13 @@ function pointerGet(document: unknown, pointer: string): Value | Unknown {
   return cur;
 }
 
-/** Python-style structural equality (used for `==`, membership and set operations). */
-function pyEqual(a: unknown, b: unknown): boolean {
+/** Structural membership equality; numeric values are never rounded to a money scale. */
+function structuralEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
-  const na = toScaled(a);
-  const nb = toScaled(b);
-  if (typeof a === 'number' && typeof b === 'number' && na !== null && nb !== null)
-    return na === nb;
+  // Private numeric metrics are scalars, not empty objects for structural comparison.
+  if (EvaluationNumber.is(a) || EvaluationNumber.is(b)) return false;
   if (Array.isArray(a) && Array.isArray(b)) {
-    return a.length === b.length && a.every((x, i) => pyEqual(x, b[i]));
+    return a.length === b.length && a.every((x, i) => structuralEqual(x, b[i]));
   }
   if (
     a &&
@@ -83,13 +81,15 @@ function pyEqual(a: unknown, b: unknown): boolean {
     const kb = Object.keys(b);
     return (
       ka.length === kb.length &&
-      ka.every((k) => pyEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]))
+      ka.every((k) =>
+        structuralEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]),
+      )
     );
   }
   return false;
 }
 
-const contains = (list: unknown[], item: unknown) => list.some((x) => pyEqual(x, item));
+const contains = (list: unknown[], item: unknown) => list.some((x) => structuralEqual(x, item));
 
 function and(values: Tri[]): Tri {
   if (values.includes(false)) return false;
@@ -175,35 +175,48 @@ export class RuleEvaluator {
       if (s === UNKNOWN) return UNKNOWN;
       const a = this.settings(s).requested_context_tokens;
       const b = this.settings(s).reserved_output_tokens;
-      if (a === undefined || b === undefined) return UNKNOWN;
-      return (a as number) + (b as number);
+      const requested = EvaluationNumber.from(a);
+      const reserved = EvaluationNumber.from(b);
+      if (requested === null || reserved === null) return UNKNOWN;
+      const total = requested.add(reserved);
+      // Context metrics were numeric primitives; preserve their existing list membership
+      // whenever conversion retains the exact sum. An unrepresentable sum stays exact.
+      return total.toNumberExact() ?? total;
     }
     if (name === 'compute.total_selected_vram_gb') {
       const matches = this.active.filter((s) => s.kind === 'accelerator');
       if (!matches.length) return UNKNOWN;
-      let total = 0n;
+      let total = EvaluationNumber.from(0)!;
       for (const s of matches) {
         const item = this.catalog.get(s.catalog_item_id);
         if (!item) return UNKNOWN;
-        const v = toScaled(this.spec(item).vram_gb);
-        const count = this.settings(s).device_count;
-        if (v === null || typeof count !== 'number') return UNKNOWN;
-        total += v * BigInt(count);
+        const v = EvaluationNumber.from(this.spec(item).vram_gb);
+        const rawCount = this.settings(s).device_count;
+        const count = EvaluationNumber.from(rawCount);
+        if (
+          v === null ||
+          count === null ||
+          typeof rawCount !== 'number' ||
+          !Number.isInteger(rawCount)
+        )
+          return UNKNOWN;
+        total = total.add(v.multiply(count));
       }
-      return { __scaled: total };
+      return total;
     }
     if (name === 'compute.min_selected_device_vram_gb') {
       const matches = this.active.filter((s) => s.kind === 'accelerator');
       if (!matches.length) return UNKNOWN;
-      let min: bigint | null = null;
+      let min: EvaluationNumber | null = null;
       for (const s of matches) {
         const item = this.catalog.get(s.catalog_item_id);
         const vram = item ? this.spec(item).vram_gb : undefined;
         if (typeof vram !== 'number') return UNKNOWN;
-        const v = toScaled(vram)!;
-        if (min === null || v < min) min = v;
+        const v = EvaluationNumber.from(vram);
+        if (v === null) return UNKNOWN;
+        if (min === null || v.compare(min) < 0) min = v;
       }
-      return { __scaled: min };
+      return min ?? UNKNOWN;
     }
     if (name === 'tools.mutating_count') {
       const matches = this.active.filter(
@@ -252,15 +265,15 @@ export class RuleEvaluator {
 
   private compare(op: string, l: Value | Unknown, r: Value | Unknown): Tri {
     if (l === UNKNOWN || r === UNKNOWN) return UNKNOWN;
-    const nl = numericOf(l);
-    const nr = numericOf(r);
+    const nl = EvaluationNumber.from(l);
+    const nr = EvaluationNumber.from(r);
     if (op === 'eq' || op === 'ne') {
-      const equal = nl !== null && nr !== null ? nl === nr : pyEqual(plain(l), plain(r));
+      const equal = nl !== null && nr !== null ? nl.compare(nr) === 0 : structuralEqual(l, r);
       return op === 'eq' ? equal : !equal;
     }
     if (op === 'lt' || op === 'lte' || op === 'gt' || op === 'gte') {
       if (nl === null || nr === null) return UNKNOWN;
-      const c = compareScaled(nl, nr);
+      const c = nl.compare(nr);
       return op === 'lt' ? c < 0 : op === 'lte' ? c <= 0 : op === 'gt' ? c > 0 : c >= 0;
     }
     if (op === 'contains' || op === 'in') {
@@ -367,15 +380,6 @@ export class RuleEvaluator {
     };
   }
 }
-
-/** Internal wrapper for exact decimal metric values so they never round-trip through floats. */
-interface ScaledBox {
-  __scaled: bigint;
-}
-const isScaledBox = (v: unknown): v is ScaledBox =>
-  typeof v === 'object' && v !== null && '__scaled' in v;
-const numericOf = (v: unknown) => (isScaledBox(v) ? v.__scaled : toScaled(v));
-const plain = (v: unknown) => (isScaledBox(v) ? v.__scaled : v);
 
 export function evaluateBuild(inputs: EvaluationInputs): EvaluationReport {
   return new RuleEvaluator(inputs).evaluate();
