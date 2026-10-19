@@ -25,17 +25,17 @@ The [organization contributing rules](https://github.com/Pick-Your-AI/.github/bl
 
 ## Access and roles
 
-Access is granted through the Pick-Your-AI GitHub teams, as of 2026-10-19. Parent teams under `Maintainers` get Triage; push access is held by the child teams listed below.
+Access is granted through the Pick-Your-AI GitHub teams. The model below was reported in [PR #317](https://github.com/Pick-Your-AI/pick-your-ai-website/pull/317) on 2026-10-19; current GitHub team and repository settings govern installed permissions. Parent teams under `Maintainers` get Triage; push access is held by the child teams listed below.
 
 | Role                                           | Who                                                    | Access to this repository                               |
 | ---------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------- |
 | Lead Maintainers (`Lead Maintainers` team)     | @CompleteDotTech, @BunsDev                             | Admin                                                   |
 | Site team (`pickyour.ai` for this repository)  | @CompleteDotTech, @karutoil, @BunsDev, @pushingsquares | Write                                                   |
 | `Websites` parent team                         | Members of the child teams above                       | Triage                                                  |
-| Early contributors (`Early Contributors` team) | Members of the `Early Contributors` team               | Write, on branches named `contrib/<your-login>/<topic>` |
+| Early contributors (`early-contributors` team) | Members of the `early-contributors` team               | Write, on branches named `contrib/<your-login>/<topic>` |
 | Other contributors                             | Anyone else                                            | Fork and pull request                                   |
 
-Only the Lead Maintainers (@CompleteDotTech and @BunsDev) can change team membership. Team membership grants access but does not waive the review and CI requirements above.
+For team-membership requests, contact the Lead Maintainers (@CompleteDotTech and @BunsDev). Organization administrators retain the authority described in the organization contributing rules. Team membership grants access but does not waive the review and CI requirements above.
 
 ## npm scripts
 
