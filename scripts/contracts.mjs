@@ -1,15 +1,16 @@
 #!/usr/bin/env node
-// Vendors and verifies the research contract (Pick-Your-AI/pick-your-ai-research contracts/v1).
+// Vendors and verifies frozen contracts/v1 and the separately pinned accepted display-label sidecar.
 //
 //   node scripts/contracts.mjs update [--ref <sha|branch>]   re-vendor from upstream at a pinned SHA
 //   node scripts/contracts.mjs verify                        check vendored bytes (offline)
 //   node scripts/contracts.mjs verify --upstream             also compare with upstream at the pinned SHA
 //
-// Verification has three layers:
+// Verification has four layers:
 //   1. Every file listed in contracts/PROVENANCE.json matches its recorded SHA-256 (no local edits).
 //   2. Every file listed in the upstream IMPORT_MANIFEST.json matches the hash that the research
 //      repo's own UPSTREAM_SHA256SUMS records for its source path (the frozen v1.0.0 baseline).
-//   3. (--upstream) The vendored tree is byte-identical to upstream contracts/v1 at the pinned SHA.
+//   3. The selected accepted label sidecar matches its independent pin and this exact registry.
+//   4. (--upstream) Both artifacts match their separate immutable upstream Git revisions.
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import {
@@ -30,6 +31,12 @@ const VENDOR_DIR = join(ROOT, 'contracts', 'v1');
 const PROVENANCE = join(ROOT, 'contracts', 'PROVENANCE.json');
 const UPSTREAM_REPO = 'https://github.com/Pick-Your-AI/pick-your-ai-research.git';
 const UPSTREAM_PATH = 'contracts/v1';
+const LABEL_VERSION = '1.0.0';
+const LABEL_FILE = join(ROOT, 'contracts', 'display-labels', `v${LABEL_VERSION}.json`);
+const LABEL_PROVENANCE = join(ROOT, 'contracts', 'display-labels', 'PROVENANCE.json');
+const LABEL_SOURCE_PATH = `research/T0-configuration/display-labels/v${LABEL_VERSION}.json`;
+const LABEL_DECISION =
+  'research/T0-configuration/component-schema-compatibility.md#display-label-sidecar-decision--2026-10-19';
 
 const sha256 = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
 
@@ -92,6 +99,104 @@ function checkBaseline(errors) {
   return checked;
 }
 
+function checkDisplayLabels(errors) {
+  const initialErrors = errors.length;
+  let provenance, sidecar, registry;
+  try {
+    provenance = JSON.parse(readFileSync(LABEL_PROVENANCE, 'utf8'));
+    sidecar = JSON.parse(readFileSync(LABEL_FILE, 'utf8'));
+    registry = JSON.parse(
+      readFileSync(join(VENDOR_DIR, 'schemas/component-registry.json'), 'utf8'),
+    );
+  } catch {
+    errors.push('unreadable or malformed display-label input');
+    return null;
+  }
+  const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+  const fields = (value, expected) =>
+    object(value) && Object.keys(value).sort().join('\n') === expected.sort().join('\n');
+  if (
+    !fields(provenance, [
+      'sourceRepository',
+      'sourcePath',
+      'sourceSha',
+      'sidecarVersion',
+      'locale',
+      'sha256',
+      'decisionRecord',
+      'note',
+    ])
+  ) {
+    errors.push('display-label provenance fields do not match the selected interface');
+    return null;
+  }
+  if (
+    !fields(sidecar, [
+      'sidecar_version',
+      'status',
+      'locale',
+      'registry_version',
+      'registry_sha256',
+      'source_url',
+      'labels',
+      'decision_record',
+    ])
+  ) {
+    errors.push('display-label sidecar fields do not match the selected interface');
+    return null;
+  }
+  if (provenance.sourceRepository !== 'Pick-Your-AI/pick-your-ai-research')
+    errors.push('display-label source repository mismatch');
+  if (provenance.sourcePath !== LABEL_SOURCE_PATH)
+    errors.push('display-label source path mismatch');
+  if (typeof provenance.sourceSha !== 'string' || !/^[0-9a-f]{40}$/.test(provenance.sourceSha))
+    errors.push('display-label immutable source SHA required');
+  if (provenance.sidecarVersion !== LABEL_VERSION)
+    errors.push('display-label provenance version mismatch');
+  if (provenance.locale !== 'en') errors.push('display-label provenance locale mismatch');
+  if (
+    provenance.decisionRecord !==
+    `https://github.com/Pick-Your-AI/pick-your-ai-research/blob/${provenance.sourceSha}/${LABEL_DECISION}`
+  )
+    errors.push('display-label provenance decision mismatch');
+  if (typeof provenance.note !== 'string' || !provenance.note.trim())
+    errors.push('display-label provenance note must be a nonempty string');
+  if (
+    typeof provenance.sha256 !== 'string' ||
+    !/^[0-9a-f]{64}$/.test(provenance.sha256) ||
+    sha256(LABEL_FILE) !== provenance.sha256
+  )
+    errors.push('display-label sidecar hash mismatch');
+  if (sidecar.sidecar_version !== LABEL_VERSION)
+    errors.push('display-label unsupported sidecar version');
+  if (sidecar.status !== 'accepted') errors.push('display-label status must be accepted');
+  if (sidecar.locale !== 'en') errors.push('display-label locale must be en');
+  if (sidecar.registry_version !== registry.schema_version)
+    errors.push('display-label registry version mismatch');
+  if (sidecar.registry_sha256 !== sha256(join(VENDOR_DIR, 'schemas/component-registry.json')))
+    errors.push('display-label registry hash mismatch');
+  if (
+    typeof sidecar.source_url !== 'string' ||
+    !/^https:\/\/github\.com\/Pick-Your-AI\/pick-your-ai-website\/blob\/[0-9a-f]{40}\/src\/contracts\/labels\.ts$/.test(
+      sidecar.source_url,
+    )
+  )
+    errors.push('display-label immutable source reference required');
+  if (sidecar.decision_record !== LABEL_DECISION)
+    errors.push('display-label decision record mismatch');
+  if (!object(sidecar.labels)) {
+    errors.push('display labels must be an object');
+  } else {
+    if (!fields(sidecar.labels, Object.keys(registry.kinds)))
+      errors.push('display-label keys must match the exact registry kinds');
+    const labels = Object.values(sidecar.labels);
+    if (labels.some((label) => typeof label !== 'string' || !label || label.trim() !== label))
+      errors.push('display labels must be nonempty trimmed strings');
+    if (new Set(labels).size !== labels.length) errors.push('display labels must be distinct');
+  }
+  return errors.length === initialErrors ? provenance : null;
+}
+
 function verify({ upstream }) {
   const errors = [];
   if (!existsSync(PROVENANCE))
@@ -107,6 +212,7 @@ function verify({ upstream }) {
     else if (sha256(file) !== h) errors.push(`modified vendored file: ${p}`);
   }
   const baseline = checkBaseline(errors);
+  const labels = checkDisplayLabels(errors);
   if (upstream) {
     const { dir, sha } = cloneAt(prov.sourceSha);
     try {
@@ -123,6 +229,18 @@ function verify({ upstream }) {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+    if (labels) {
+      const { dir, sha } = cloneAt(labels.sourceSha);
+      try {
+        if (sha !== labels.sourceSha)
+          errors.push(`display-label upstream resolved to ${sha}, expected ${labels.sourceSha}`);
+        const published = readFileSync(join(dir, labels.sourcePath));
+        if (!published.equals(readFileSync(LABEL_FILE)))
+          errors.push('display-label sidecar differs from pinned upstream bytes');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
   }
   if (errors.length) {
     console.error(`Contract verification FAILED (${errors.length}):\n  - ${errors.join('\n  - ')}`);
@@ -131,6 +249,10 @@ function verify({ upstream }) {
   console.log(
     `Contract v${prov.contractVersion} @ ${prov.sourceSha.slice(0, 12)}: ${recorded.size} files intact, ` +
       `${baseline} baseline files match UPSTREAM_SHA256SUMS${upstream ? ', identical to upstream' : ''}.`,
+  );
+  console.log(
+    `Display labels v${labels.sidecarVersion} (${labels.locale}) @ ${labels.sourceSha.slice(0, 12)}: ` +
+      `29 labels match the frozen registry${upstream ? ', identical to pinned upstream' : ''}.`,
   );
 }
 
