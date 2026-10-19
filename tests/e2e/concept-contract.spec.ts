@@ -277,6 +277,14 @@ test('review r4314645227: dialogs contain keyboard focus and return it to their 
   await expect(page.locator('#modalCloseBtn')).toBeFocused();
   await page.locator('#modalCloseBtn').click();
   await expect(page.locator('#openCompare')).toBeFocused();
+  await page.setViewportSize({ width: 320, height: 760 });
+  await page.locator('#menuBtn').click();
+  await page.locator('#viewJson').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#closeModal')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#viewJson')).toBeFocused();
+  await expect(page.locator('#menuBtn')).toHaveAttribute('aria-expanded', 'true');
 });
 
 test('review r4314645243: saved identity survives reload without creating another build', async ({
