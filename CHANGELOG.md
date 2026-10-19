@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- Accepted English 1.0.0 display labels from Research #487, pinned independently of frozen v1 and imported without a duplicate kind table; normal contract verification checks the sidecar and its immutable upstream source.
 - Project bootstrap: Vite + React 19 + TypeScript (strict), Tailwind CSS 4, React Router, TanStack Query, ESLint, Prettier, Vitest, Playwright with axe.
 - `dist/version.json` build stamp (commit, build time, contract version and source SHA, data mode) and a footer build indicator.
 - Vendored research contract v1.0.0 from `Pick-Your-AI/pick-your-ai-research@d4bdca4` with provenance manifest and hash verification (`npm run contracts:verify`).

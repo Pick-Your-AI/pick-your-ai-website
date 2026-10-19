@@ -30,52 +30,60 @@ export class ContractHttpClient {
   ): Promise<{ data: unknown; response: Response }> {
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : undefined;
     const timer = controller ? setTimeout(() => controller.abort(), this.timeoutMs) : undefined;
-    let response: Response;
+    // Receiving headers does not complete the request. Keep one deadline active
+    // while consuming either a success body or an optional HTTP error detail.
     try {
-      response = await this.fetchImpl(`${this.baseUrl}${path}`, {
-        method,
-        headers: {
-          Accept: 'application/json',
-          ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-          ...headers,
-        },
-        body: body === undefined ? undefined : JSON.stringify(body),
-        signal: controller?.signal,
-        credentials: 'omit',
-      });
-    } catch (cause) {
-      throw new DataError(
-        'network',
-        `Request to ${path} failed: ${(cause as Error)?.message ?? cause}`,
-        { cause },
-      );
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
-    if (!response.ok) {
-      const kind =
-        response.status === 404 ? 'not_found' : response.status === 409 ? 'conflict' : 'http';
-      let detail = '';
+      let response: Response;
       try {
-        const err = (await response.json()) as { message?: unknown };
-        if (typeof err?.message === 'string') detail = `: ${err.message.slice(0, 300)}`;
-      } catch {
-        /* non-JSON error body */
+        response = await this.fetchImpl(`${this.baseUrl}${path}`, {
+          method,
+          headers: {
+            Accept: 'application/json',
+            ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+            ...headers,
+          },
+          body: body === undefined ? undefined : JSON.stringify(body),
+          signal: controller?.signal,
+          credentials: 'omit',
+        });
+      } catch (cause) {
+        throw new DataError(
+          'network',
+          `Request to ${path} failed: ${(cause as Error)?.message ?? cause}`,
+          { cause },
+        );
       }
-      throw new DataError(kind, `${method} ${path} returned ${response.status}${detail}`, {
-        status: response.status,
-      });
+      if (!response.ok) {
+        const kind =
+          response.status === 404 ? 'not_found' : response.status === 409 ? 'conflict' : 'http';
+        let detail = '';
+        try {
+          const err = (await response.json()) as { message?: unknown };
+          if (typeof err?.message === 'string') detail = `: ${err.message.slice(0, 300)}`;
+        } catch {
+          /* Missing, invalid or timed-out detail does not erase a known HTTP status. */
+        }
+        throw new DataError(kind, `${method} ${path} returned ${response.status}${detail}`, {
+          status: response.status,
+        });
+      }
+      let data: unknown;
+      try {
+        data = await response.json();
+      } catch (cause) {
+        const timedOut = controller?.signal.aborted === true;
+        throw new DataError(
+          timedOut ? 'network' : 'malformed',
+          timedOut
+            ? `${method} ${path} did not finish before the request timeout.`
+            : `${method} ${path} returned invalid JSON.`,
+          { cause, status: response.status },
+        );
+      }
+      return { data, response };
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
     }
-    let data: unknown;
-    try {
-      data = await response.json();
-    } catch (cause) {
-      throw new DataError('malformed', `${method} ${path} returned invalid JSON.`, {
-        cause,
-        status: response.status,
-      });
-    }
-    return { data, response };
   }
 
   /** Requests and validates a contract payload; malformed responses become DataError('malformed'). */

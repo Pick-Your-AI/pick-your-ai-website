@@ -46,6 +46,15 @@ export interface HttpProviderConfig {
 
 const enc = encodeURIComponent;
 
+function hasOnlyKeys(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.keys(value).every((key) => keys.includes(key))
+  );
+}
+
 function requireArtifactId<T extends { id: string }>(
   contract: ContractName,
   value: T,
@@ -159,33 +168,37 @@ export class HttpCompatibilityEvaluator implements CompatibilityEvaluator {
     kind: ComponentKind,
     role = 'primary',
   ): Promise<CompatibleOption[]> {
+    const { id, revision } = build;
     const { data } = await this.client.request(
       'GET',
-      `/builds/${enc(build.id)}/compatible-options?kind=${enc(kind)}&role=${enc(role)}`,
+      `/builds/${enc(id)}/compatible-options?kind=${enc(kind)}&role=${enc(role)}`,
     );
-    const d = data as { build_id?: unknown; build_revision?: unknown; options?: unknown };
     const verdicts = new Set(['compatible', 'incompatible', 'unknown']);
     const valid =
-      d &&
-      d.build_id === build.id &&
-      typeof d.build_revision === 'number' &&
-      Array.isArray(d.options) &&
-      d.options.every(
-        (o: Partial<CompatibleOption>) =>
-          typeof o?.catalog_item_id === 'string' &&
+      hasOnlyKeys(data, ['build_id', 'build_revision', 'kind', 'options']) &&
+      data.build_id === id &&
+      Number.isInteger(data.build_revision) &&
+      data.kind === kind &&
+      Array.isArray(data.options) &&
+      data.options.every(
+        (o: unknown) =>
+          hasOnlyKeys(o, ['catalog_item_id', 'catalog_item_version', 'verdict', 'rule_ids']) &&
+          typeof o.catalog_item_id === 'string' &&
           typeof o.catalog_item_version === 'string' &&
-          verdicts.has(o.verdict as string) &&
-          Array.isArray(o.rule_ids),
+          typeof o.verdict === 'string' &&
+          verdicts.has(o.verdict) &&
+          Array.isArray(o.rule_ids) &&
+          o.rule_ids.every((ruleId: unknown) => typeof ruleId === 'string'),
       );
     if (!valid)
       throw new DataError('malformed', 'compatible-options response does not match the contract.');
-    if (d.build_revision !== build.revision) {
+    if (data.build_revision !== revision) {
       throw new DataError(
         'malformed',
         'compatible-options response is for a different build revision.',
       );
     }
-    return d.options as CompatibleOption[];
+    return data.options as CompatibleOption[];
   }
 }
 
