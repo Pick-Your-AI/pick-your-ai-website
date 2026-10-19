@@ -17,19 +17,31 @@ import subsetFont from 'subset-font';
 import { subsetText } from './font-charset.mjs';
 
 const FACES = [
-  'dm-sans-var.woff2',
-  'space-grotesk-var.woff2',
-  'ibm-plex-mono-400.woff2',
-  'ibm-plex-mono-600.woff2',
+  { file: 'dm-sans-var.woff2', variable: true },
+  { file: 'space-grotesk-var.woff2', variable: true },
+  { file: 'ibm-plex-mono-400.woff2', variable: false },
+  { file: 'ibm-plex-mono-600.woff2', variable: false },
 ];
+
+/*
+ * Weight range the stylesheet actually selects (`font-weight: 400 700` on the two variable faces;
+ * `grep font-weight src/styles` finds 400, 500, 600 and 700 and nothing outside that span).
+ * Restricting the wght axis drops the unused masters instead of shipping them: DM Sans alone is
+ * 25.9 kB at full range and 16.1 kB clipped to 400-700. The static mono faces have no axis, so the
+ * option is only passed for the variable ones.
+ */
+const VARIATION_AXES = { wght: { min: 400, max: 700 } };
 
 const sourceDir = fileURLToPath(new URL('../fonts-src/', import.meta.url));
 const outDir = fileURLToPath(new URL('../public/fonts/', import.meta.url));
 const text = subsetText();
 
-for (const face of FACES) {
+for (const { file: face, variable } of FACES) {
   const source = await readFile(`${sourceDir}${face}`);
-  const subset = await subsetFont(source, text, { targetFormat: 'woff2' });
+  const subset = await subsetFont(source, text, {
+    targetFormat: 'woff2',
+    ...(variable ? { variationAxes: VARIATION_AXES } : {}),
+  });
   if (subset.length >= source.length) {
     throw new Error(
       `${face}: subset (${subset.length} B) is not smaller than the source; refusing to write`,

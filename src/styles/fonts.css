@@ -6,9 +6,11 @@
  * Content-Security-Policy can stay `style-src 'self'; font-src 'self'` and so loading a page makes
  * no third-party request — which is what the privacy notice promises.
  *
- * DM Sans and Space Grotesk are variable fonts, so one file covers every weight used. IBM Plex Mono
- * is static, so only the two weights the stylesheet actually uses (400 body text, 600 labels) are
- * shipped; a 500 face was present but no rule selected it.
+ * DM Sans and Space Grotesk are variable fonts, so one file covers every weight used, and
+ * `scripts/subset-fonts.mjs` clips their `wght` axis to 400-700 — the only span the stylesheet
+ * selects — which drops the unused masters (DM Sans: 25.9 kB full range, 16.1 kB clipped).
+ * IBM Plex Mono is static, so only the two weights the stylesheet actually uses (400 body text, 600
+ * labels) are shipped; a 500 face was present but no rule selected it.
  * Files: public/fonts/. Licence texts: docs/ASSETS.md.
  *
  * Deliberately NO `unicode-range`. These faces previously carried Google Fonts' default *latin*
