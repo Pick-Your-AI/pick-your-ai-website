@@ -23,6 +23,19 @@ Copy `.env.example` to `.env.local` to change the data provider (`VITE_DATA_MODE
 
 The [organization contributing rules](https://github.com/Pick-Your-AI/.github/blob/main/CONTRIBUTING.md) define roles, credentials and enforcement.
 
+## Access and roles
+
+Access is granted through the Pick-Your-AI GitHub teams, as of 2026-10-19:
+
+| Role | Who | Access to this repository |
+| --- | --- | --- |
+| Lead Maintainers (team maintainers of Websites) | @CompleteDotTech, @BunsDev | Admin |
+| Websites team | Members of the `Websites` team, including @karutoil and @pushingsquares | Write |
+| Early contributors | Members of the `Early Contributors` team | Branches named `contrib/<your-login>/<topic>` |
+| Other contributors | Anyone else | Fork and pull request |
+
+Only the Lead Maintainers administer repository settings and manage Websites team membership. Team membership grants access but does not waive the review and CI requirements above.
+
 ## npm scripts
 
 | Script                    | Purpose                                                                        |
