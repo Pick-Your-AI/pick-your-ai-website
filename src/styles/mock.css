@@ -1907,7 +1907,7 @@ footer {
   max-width: 330px;
   margin-top: 16px;
 }
-.footer-column h4 {
+.footer-column h2 {
   font: 10px var(--mono);
   letter-spacing: 0.12em;
   color: #c6d5d4;

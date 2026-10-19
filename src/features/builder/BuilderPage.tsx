@@ -228,6 +228,9 @@ function EmptyRow({ kind, onChoose }: { kind: ComponentKind; onChoose: () => voi
   );
 }
 
+const BUILDER_DESCRIPTION =
+  'One row per component slot, in dependency order. Prices and compatibility come from synthetic demo data; nothing here is a quote or a vendor specification.';
+
 export default function BuilderPage() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -268,7 +271,18 @@ export default function BuilderPage() {
     return (
       <div className="app-page parts-page">
         <div className="container">
-          <Loading label="Loading builder…" />
+          {/* Paint the page identity immediately: waiting on the catalog before showing the
+              heading delays the largest paint for no benefit. */}
+          <PartsHead
+            crumbs={
+              <>
+                <Link to="/">PickYour.AI</Link> <span>/</span> Builder
+              </>
+            }
+            title="Choose your parts"
+            description={BUILDER_DESCRIPTION}
+          />
+          <Loading label="Loading the parts register…" />
         </div>
       </div>
     );
@@ -388,7 +402,7 @@ export default function BuilderPage() {
             </>
           }
           title="Choose your parts"
-          description="One row per component slot, in dependency order. Prices and compatibility come from synthetic demo data; nothing here is a quote or a vendor specification."
+          description={BUILDER_DESCRIPTION}
           actions={
             <>
               <button type="button" className="pbtn" onClick={() => setJsonOpen(true)}>

@@ -690,7 +690,7 @@ html.light .compare-key {
   color: var(--muted);
 }
 html.light .catalog-metric strong,
-html.light .footer-column h4,
+html.light .footer-column h2,
 html.light .template-showcase-foot > span strong {
   color: var(--text);
 }

@@ -5,7 +5,7 @@ import { buildVersion, shortSha } from '../lib/version';
 import { useData } from '../app/data-context';
 import { useBuilder } from '../app/builder-context';
 import { LAYERS } from '../lib/layers';
-import { Icon, IconSprite } from './icon';
+import { Icon } from './icon';
 import { ToastProvider } from './feedback';
 
 const NAV = [
@@ -149,20 +149,20 @@ function Footer() {
             </p>
           </div>
           <div className="footer-column">
-            <h4>Explore</h4>
+            <h2>Explore</h2>
             <Link to="/builder">Stack builder</Link>
             <Link to="/catalog">Component catalog</Link>
             <Link to="/templates">Starter stacks</Link>
           </div>
           <div className="footer-column">
-            <h4>Learn</h4>
+            <h2>Learn</h2>
             <Link to="/methodology#compatibility">Compatibility rules</Link>
             <Link to="/methodology">How it works</Link>
             <Link to="/about">About the concept</Link>
             <Link to="/legal">Privacy &amp; terms</Link>
           </div>
           <div className="footer-column">
-            <h4>Demo controls</h4>
+            <h2>Demo controls</h2>
             <Link to="/builds">Saved builds</Link>
             <Link to="/compare">Comparison lab</Link>
             <a href={RESEARCH_REPO}>Research repository</a>
@@ -199,7 +199,6 @@ function RouteFocus() {
 export function Layout() {
   return (
     <ToastProvider>
-      <IconSprite />
       <a href="#main" className="sr-only sr-only-focusable">
         Skip to content
       </a>
