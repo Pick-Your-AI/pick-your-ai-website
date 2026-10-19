@@ -1,0 +1,10 @@
+{
+  "sourceRepository": "Pick-Your-AI/pick-your-ai-research",
+  "sourcePath": "research/T0-configuration/display-labels/v1.0.0.json",
+  "sourceSha": "d3548b303eaea7450615848db056f33f97d2cea6",
+  "sidecarVersion": "1.0.0",
+  "locale": "en",
+  "sha256": "526af0435348c025d041a21a81fc574c3e0797a307768c79ff36bc444a66f623",
+  "decisionRecord": "https://github.com/Pick-Your-AI/pick-your-ai-research/blob/d3548b303eaea7450615848db056f33f97d2cea6/research/T0-configuration/component-schema-compatibility.md#display-label-sidecar-decision--2026-10-19",
+  "note": "Vendored verbatim from the accepted independent display-label release. This pin does not update frozen contracts/v1; tier names, descriptions and grammar remain consumer presentation."
+}
