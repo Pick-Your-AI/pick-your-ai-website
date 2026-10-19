@@ -70,6 +70,43 @@ describe('subset web fonts', () => {
     expect(total, `fonts: ${JSON.stringify(sizes)}`).toBeLessThan(64 * 1024);
   });
 
+  it('declares no unicode-range that would exclude a glyph the UI renders', () => {
+    /*
+     * A face can contain a glyph and still never render it: `unicode-range` decides which codepoints
+     * a face may serve. These faces carried Google Fonts' default *latin* range, which stops at
+     * U+2193, so `-> >= != <= subset-of check cross` and the diagonal/upward arrows silently fell
+     * back to a system font while the subset contained them.
+     *
+     * `document.fonts.check` cannot catch this in Chromium (it returns true for an excluded
+     * codepoint), and a width comparison cannot either, because several of these glyphs are absent
+     * from some of the families and correctly fall back there. So the assertion is made on the
+     * stylesheet itself: any declared range must cover the whole subset.
+     */
+    const css = readFileSync('src/styles/fonts.css', 'utf8');
+    const ranges = [...css.matchAll(/unicode-range:\s*([^;]+);/g)].map((m) => m[1]!);
+    const parse = (spec: string) =>
+      spec
+        .split(',')
+        .map((part) => part.trim().replace(/^U\+/i, ''))
+        .filter(Boolean)
+        .map((part) => {
+          const [from, to] = part.split('-');
+          const lo = Number.parseInt(from!, 16);
+          const hi = to ? Number.parseInt(to, 16) : lo;
+          return [lo, hi] as const;
+        });
+    for (const range of ranges) {
+      const spans = parse(range);
+      const uncovered = subsetCodepoints().filter(
+        (cp) => !spans.some(([lo, hi]) => cp >= lo && cp <= hi),
+      );
+      expect(
+        uncovered.map(describeCodepoint),
+        'these characters are excluded by unicode-range and would render in a fallback font',
+      ).toEqual([]);
+    }
+  });
+
   it('ships no weight the stylesheet never selects', () => {
     const css = readFileSync('src/styles/fonts.css', 'utf8');
     const declared = [...css.matchAll(/url\('\/fonts\/([^']+)'\)/g)].map((m) => m[1]);
