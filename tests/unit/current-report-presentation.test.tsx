@@ -128,10 +128,7 @@ describe('current report presentation', () => {
       );
       const mobile = document.getElementById('mobile-summary');
       expect(mobile).not.toBeNull();
-      for (const panel of [
-        screen.getByRole('complementary', { name: 'Build summary' }),
-        mobile!,
-      ]) {
+      for (const panel of [screen.getByRole('complementary', { name: 'Build summary' }), mobile!]) {
         expect(
           within(panel).getByText('Current compatibility results are not available yet.'),
         ).toBeInTheDocument();
