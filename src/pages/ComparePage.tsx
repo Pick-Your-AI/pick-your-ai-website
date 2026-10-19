@@ -14,6 +14,7 @@
  * and `?builds=a,b` diffs two saved builds. They render one `BuildDiff` so selections, objectives,
  * compatibility outcomes and estimated cost are always read the same way.
  */
+import '../styles/dense.css';
 import { useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useSearchParams } from 'react-router';

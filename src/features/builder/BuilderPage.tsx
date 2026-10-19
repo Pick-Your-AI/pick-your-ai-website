@@ -10,6 +10,7 @@
  * (T1 has a model and its provider). Only required kinds get an empty row; optional kinds are
  * reachable from their group header, so the table stays as short as the build actually is.
  */
+import '../../styles/dense.css';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import type { BuildSnapshot, CatalogItem, ComponentKind, Tier } from '../../contracts';

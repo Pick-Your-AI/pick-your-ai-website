@@ -5,6 +5,7 @@
  * preserved: ?replace=<selectionId> swaps a selection and returns, ?ids=<slug>,… seeds the compare
  * tray. Unknown components are listed, labelled Unknown and never filtered in as compatible.
  */
+import '../../styles/dense.css';
 import { useParams } from 'react-router';
 import { isComponentKind, kindFromSlug } from '../../contracts';
 import NotFoundPage from '../../pages/NotFoundPage';

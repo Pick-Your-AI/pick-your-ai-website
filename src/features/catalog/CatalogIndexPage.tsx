@@ -3,6 +3,7 @@
  * one layer with ?layer=T1. Structure and behaviour live in PartList; this route only resolves the
  * layer parameter.
  */
+import '../../styles/dense.css';
 import { useSearchParams } from 'react-router';
 import type { Tier } from '../../contracts';
 import { TIERS } from '../../contracts';

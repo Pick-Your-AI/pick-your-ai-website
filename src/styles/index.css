@@ -8,7 +8,12 @@
  */
 @import './fonts.css';
 @import './mock.css';
-@import './dense.css';
+/*
+ * `dense.css` is deliberately NOT imported here. It is the parts-register visual language used only
+ * by the builder, catalog and compare routes, so those modules import it directly and the browser
+ * loads it as a route-level chunk. Keeping it out of this bundle stops the marketing pages, which
+ * use none of its ~30 kB of table and chip rules, from paying for it in the render-blocking CSS.
+ */
 
 /* The theme class is applied to <html> before first paint (see public/theme-init.js). */
 html.light {

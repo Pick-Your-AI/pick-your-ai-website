@@ -10,6 +10,7 @@
  * Two modes: `all` lists every kind grouped by layer (the /catalog index); `kind` lists one
  * component kind with its own spec columns (the /catalog/:kindSlug picker).
  */
+import '../../styles/dense.css';
 import { useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import type { CatalogItem, ComponentKind, Tier } from '../../contracts';
