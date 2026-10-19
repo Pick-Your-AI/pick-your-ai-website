@@ -11,7 +11,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - The three pages use compact titles and tables instead of the marketing hero treatment; the marketing pages are unchanged.
 - **Website UI rebuilt to match the approved design mock** (`docs/design/pickyourai-complete.html`). The mock's stylesheet is vendored verbatim as `src/styles/mock.css` (the only edit is scoping the theme class to `<html>`), its 33-glyph icon sprite as `src/components/icon.tsx`, and every screen now uses the mock's markup and class names instead of utility classes; Tailwind was removed. The seven "layers" of the mock are the contract's seven tiers, so no parallel taxonomy was introduced.
 - Home, builder, catalog directory, component chooser, component detail, compare, My Builds, starter builds, methodology, about, legal, build summary and the shared-build preview all follow the mock's layout, typography, palette and responsive behaviour.
-- A first visit now opens a prefilled demonstration stack (the mock's default state) instead of an empty canvas; "New build" still starts blank.
+- A first visit opens an empty canvas, not the mock's prefilled demonstration stack: a preselected stack would read as a recommendation, and an unconfigured build must surface as `Incomplete`, not `Compatible`. Starter stacks remain an explicit choice on /templates.
 - Per-component prices come from the real preview estimator over a one-item probe build (`src/lib/item-cost.ts`), never from hard-coded numbers; `Unknown` is shown when no applicable rate exists. `Included` and `Free` are rendered as words, never as `$0`.
 - Catalog rows carry a one-line spec subtitle (`rowSubtitle` in `src/lib/catalog-view.ts`) that only prints values the catalog records, prefers numbers, and never restates the component kind or layer.
 - Compare and catalog rows show licence/billing facts the contract actually carries instead of inventing a vendor name.
@@ -20,6 +20,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- Accepted English 1.0.0 display labels from Research #487, pinned independently of frozen v1 and imported without a duplicate kind table; normal contract verification checks the sidecar and its immutable upstream source.
 - Project bootstrap: Vite + React 19 + TypeScript (strict), React Router, TanStack Query, ESLint, Prettier, Vitest, Playwright with axe.
 - `dist/version.json` build stamp (commit, build time, contract version and source SHA, data mode) and a footer build indicator.
 - Vendored research contract v1.0.0 from `Pick-Your-AI/pick-your-ai-research@d4bdca4` with provenance manifest and hash verification (`npm run contracts:verify`).

@@ -3,6 +3,8 @@ coverage/
 node_modules/
 package-lock.json
 contracts/v1/
+# Preserve the independently pinned upstream label artifact verbatim.
+contracts/display-labels/v1.0.0.json
 src/contracts/generated/
 playwright-report/
 test-results/
