@@ -25,16 +25,17 @@ The [organization contributing rules](https://github.com/Pick-Your-AI/.github/bl
 
 ## Access and roles
 
-Access is granted through the Pick-Your-AI GitHub teams, as of 2026-10-19:
+Access is granted through the Pick-Your-AI GitHub teams, as of 2026-10-19. Parent teams under `Maintainers` get Triage; push access is held by the child teams listed below.
 
 | Role | Who | Access to this repository |
 | --- | --- | --- |
-| Lead Maintainers (team maintainers of Websites) | @CompleteDotTech, @BunsDev | Admin |
-| Websites team | Members of the `Websites` team, including @karutoil and @pushingsquares | Write |
-| Early contributors | Members of the `Early Contributors` team | Branches named `contrib/<your-login>/<topic>` |
+| Lead Maintainers (`Lead Maintainers` team) | @CompleteDotTech, @BunsDev | Admin |
+| Site team (`pickyour.ai` for this repository) | @CompleteDotTech, @karutoil, @BunsDev, @pushingsquares | Write |
+| `Websites` parent team | Members of the child teams above | Triage |
+| Early contributors (`Early Contributors` team) | Members of the `Early Contributors` team | Write, on branches named `contrib/<your-login>/<topic>` |
 | Other contributors | Anyone else | Fork and pull request |
 
-Only the Lead Maintainers administer repository settings and manage Websites team membership. Team membership grants access but does not waive the review and CI requirements above.
+Only the Lead Maintainers (@CompleteDotTech and @BunsDev) can change team membership. Team membership grants access but does not waive the review and CI requirements above.
 
 ## npm scripts
 
