@@ -17,7 +17,7 @@ import { OutcomeBadge } from '../../components/status';
 import { costHeadline, nextAction, overall } from './analysis';
 
 export function OverallStrip({
-  report,
+  report: previousReport,
   current,
   build,
 }: {
@@ -26,9 +26,12 @@ export function OverallStrip({
   build?: BuildSnapshot;
 }) {
   const ruleset = useRuleset();
-  const incomplete = incompleteBuild(build, current ? report : undefined, ruleset.data);
+  const report = current ? previousReport : undefined;
+  const incomplete = incompleteBuild(build, report, ruleset.data);
   const o = overall(report);
-  let text = 'Add components to start checking compatibility.';
+  let text = build?.selections.length
+    ? 'Current compatibility results are not available yet.'
+    : 'Add components to start checking compatibility.';
   let cls = 'border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-900';
   if (report && o) {
     const { failed, unknown, passed, skipped } = report.summary;
@@ -68,9 +71,11 @@ export function OverallStrip({
         />
       ) : null}
       <p className="text-sm font-medium">{text}</p>
-      {!current && report ? (
+      {!current && previousReport ? (
         <span className="muted text-xs" role="status">
-          Showing revision {report.build_revision} while the new revision is evaluated…
+          Previous evaluation: revision {previousReport.build_revision}
+          {build && previousReport.build_id !== build.id ? ' of another build' : ''}. These
+          results are not current.
         </span>
       ) : null}
     </div>
@@ -82,7 +87,7 @@ export function SummaryPanel({
   byId,
   snapshot,
   coverage,
-  report,
+  report: previousReport,
   reportIsCurrent,
   cost,
   costIsCurrent,
@@ -102,7 +107,8 @@ export function SummaryPanel({
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const ruleset = useRuleset();
-  const incomplete = incompleteBuild(build, reportIsCurrent ? report : undefined, ruleset.data);
+  const report = reportIsCurrent ? previousReport : undefined;
+  const incomplete = incompleteBuild(build, report, ruleset.data);
   const o = overall(report);
   const headline = costHeadline(costIsCurrent ? cost : undefined);
   const staleness = buildStaleness(build, snapshot);
@@ -171,7 +177,7 @@ export function SummaryPanel({
             </li>
           </ul>
         ) : (
-          <p className="muted">Not evaluated yet.</p>
+          <p className="muted">Current compatibility results are not available yet.</p>
         )}
         <p className="muted mt-1 text-xs">
           Readiness: {report ? report.deployment_readiness.replace('_', ' ') : '—'} (deployment

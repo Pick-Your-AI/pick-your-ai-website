@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
 import { KIND_LABELS } from '../../contracts';
 import { buildContext, coverage as computeCoverage } from '../../domain/activation';
 import { updateObjectives } from '../../domain/build';
@@ -14,22 +14,13 @@ import { ObjectivesForm } from './ObjectivesForm';
 import { OverallStrip, SummaryPanel } from './SummaryPanel';
 
 /** Announces compatibility changes to screen readers after each revision is evaluated. */
-function useAnnouncement(
+function evaluationAnnouncement(
   revision: number | undefined,
   summary: { failed: number; unknown: number } | undefined,
   current: boolean,
 ) {
-  const [text, setText] = useState('');
-  const last = useRef<string>('');
-  useEffect(() => {
-    if (!current || !summary || revision === undefined) return;
-    const next = `Revision ${revision} evaluated: ${summary.failed} failing, ${summary.unknown} unknown.`;
-    if (next !== last.current) {
-      last.current = next;
-      setText(next);
-    }
-  }, [revision, summary, current]);
-  return text;
+  if (!current || !summary || revision === undefined) return '';
+  return `Revision ${revision} evaluated: ${summary.failed} failing, ${summary.unknown} unknown.`;
 }
 
 export default function BuilderPage() {
@@ -42,7 +33,7 @@ export default function BuilderPage() {
     [build, catalog.byId],
   );
   const cov = useMemo(() => (build && ctx ? computeCoverage(build, ctx) : undefined), [build, ctx]);
-  const announcement = useAnnouncement(
+  const announcement = evaluationAnnouncement(
     analysis.report?.build_revision,
     analysis.report?.summary,
     analysis.reportIsCurrent,
@@ -158,7 +149,11 @@ export default function BuilderPage() {
             reportIsCurrent={analysis.reportIsCurrent}
             affectedKinds={affected}
           />
-          <FindingsList report={analysis.report} build={build} byId={catalog.byId} />
+          {analysis.reportIsCurrent ? (
+            <FindingsList report={analysis.report} build={build} byId={catalog.byId} />
+          ) : build.selections.length && !analysis.evaluation.isError ? (
+            <Loading label={`Evaluating revision ${build.revision}…`} />
+          ) : null}
         </div>
         <SummaryPanel
           variant="aside"
