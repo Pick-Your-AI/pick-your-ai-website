@@ -2,16 +2,22 @@
 
 This explains how real research output replaces the synthetic fixtures without rewriting the UI.
 
+GitHub status reconciled with a **2026-10-19 09:15 UTC cutoff**, alongside research [`9db556b7fca485c8eb4396f9ee2ceeacdc119d79`](https://github.com/Pick-Your-AI/pick-your-ai-research/commit/9db556b7fca485c8eb4396f9ee2ceeacdc119d79); see `RESEARCH_MAPPING.md` for the dated merge/closure inventory and final #39–#42 research completion receipts. Completed research does not publish production data or implement the receiving website features. The website remains on contract **1.0.0**, pinned at `d4bdca479f78439b3b98e7418b37acbaccbaa63c`, with synthetic fixtures and unavailable resource estimates.
+
+The acceptance gates in [website #15](https://github.com/Pick-Your-AI/pickyour.ai/issues/15), [#16](https://github.com/Pick-Your-AI/pickyour.ai/issues/16), [#17](https://github.com/Pick-Your-AI/pickyour.ai/issues/17) and [#18](https://github.com/Pick-Your-AI/pickyour.ai/issues/18) remain in force. This refresh changes documentation only.
+
 ## 1. The pipeline
+
+Artifact review is governed by research [#40](https://github.com/Pick-Your-AI/pick-your-ai-research/issues/40), [#41](https://github.com/Pick-Your-AI/pick-your-ai-research/issues/41) and [#39](https://github.com/Pick-Your-AI/pick-your-ai-research/issues/39).
 
 ```text
 research PR merged on pick-your-ai-research main
-   │  (catalog proposals, pricebooks, rules, estimator evidence — reviewed under #40/#41/#39)
+   │  (catalog proposals, pricebooks, rules, estimator evidence — reviewed under research #40/#41/#39)
    ▼
 published, versioned artifacts
    CatalogSnapshot (catalog.<x>.<rev>)  Pricebook  Ruleset@version  DependencyGraph@rev  ResourceEstimate
    ▼
-served by the contract API  (contracts/v1/api/openapi.yaml, base /v1)    ← or a static JSON host with the same paths
+served by the contract API  (contracts/v1/api/openapi.yaml, base /v1)    ← static JSON can serve immutable GET artifacts only
    ▼
 website HTTP providers  (src/data/http/providers.ts)
    every response → JSON Schema validation (generated Ajv validators) → typed contract object
@@ -55,9 +61,9 @@ Set these at build time (Vite `VITE_*` variables, baked into the static bundle):
 
 ## 4. Real-data integration checklist
 
-1. ☐ Research artifacts are merged on `main` in the research repo. Unmerged PRs stay provisional.
-2. ☐ If the contract changed (via #40): `npm run contracts:update -- --ref <sha>`, then `npm run contracts:types`, fix any type errors, and confirm `npm test` passes, including evaluator parity against the new `reference/evaluate.py`.
-3. ☐ Publish the artifacts behind the API, or a static mirror with the openapi paths.
+1. ☐ The specific research artifacts to adopt are merged on research `main`, with required owner decisions recorded. Unmerged PRs stay provisional; a merge alone does not satisfy the remaining gates.
+2. ☐ If the contract changed (via [#40](https://github.com/Pick-Your-AI/pick-your-ai-research/issues/40)): `npm run contracts:update -- --ref <sha>`, then `npm run contracts:types`, fix any type errors, and confirm `npm test` passes, including evaluator parity against the new `reference/evaluate.py`.
+3. ☐ Publish immutable artifacts behind the API (or a static mirror for GET paths). Evaluation, cost estimates and remote build writes still need the corresponding dynamic API endpoints; a static mirror alone cannot supply the full HTTP provider.
 4. ☐ Validate offline: fetch each artifact and check it with `validateContract` (as `tests/unit/contracts.test.ts` does). Reject anything with fabricated fields.
 5. ☐ In the `build` job of `.github/workflows/ci.yml`, change `VITE_DATA_MODE: fixture` to `http` and add `VITE_API_BASE_URL` and `VITE_CATALOG_SNAPSHOT`. Use repository variables for these, not secrets: they end up in the public bundle.
 6. ☐ Request the CSP `connect-src` change if the API is on another origin.
@@ -75,7 +81,7 @@ Set these at build time (Vite `VITE_*` variables, baked into the static bundle):
 
 ## 6. Contract-change workflow
 
-1. Propose the change in the research repo through issue #40, with versioning and owner review.
+1. Propose the change in the research repo through issue [#40](https://github.com/Pick-Your-AI/pick-your-ai-research/issues/40), with versioning and owner review.
 2. After it merges upstream, run `npm run contracts:update -- --ref <new sha>`. This writes `contracts/PROVENANCE.json` with per-file SHA-256 hashes.
 3. CI's `contracts:verify --upstream` re-downloads the pinned SHA and fails on any byte difference. It also checks the frozen baseline against `UPSTREAM_SHA256SUMS`.
 4. Regenerate the types and validators (`npm run contracts:types`). CI fails if the generated files drift.
@@ -83,19 +89,25 @@ Set these at build time (Vite `VITE_*` variables, baked into the static bundle):
 
 ## 7. Required backend endpoints and known v1 gaps
 
-The endpoints the UI needs all exist in openapi v1, except these gaps. Each needs a decision under #40:
+The endpoints the UI needs all exist in openapi v1, except these gaps. The accepted research in [#40](https://github.com/Pick-Your-AI/pick-your-ai-research/issues/40) supplies decision records; the corresponding versioned release and consumer implementation still have to be delivered:
 
 - No `GET` for the **current** catalog snapshot id, so it is set by configuration today.
 - No `GET` for **resource estimates**, so capacity evidence cannot be read and VRAM-fit rules stay Unknown.
 - No **list builds** or **delete build** endpoint, so remote builds keep a local index.
 - No **evidence** endpoint beyond item provenance.
-- No published **display labels** for kinds, so the site keeps its own display-only labels.
-- Billing meters for egress and training (see PRs #70 and #77) are missing, so those costs appear as uncovered warnings.
+- No accepted **display-label sidecar** adopted by the website. The shared English sidecar remains a proposal, so the site keeps its own display-only labels.
+- Billing meters for egress and training (see PRs [#70](https://github.com/Pick-Your-AI/pick-your-ai-research/pull/70) and [#77](https://github.com/Pick-Your-AI/pick-your-ai-research/pull/77)) are missing, so those costs appear as uncovered warnings.
 
-## 8. Unresolved research decisions that affect the UI
+## 8. Research decisions still requiring integration or owner disposition
 
-- Price-specific refresh and invalidation remain open (#41/#39). The accepted [#41 interface](https://github.com/Pick-Your-AI/pick-your-ai-research/issues/41#issuecomment-6242626857) and [#127 decision record](https://github.com/Pick-Your-AI/pick-your-ai-research/pull/127) adopt no TTL: version-pinned facts do not expire with age, current-state facts retain access dates, and a newer snapshot alone does not invalidate a build. The UI shows recorded dates without implying currentness or independent verification; selected-version mismatches and missing items remain visible. Historical `verified` values are preserved, but the label alone does not prove independent reproduction or corroboration.
-- The usage model for quotes, plus default currency and region (#39). The site's preview estimator is provisional.
-- Sharing and privacy semantics for saved builds (#42, blocked by #40). The site's share links are a local-only preview.
-- PR #72 reports that `rule.memory.framework.compatibility` blocks real frameworks.
-- Whether the deployment mode is set per build or per component, and how hybrid mode is represented (#3).
+- Freshness policy ([#41](https://github.com/Pick-Your-AI/pick-your-ai-research/issues/41)): [merged PR #127](https://github.com/Pick-Your-AI/pick-your-ai-research/pull/127) and its [scoped T4 receipt](https://github.com/Pick-Your-AI/pick-your-ai-research/issues/41#issuecomment-6242626857) adopt no TTL. Pinned facts do not expire by age; hosted current-state facts use capture-date versions and retained snapshots. A newer snapshot alone does not invalidate a build. The website now displays capture dates without age-based freshness claims; the 30-day preview warning at `dc66a9e` is historical. Item revision mismatches, missing items, build schema mismatches and explicit price validity remain separate checks; the completed #39/#41 research and its named implementation follow-ups govern price-specific refresh/invalidation rather than an invented website policy.
+- Implement the completed cost research ([#39](https://github.com/Pick-Your-AI/pick-your-ai-research/issues/39)): preserve source currency and explicit budget currency, with no automatic FX or region/account fallback. Applicable quotes and complete priced coverage remain separate evidence requirements. The site's preview estimator is provisional.
+- Implement the completed sharing/privacy research from [#42](https://github.com/Pick-Your-AI/pick-your-ai-research/issues/42) under [website #17](https://github.com/Pick-Your-AI/pick-your-ai-website/issues/17). Both #42 and its #40 research prerequisite are completed; the site's share links remain a local-only preview. Their research completion adopts no hosted retention period and supplies no deployed accounts, persistence or authorization service.
+- The merged memory record (PR [#72](https://github.com/Pick-Your-AI/pick-your-ai-research/pull/72)) documents capability-evidence gaps in `rule.memory.framework.compatibility`; policy changes still require a reviewed contract version.
+- Deployment-mode research ([#3](https://github.com/Pick-Your-AI/pick-your-ai-research/issues/3), received in [#42](https://github.com/Pick-Your-AI/pick-your-ai-research/issues/42)): the [accepted record](https://github.com/Pick-Your-AI/pick-your-ai-research/blob/9db556b7fca485c8eb4396f9ee2ceeacdc119d79/research/T0-configuration/saved-shared-builds.md) classifies components by operator and capacity placement. Any required unresolved component makes the aggregate unknown; otherwise a common mode stays that mode and mixed modes aggregate to hybrid. Encoding and adopting this model require a successor contract and client implementation; the website retains frozen v1 behavior.
+
+The [#40 completion receipt](https://github.com/Pick-Your-AI/pick-your-ai-research/issues/40#issuecomment-6257213742) closes the research criteria, including the receiving map and physical-pool decision. It does not release a successor wire schema, ruleset, reader or migration. Frozen v1 remains unchanged.
+
+The [publication eligibility handoff](https://github.com/Pick-Your-AI/pick-your-ai-research/blob/9db556b7fca485c8eb4396f9ee2ceeacdc119d79/docs/PUBLICATION_ELIGIBILITY_HANDOFF.md) clears no complete existing catalog or pricebook for publication and records the exclusion of GPUs.io API retrieval, display and export from the current product. The [display-label sidecar](https://github.com/Pick-Your-AI/pick-your-ai-research/blob/9db556b7fca485c8eb4396f9ee2ceeacdc119d79/research/T0-configuration/display-labels/README.md) remains proposed and still needs an accepted revision, a decision receipt and consumer import. Neither is supplied by closing the parent research issues.
+
+Before real-data intake, apply the scoped evidence and per-source rights gates in `RESEARCH_MAPPING.md`: source-checked without independent support maps to `unverified`, and new `verified` claims require linked independent support. Missing rights-table rows do not authorize automated collection, display or redistribution. Preserve source dates and selected snapshots; do not silently convert a new catalog revision into expiry of existing build evidence. Neither these receipts nor merged research authorize enabling production providers.
