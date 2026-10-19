@@ -89,13 +89,13 @@ Set these at build time (Vite `VITE_*` variables, baked into the static bundle):
 
 ## 7. Required backend endpoints and known v1 gaps
 
-The endpoints the UI needs all exist in openapi v1, except these gaps. Each needs a decision under [#40](https://github.com/Pick-Your-AI/pick-your-ai-research/issues/40):
+The endpoints the UI needs all exist in openapi v1, except these gaps. The accepted research in [#40](https://github.com/Pick-Your-AI/pick-your-ai-research/issues/40) supplies decision records; the corresponding versioned release and consumer implementation still have to be delivered:
 
 - No `GET` for the **current** catalog snapshot id, so it is set by configuration today.
 - No `GET` for **resource estimates**, so capacity evidence cannot be read and VRAM-fit rules stay Unknown.
 - No **list builds** or **delete build** endpoint, so remote builds keep a local index.
 - No **evidence** endpoint beyond item provenance.
-- No published **display labels** for kinds, so the site keeps its own display-only labels.
+- No accepted **display-label sidecar** adopted by the website. The shared English sidecar remains a proposal, so the site keeps its own display-only labels.
 - Billing meters for egress and training (see PRs [#70](https://github.com/Pick-Your-AI/pick-your-ai-research/pull/70) and [#77](https://github.com/Pick-Your-AI/pick-your-ai-research/pull/77)) are missing, so those costs appear as uncovered warnings.
 
 ## 8. Research decisions still requiring integration or owner disposition
@@ -104,8 +104,10 @@ The endpoints the UI needs all exist in openapi v1, except these gaps. Each need
 - Implement the completed cost research ([#39](https://github.com/Pick-Your-AI/pick-your-ai-research/issues/39)): preserve source currency and explicit budget currency, with no automatic FX or region/account fallback. Applicable quotes and complete priced coverage remain separate evidence requirements. The site's preview estimator is provisional.
 - Implement the completed sharing/privacy research from [#42](https://github.com/Pick-Your-AI/pick-your-ai-research/issues/42) under [website #17](https://github.com/Pick-Your-AI/pick-your-ai-website/issues/17). Both #42 and its #40 research prerequisite are completed; the site's share links remain a local-only preview. Their research completion adopts no hosted retention period and supplies no deployed accounts, persistence or authorization service.
 - The merged memory record (PR [#72](https://github.com/Pick-Your-AI/pick-your-ai-research/pull/72)) documents capability-evidence gaps in `rule.memory.framework.compatibility`; policy changes still require a reviewed contract version.
-- Whether the deployment mode is set per build or per component, and how hybrid mode is represented ([#3](https://github.com/Pick-Your-AI/pick-your-ai-research/issues/3)).
+- Deployment-mode research ([#3](https://github.com/Pick-Your-AI/pick-your-ai-research/issues/3), received in [#42](https://github.com/Pick-Your-AI/pick-your-ai-research/issues/42)): the [accepted record](https://github.com/Pick-Your-AI/pick-your-ai-research/blob/9db556b7fca485c8eb4396f9ee2ceeacdc119d79/research/T0-configuration/saved-shared-builds.md) classifies components by operator and capacity placement. Any required unresolved component makes the aggregate unknown; otherwise a common mode stays that mode and mixed modes aggregate to hybrid. Encoding and adopting this model require a successor contract and client implementation; the website retains frozen v1 behavior.
 
-The merged schema record (PR [#126](https://github.com/Pick-Your-AI/pick-your-ai-research/pull/126)) explicitly leaves frozen v1 unchanged. Its next-version proposals do not unblock these gaps by themselves.
+The [#40 completion receipt](https://github.com/Pick-Your-AI/pick-your-ai-research/issues/40#issuecomment-6257213742) closes the research criteria, including the receiving map and physical-pool decision. It does not release a successor wire schema, ruleset, reader or migration. Frozen v1 remains unchanged.
+
+The [publication eligibility handoff](https://github.com/Pick-Your-AI/pick-your-ai-research/blob/9db556b7fca485c8eb4396f9ee2ceeacdc119d79/docs/PUBLICATION_ELIGIBILITY_HANDOFF.md) clears no complete existing catalog or pricebook for publication and records the exclusion of GPUs.io API retrieval, display and export from the current product. The [display-label sidecar](https://github.com/Pick-Your-AI/pick-your-ai-research/blob/9db556b7fca485c8eb4396f9ee2ceeacdc119d79/research/T0-configuration/display-labels/README.md) remains proposed and still needs an accepted revision, a decision receipt and consumer import. Neither is supplied by closing the parent research issues.
 
 Before real-data intake, apply the scoped evidence and per-source rights gates in `RESEARCH_MAPPING.md`: source-checked without independent support maps to `unverified`, and new `verified` claims require linked independent support. Missing rights-table rows do not authorize automated collection, display or redistribution. Preserve source dates and selected snapshots; do not silently convert a new catalog revision into expiry of existing build evidence. Neither these receipts nor merged research authorize enabling production providers.
