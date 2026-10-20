@@ -12,8 +12,8 @@
  * to add the character and re-run `npm run fonts:subset`, so a glyph can never go missing silently.
  */
 
-/** Printable ASCII: space through tilde. */
-const ASCII = Array.from({ length: 0x7f - 0x20 + 1 }, (_, i) => 0x20 + i);
+/** Printable ASCII: space through tilde. U+007F (DEL) is a control character, not printable. */
+const ASCII = Array.from({ length: 0x7e - 0x20 + 1 }, (_, i) => 0x20 + i);
 
 /**
  * Non-ASCII characters that appear in copy, labels or contract data, plus the few typographic

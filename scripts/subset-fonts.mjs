@@ -35,7 +35,22 @@ const FACES = [
  *
  * Restricting the admitted range belongs in the `@font-face` rule, where it is declarative,
  * reversible and does not alter the glyph data.
+ *
+ * `preserveNameIds` is required, not cosmetic. The harfbuzz subsetter drops most of the `name` table
+ * by default, and the pristine faces carry their licence URL in name ID 14
+ * (`https://scripts.sil.org/OFL`). Dropping it removes the licence notice from the distributed file,
+ * which the SIL Open Font License requires to be retained. ID 0 (copyright) survives by default, but
+ * it is listed explicitly so the intent is visible rather than incidental.
  */
+const LICENCE_NAME_IDS = [
+  0, // copyright notice
+  7, // trademark notice
+  11, // vendor URL
+  12, // designer URL
+  13, // licence description
+  14, // licence URL
+];
+
 const sourceDir = fileURLToPath(new URL('../fonts-src/', import.meta.url));
 const outDir = fileURLToPath(new URL('../public/fonts/', import.meta.url));
 const text = subsetText();
@@ -43,7 +58,10 @@ const text = subsetText();
 for (const { file: face } of FACES) {
   const source = await readFile(`${sourceDir}${face}`);
   // Glyph subset only: the axis is preserved exactly as the upstream face declares it.
-  const subset = await subsetFont(source, text, { targetFormat: 'woff2' });
+  const subset = await subsetFont(source, text, {
+    targetFormat: 'woff2',
+    preserveNameIds: LICENCE_NAME_IDS,
+  });
   if (subset.length >= source.length) {
     throw new Error(
       `${face}: subset (${subset.length} B) is not smaller than the source; refusing to write`,

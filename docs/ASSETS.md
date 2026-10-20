@@ -66,6 +66,15 @@ at 400 changed by a whole pixel. Which weights may be _used_ is declared in CSS 
 `tests/e2e/font-subset.spec.ts` measures advances against the pristine face at 400, 450, 500, 550,
 600, 650 and 700, so a re-introduction fails the build.
 
+The shipped binaries are verified, not assumed: `tests/unit/font-binary-integrity.test.ts` decodes
+each woff2 and asserts (a) the variable axes still carry the upstream bounds — DM Sans
+`100/400/1000`, Space Grotesk `300/300/700` — (b) the copyright (name ID 0) and licence URL (name ID 14) records survive subsetting, and (c) the subset contains no control characters. That last one was
+a real bug: the printable-ASCII range ran to `U+007F` (DEL).
+
+`preserveNameIds` is required in `scripts/subset-fonts.mjs`, not cosmetic. The harfbuzz subsetter
+drops most of the `name` table by default, and the pristine faces carry their SIL OFL licence URL in
+name ID 14. Dropping it strips the licence notice from the redistributed file.
+
 `src/styles/fonts.css` deliberately declares **no `unicode-range`**. It previously carried Google
 Fonts' default _latin_ range, which stops at U+2193, so nine characters the UI renders (`→ ↗ ↥ ≠ ≤ ≥
 ⊆ ✓ ✕`) silently fell back to a system font even though the subset contained them. The files here are
