@@ -9,7 +9,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import type { BuildSnapshot } from '../contracts';
+import type { BuildSnapshot, CostEstimate } from '../contracts';
 import { kindDef } from '../contracts';
 import { createDraft, newBuildId } from '../domain/build';
 import { canExport, exportBuild, exportFileName, importBuild } from '../domain/share';
@@ -23,7 +23,7 @@ import { ErrorState, Loading, useToast } from '../components/feedback';
 import { Icon } from '../components/icon';
 import { PageHeader } from '../components/layout';
 import { download } from '../features/builder/BuildToolbar';
-import { totalLabel } from '../lib/item-cost';
+import { costShort } from '../features/builder/analysis';
 
 const LIST_KEY = ['builds', 'list'] as const;
 const UNREADABLE = '(unreadable saved build)';
@@ -32,8 +32,11 @@ type SortKey = 'updated' | 'name' | 'cost';
 
 interface BuildDetail {
   build: BuildSnapshot;
-  /** Illustrative monthly total, or null when the estimator could not price the build. */
-  total: { amount: string; currency: string } | null;
+  /**
+   * The estimator's result, kept whole: storing only the amount lost the coverage and the period, so
+   * an all-unpriced build displayed as $0/mo and a partial total displayed as complete.
+   */
+  cost: CostEstimate;
   conflicts: number;
 }
 
@@ -94,7 +97,7 @@ export default function MyBuildsPage() {
             ]);
             map.set(summary.id, {
               build: stored.build,
-              total: { amount: cost.total.amount, currency: cost.currency },
+              cost,
               conflicts: report.summary.failed,
             });
           } catch {
@@ -171,17 +174,23 @@ export default function MyBuildsPage() {
   const sorted = [...summaries].sort((a, b) => {
     if (sort === 'name') return a.name.localeCompare(b.name);
     if (sort === 'cost') {
-      const ca = details.data?.get(a.id)?.total;
-      const cb = details.data?.get(b.id)?.total;
+      const ca = details.data?.get(a.id)?.cost;
+      const cb = details.data?.get(b.id)?.cost;
       if (!ca && !cb) return b.updatedAt.localeCompare(a.updatedAt);
       if (!ca) return 1;
       if (!cb) return -1;
-      return Number(ca.amount) - Number(cb.amount);
+      // Rank by coverage first: a lower bound is not "cheaper" than a complete total.
+      const rank = (cost: CostEstimate) =>
+        cost.coverage === 'complete' ? 0 : cost.coverage === 'partial' ? 1 : 2;
+      const byCoverage = rank(ca) - rank(cb);
+      if (byCoverage) return byCoverage;
+      return Number(ca.total.amount) - Number(cb.total.amount);
     }
     return b.updatedAt.localeCompare(a.updatedAt);
   });
 
   const workingTotal = analysis.costIsCurrent ? analysis.cost : undefined;
+  const workingCost = costShort(workingTotal);
   const workingConflicts = analysis.report?.summary.failed ?? 0;
   const workingLayers = draft ? filledLayers(draft.build) : 0;
 
@@ -279,10 +288,9 @@ export default function MyBuildsPage() {
                 selected
               </p>
               <div className="build-meta-row">
-                <span>
-                  {workingTotal
-                    ? `${totalLabel(workingTotal.total.amount, workingTotal.currency)}/mo* example`
-                    : 'Cost not available*'}
+                <span title={workingCost.note}>
+                  {workingCost.text}
+                  {workingCost.qualifier ? ` ${workingCost.qualifier}` : ''}
                 </span>
                 <span>
                   {workingConflicts
@@ -421,6 +429,8 @@ function SavedCard({
   };
 
   const layers = detail ? filledLayers(detail.build) : summary.selectionCount;
+  // Coverage-aware: a partial estimate reads as a lower bound, never as the full monthly price.
+  const cost = costShort(detail?.cost);
 
   return (
     <article className="saved-card">
@@ -447,10 +457,9 @@ function SavedCard({
           <div className="saved-card-metrics">
             <div>
               <small>ESTIMATED BASELINE*</small>
-              <strong>
-                {detail?.total
-                  ? `${totalLabel(detail.total.amount, detail.total.currency)}/mo`
-                  : '—'}
+              <strong title={cost.note}>
+                {cost.text}
+                {cost.qualifier ? <span className="pt-sub"> {cost.qualifier}</span> : null}
               </strong>
             </div>
             <div>

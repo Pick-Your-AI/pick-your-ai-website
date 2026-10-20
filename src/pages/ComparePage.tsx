@@ -133,22 +133,37 @@ function ComponentCompare() {
   const layerItems = preferred ? tierItems.filter((i) => i.kind === preferred) : tierItems;
 
   const slotItem = (index: number): CatalogItem | undefined => {
+    // An explicit `?ids=` may name products from different tiers (the catalog's compare tray is not
+    // tier-scoped), so a requested id is resolved as-is instead of being dropped for its tier.
     const id = requestedIds ? requestedIds[index] : layerItems[index]?.id;
-    if (!id) return undefined;
-    const item = catalog.byId.get(id);
-    return item && item.tier === tier ? item : undefined;
+    return id ? catalog.byId.get(id) : undefined;
   };
   const slots = Array.from({ length: SLOTS }, (_, index) => slotItem(index));
   const filled = slots.filter(Boolean) as CatalogItem[];
+  const mixedTiers = new Set(filled.map((item) => item.tier)).size > 1;
+
+  /** A slot lists this tier's products, plus a selected product that came from another tier. */
+  const optionsFor = (item: CatalogItem | undefined): CatalogItem[] =>
+    !item || tierItems.some((option) => option.id === item.id) ? tierItems : [...tierItems, item];
+  const slotOptions = (item: CatalogItem | undefined) =>
+    optionsFor(item).map((option) => (
+      <option key={option.id} value={option.id}>
+        {option.name} — {KIND_LABELS[option.kind]}
+        {option.tier === tier ? '' : ` (${option.tier} ${TIER_LABELS[option.tier]})`}
+      </option>
+    ));
 
   const updateIds = (next: (string | undefined)[]) => {
     const trimmed = [...next];
     while (trimmed.length && !trimmed[trimmed.length - 1]) trimmed.pop();
     const search = new URLSearchParams(params);
     search.set('layer', tier);
-    if (trimmed.some(Boolean))
-      search.set('ids', trimmed.map((id) => (id ? idToSlug(id) : '')).join(','));
-    else search.delete('ids');
+    /*
+     * `ids` is always written, even when it is empty. A missing `ids` means "first visit" and seeds
+     * the tier's default products; `ids=` says the slots were cleared on purpose and must stay
+     * empty.
+     */
+    search.set('ids', trimmed.map((id) => (id ? idToSlug(id) : '')).join(','));
     setParams(search, { replace: true });
   };
 
@@ -223,14 +238,44 @@ function ComponentCompare() {
     {
       key: 'cost',
       label: 'Est. cost',
+      /*
+       * The catalog and the builder both mark a component with an unpriced meter as a lower bound
+       * (`≥ … partial`) and keep the `Included*` asterisk. Comparing the bare amount would present a
+       * partial figure as a complete one — e.g. an expired output-token rate makes Aurora Mini's
+       * support-chat price ≥ $14.40, not $14.40.
+       */
       render: (item) => {
         const price = itemPrice(item, draft?.build, catalog.byId, pricebook.data);
-        if (price.amount === null) return <span className="pchip pchip-unknown">Unknown</span>;
-        if (Number(price.amount) === 0) return <span className="dim">Included</span>;
-        return <Money amount={price.amount} currency={price.currency} />;
+        if (price.amount === null)
+          return (
+            <span className="pchip pchip-unknown" title={price.note}>
+              Unknown
+            </span>
+          );
+        if (price.included)
+          return (
+            <span className={price.label.endsWith('*') ? 'pchip' : 'dim'} title={price.note}>
+              {price.label}
+            </span>
+          );
+        if (price.partial)
+          return (
+            <span className="pchip pchip-unknown" title={price.note}>
+              <Money amount={price.amount} currency={price.currency} approximate /> partial
+            </span>
+          );
+        return (
+          <span title={price.note}>
+            <Money amount={price.amount} currency={price.currency} />
+          </span>
+        );
       },
-      compare: (item) =>
-        itemPrice(item, draft?.build, catalog.byId, pricebook.data).amount ?? 'unknown',
+      compare: (item) => {
+        const price = itemPrice(item, draft?.build, catalog.byId, pricebook.data);
+        if (price.amount === null) return 'unknown';
+        // A lower bound and a complete price of the same amount are not the same fact.
+        return price.partial ? `${price.amount} (lower bound)` : price.amount;
+      },
     },
     {
       key: 'licence',
@@ -398,8 +443,10 @@ function ComponentCompare() {
               <div className="pbar-field">
                 <Icon name="compare" />
                 <span style={{ fontSize: 12, fontWeight: 600 }}>
-                  {layer.name} · {labelInSentence(KIND_LABELS[preferred])} · {filled.length} of{' '}
-                  {SLOTS} slots filled
+                  {mixedTiers
+                    ? 'Comparing products across layers'
+                    : `${layer.name} · ${labelInSentence(KIND_LABELS[preferred])}`}{' '}
+                  · {filled.length} of {SLOTS} slots filled
                 </span>
               </div>
               <div className="pbar-actions">
@@ -425,11 +472,7 @@ function ComponentCompare() {
                     onChange={(e) => setSlot(index, e.target.value)}
                   >
                     <option value="">Choose a component…</option>
-                    {tierItems.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.name} — {KIND_LABELS[option.kind]}
-                      </option>
-                    ))}
+                    {slotOptions(item)}
                   </select>
                 </div>
               ))}
@@ -439,7 +482,9 @@ function ComponentCompare() {
               <div className="pt-scroll" tabIndex={0} role="region" aria-label="Comparison table">
                 <table className="pcmp">
                   <caption className="sr-only">
-                    Side-by-side comparison of {filled.length} {layer.name} components
+                    Side-by-side comparison of {filled.length} component
+                    {filled.length === 1 ? '' : 's'}
+                    {mixedTiers ? ' from different layers' : ` in the ${layer.name} layer`}
                   </caption>
                   <thead>
                     <tr>
@@ -460,11 +505,7 @@ function ComponentCompare() {
                               onChange={(e) => setSlot(index, e.target.value)}
                             >
                               <option value="">Choose a component…</option>
-                              {tierItems.map((option) => (
-                                <option key={option.id} value={option.id}>
-                                  {option.name} — {KIND_LABELS[option.kind]}
-                                </option>
-                              ))}
+                              {slotOptions(item)}
                             </select>
                             {item ? (
                               <div className="pt-name">

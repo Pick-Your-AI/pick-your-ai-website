@@ -13,7 +13,7 @@ import { useBuilder } from '../app/builder-context';
 import { useData } from '../app/data-context';
 import { useCatalog } from '../app/queries';
 import { STARTERS, type Starter } from '../data/fixture/starters';
-import { totalLabel } from '../lib/item-cost';
+import { costShort } from '../features/builder/analysis';
 import { LAYERS } from '../lib/layers';
 import { Icon } from '../components/icon';
 import { Loading, useToast } from '../components/feedback';
@@ -57,7 +57,12 @@ function TemplateCard({ starter, index }: { starter: Starter; index: number }) {
     staleTime: Infinity,
   });
   const nodes = layerNodes(build, catalog.byId);
-  const total = cost.data ? totalLabel(cost.data.total.amount, cost.data.currency) : '—';
+  /*
+   * Coverage-aware, like the builder: a starter with an unpriced component (the Document Q&A
+   * starter leaves its vector database unpriced) is a lower bound, and an estimate that priced
+   * nothing is Unknown — neither may read as a complete monthly total.
+   */
+  const total = costShort(cost.data);
   const kicker = KICKERS[starter.id] ?? `${String(index + 1).padStart(2, '0')} / STARTER BUILD`;
 
   return (
@@ -83,8 +88,9 @@ function TemplateCard({ starter, index }: { starter: Starter; index: number }) {
         ))}
       </div>
       <div className="template-showcase-foot">
-        <span>
-          <strong>{total}</strong>/mo* illustrative
+        <span title={total.note}>
+          <strong>{total.text}</strong>
+          {total.qualifier ? ` ${total.qualifier}` : ''} · illustrative
         </span>
         <button
           className="btn btn-primary btn-small"

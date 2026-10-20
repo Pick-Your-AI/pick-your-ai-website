@@ -80,6 +80,13 @@ export function PartList({
   const ruleset = useRuleset();
 
   const build = draft?.build;
+  /*
+   * `useBuildAnalysis` retains the previous report as placeholder data while a changed revision is
+   * evaluated. Consuming it unchecked would announce the old verdict, conflict count and unknown
+   * count for a stack that no longer exists, so the summary reads it only while it is current — the
+   * same gate the builder uses (docs/ARCHITECTURE.md).
+   */
+  const report = analysis.reportIsCurrent ? analysis.report : undefined;
 
   // ---- URL state (research §4.8) ----------------------------------------------------------
   const q = params.get('q') ?? '';
@@ -97,6 +104,9 @@ export function PartList({
   const ossOnly = params.get('oss') === '1';
   // Deep links from the builder's "Change" action: replace an existing selection, then return.
   const replaceId = params.get('replace');
+  // Deep links from the builder's "Add another" action for `cardinality: many` kinds: add a second
+  // selection of the kind instead of replacing the primary one (the chooser option is `?add=1`).
+  const adding = params.get('add') === '1';
   const selectedIds = (params.get('ids') ?? '').split(',').filter(Boolean).slice(0, MAX_COMPARE);
 
   const update = (patch: Record<string, string | null>) => {
@@ -260,12 +270,24 @@ export function PartList({
 
   const inStack = (item: CatalogItem) =>
     build.selections.some((s) => s.enabled && s.catalog_item_id === item.id);
+  const replaceTarget = replaceId ? build.selections.find((s) => s.id === replaceId) : undefined;
+  /*
+   * The Add action must be a no-op for a component that is already selected: `addOrReplace` runs
+   * `replaceSelection` over the existing selection, which resets every setting the user configured
+   * (a model's temperature, an instance count) while the toast claims nothing happened.
+   */
+  const addIsNoop = (item: CatalogItem) =>
+    replaceTarget ? replaceTarget.catalog_item_id === item.id : inStack(item);
 
   const add = (item: CatalogItem) => {
     if (replaceId) {
-      const target = build.selections.find((s) => s.id === replaceId);
-      if (!target) {
+      if (!replaceTarget) {
         toast('That selection no longer exists. Choose a component instead.');
+        return;
+      }
+      if (addIsNoop(item)) {
+        toast(`${item.name} is already in that slot, so nothing changed.`);
+        void navigate('/builder');
         return;
       }
       apply(
@@ -277,10 +299,20 @@ export function PartList({
       void navigate('/builder');
       return;
     }
-    apply((b) => addOrReplace(b, item, byId), `Selected ${KIND_LABELS[item.kind]}: ${item.name}`, [
-      item.kind,
-    ]);
-    toast(`${item.name} ${inStack(item) ? 'is already in' : 'added to'} your stack.`);
+    if (addIsNoop(item)) {
+      toast(`${item.name} is already in your stack. Change or remove it in the builder.`);
+      return;
+    }
+    apply(
+      (b) => addOrReplace(b, item, byId, { additional: adding }),
+      `${adding ? 'Added an additional' : 'Selected'} ${KIND_LABELS[item.kind]}: ${item.name}`,
+      [item.kind],
+    );
+    toast(
+      adding
+        ? `${item.name} added as an additional ${KIND_LABELS[item.kind].toLowerCase()}.`
+        : `${item.name} added to your stack.`,
+    );
   };
 
   const toggleCompare = (id: string) => {
@@ -327,6 +359,16 @@ export function PartList({
         </div>
       ) : null}
 
+      {adding ? (
+        <div className="pnotice" style={{ marginBottom: 12 }}>
+          <Icon name="plus" />
+          <span>
+            <strong>Adding an additional component.</strong> The product you choose is added next to
+            the ones you already have, so nothing is replaced. <Link to="/builder">Cancel</Link>
+          </span>
+        </div>
+      ) : null}
+
       <div className="parts-cols">
         <aside className="prail" aria-label="Build context and filters">
           <MiniBuild
@@ -336,24 +378,18 @@ export function PartList({
               total: cov.needed.length,
             }}
             outcome={
-              analysis.report?.summary.failed
+              report?.summary.failed
                 ? 'fail'
-                : analysis.report?.summary.unknown
+                : report?.summary.unknown
                   ? 'unknown'
-                  : analysis.report
+                  : report
                     ? 'pass'
                     : 'none'
             }
             cost={analysis.costIsCurrent ? analysis.cost : undefined}
-            conflicts={analysis.report?.summary.failed ?? 0}
-            unknown={analysis.report?.summary.unknown ?? 0}
-            incomplete={
-              incompleteBuild(
-                build,
-                analysis.reportIsCurrent ? analysis.report : undefined,
-                ruleset.data,
-              ) ?? undefined
-            }
+            conflicts={report?.summary.failed ?? 0}
+            unknown={report?.summary.unknown ?? 0}
+            incomplete={incompleteBuild(build, report, ruleset.data) ?? undefined}
           />
 
           <CompatFilter
@@ -641,6 +677,12 @@ export function PartList({
                                     : verdict === 'incompatible'
                                       ? 'pbtn pbtn-blocked'
                                       : 'pbtn pbtn-add'
+                                }
+                                disabled={addIsNoop(item)}
+                                title={
+                                  addIsNoop(item)
+                                    ? `${item.name} is already selected; change its settings in the builder`
+                                    : undefined
                                 }
                                 onClick={() => add(item)}
                               >

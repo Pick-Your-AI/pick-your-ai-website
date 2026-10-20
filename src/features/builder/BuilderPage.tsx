@@ -14,10 +14,16 @@ import '../../styles/dense.css';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import type { BuildSnapshot, CatalogItem, ComponentKind, Tier } from '../../contracts';
-import { KIND_LABELS, kindsInTier } from '../../contracts';
+import { KIND_LABELS, kindDef, kindsInTier } from '../../contracts';
 import type { BuildContext } from '../../domain/activation';
 import { KIND_NEED_LABEL, buildContext, coverage, kindNeed } from '../../domain/activation';
-import { removeSelection, rename, updateObjectives, updateSettings } from '../../domain/build';
+import {
+  removeSelection,
+  rename,
+  setEnabled,
+  updateObjectives,
+  updateSettings,
+} from '../../domain/build';
 import { canExport, encodeShareFragment, exportBuild, exportFileName } from '../../domain/share';
 import { useBuilder } from '../../app/builder-context';
 import { useData } from '../../app/data-context';
@@ -85,20 +91,29 @@ function ComponentRow({
   selectionId,
   item,
   price,
+  enabled,
+  addAnother,
   onConfigure,
+  onToggleEnabled,
   onRemove,
 }: {
   kind: ComponentKind;
   selectionId: string;
   item: CatalogItem | undefined;
   price: ReturnType<typeof itemPrice> | undefined;
+  /** A disabled selection is still part of the saved build: it must stay visible and manageable. */
+  enabled: boolean;
+  /** True on the last row of a `cardinality: many` kind, which may take another selection. */
+  addAnother: boolean;
   onConfigure: () => void;
+  onToggleEnabled: () => void;
   onRemove: () => void;
 }) {
   const evidence = item ? evidenceLine(item) : undefined;
   const logo = item ? itemLogo(item) : undefined;
+  const name = item?.name ?? KIND_LABELS[kind];
   return (
-    <tr data-kind={kind}>
+    <tr data-kind={kind} className={enabled ? undefined : 'is-disabled'}>
       <th scope="row" data-label="Component">
         <span className="pt-name">
           <span className="dim" style={{ fontSize: 11 }}>
@@ -117,6 +132,14 @@ function ComponentRow({
             <span>
               <Link to={`${kindPath(kind)}/${item.id.replace(/\./g, '~')}`}>{item.name}</Link>
               {rowSubtitle(item) ? <span className="pt-sub">{rowSubtitle(item)}</span> : null}
+              {enabled ? null : (
+                <span className="pchip pchip-unknown">Disabled — excluded from checks</span>
+              )}
+              {addAnother ? (
+                <Link className="pt-sub" to={`${kindPath(kind)}?add=1`}>
+                  <Icon name="plus" /> Add another {KIND_LABELS[kind].toLowerCase()}
+                </Link>
+              ) : null}
             </span>
           ) : (
             <span className="dim">{selectionId}</span>
@@ -158,7 +181,7 @@ function ComponentRow({
             <button
               type="button"
               className="pbtn pbtn-icon"
-              aria-label={`Configure ${item?.name ?? KIND_LABELS[kind]}`}
+              aria-label={`Configure ${name}`}
               onClick={onConfigure}
             >
               <Icon name="wand" />
@@ -167,7 +190,20 @@ function ComponentRow({
           <button
             type="button"
             className="pbtn pbtn-icon"
-            aria-label={`Remove ${item?.name ?? KIND_LABELS[kind]} from the stack`}
+            aria-label={`${enabled ? 'Disable' : 'Enable'} ${name}`}
+            title={
+              enabled
+                ? 'Keep the component but exclude it from checks and cost'
+                : 'Include this component in checks and cost again'
+            }
+            onClick={onToggleEnabled}
+          >
+            <Icon name={enabled ? 'x-circle' : 'check'} />
+          </button>
+          <button
+            type="button"
+            className="pbtn pbtn-icon"
+            aria-label={`Remove ${name} from the stack`}
             onClick={onRemove}
           >
             <Icon name="x" />
@@ -346,7 +382,19 @@ export default function BuilderPage() {
   };
 
   const share = async () => {
-    const url = `${location.origin}/shared#${encodeShareFragment(build, mode)}`;
+    // Encoding a draft the contract rejects throws, so validate first and say why.
+    const problem = canExport(build);
+    if (problem) {
+      toast(problem);
+      return;
+    }
+    let url: string;
+    try {
+      url = `${location.origin}/shared#${encodeShareFragment(build, mode)}`;
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'This build cannot be encoded into a link.');
+      return;
+    }
     try {
       await navigator.clipboard.writeText(url);
       toast('Share link copied. The build travels in the link itself (after #).');
@@ -362,12 +410,16 @@ export default function BuilderPage() {
     ? byId.get(configureSelection.catalog_item_id)
     : undefined;
 
-  /** Rows for one tier: every selected component, plus an empty row for each required gap. */
+  /**
+   * Rows for one tier: every selected component — enabled *or* disabled, because a disabled
+   * selection is still part of the saved build and its configure, enable and remove controls must
+   * stay reachable — plus an empty row for each required gap.
+   */
   const rowsFor = (tier: Tier) => {
     const kinds = kindsInTier(tier).map((k) => k.kind);
     const rows: React.ReactNode[] = [];
     for (const kind of kinds) {
-      const selections = build.selections.filter((s) => s.enabled && s.kind === kind);
+      const selections = build.selections.filter((s) => s.kind === kind);
       if (selections.length === 0) {
         if (kindNeed(kind, ctx.mode) === 'needed')
           rows.push(
@@ -375,8 +427,10 @@ export default function BuilderPage() {
           );
         continue;
       }
-      for (const selection of selections) {
+      const many = kindDef(kind).cardinality === 'many';
+      selections.forEach((selection, index) => {
         const item = byId.get(selection.catalog_item_id);
+        const name = item?.name ?? selection.catalog_item_id;
         rows.push(
           <ComponentRow
             key={selection.id}
@@ -384,11 +438,26 @@ export default function BuilderPage() {
             selectionId={selection.id}
             item={item}
             price={item ? itemPrice(item, build, byId, pricebook.data) : undefined}
+            enabled={selection.enabled}
+            addAnother={many && index === selections.length - 1}
             onConfigure={() => setConfigure(selection.id)}
-            onRemove={() => remove(selection.id, kind, item?.name ?? selection.catalog_item_id)}
+            onToggleEnabled={() => {
+              const next = !selection.enabled;
+              apply(
+                (b) => setEnabled(b, selection.id, next),
+                `${next ? 'Enabled' : 'Disabled'} ${KIND_LABELS[kind]}: ${name}`,
+                [kind],
+              );
+              toast(
+                next
+                  ? `${name} is included in checks again.`
+                  : `${name} is kept but excluded from checks and cost.`,
+              );
+            }}
+            onRemove={() => remove(selection.id, kind, name)}
           />,
         );
-      }
+      });
     }
     return rows;
   };

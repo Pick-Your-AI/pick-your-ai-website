@@ -365,6 +365,17 @@
 .pt tbody tr.is-blocked:hover {
   background: #2d2024;
 }
+/*
+ * A disabled selection is still part of the build, so it keeps its row and its controls. The marker
+ * is a chip in the Selection cell (never colour alone); the rule below only adds the quiet cue.
+ */
+.pt tbody tr.is-disabled {
+  box-shadow: inset 3px 0 0 var(--line);
+}
+.pt tbody tr.is-disabled td,
+.pt tbody tr.is-disabled th {
+  color: #93a6a4;
+}
 .pt td,
 .pt tbody th {
   padding: 6px 9px;
@@ -1130,6 +1141,10 @@ html.light .pt tbody tr.is-selected {
 }
 html.light .pt tbody tr.is-blocked {
   background: #fdf1f0;
+}
+html.light .pt tbody tr.is-disabled td,
+html.light .pt tbody tr.is-disabled th {
+  color: #4a625e;
 }
 html.light .pt td,
 html.light .pcmp td {
