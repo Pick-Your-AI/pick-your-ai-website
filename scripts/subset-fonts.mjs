@@ -24,24 +24,26 @@ const FACES = [
 ];
 
 /*
- * Weight range the stylesheet actually selects (`font-weight: 400 700` on the two variable faces;
- * `grep font-weight src/styles` finds 400, 500, 600 and 700 and nothing outside that span).
- * Restricting the wght axis drops the unused masters instead of shipping them: DM Sans alone is
- * 25.9 kB at full range and 16.1 kB clipped to 400-700. The static mono faces have no axis, so the
- * option is only passed for the variable ones.
+ * Weight range the stylesheet admits is declared in CSS (`font-weight: 400 700` on the two variable
+ * faces), NOT by clipping the binary.
+ *
+ * Do not pass `variationAxes` here. Clipping the `wght` axis to 400-700 does shrink the file
+ * (DM Sans 25.9 kB -> 16.1 kB), but it rewrites the face's native design coordinates: the retained
+ * masters become the axis endpoints, so the interpolated advances at any given weight are no longer
+ * the ones the type designer drew. `tests/e2e/font-subset.spec.ts` measures advances at 400, 500,
+ * 600 and 700 against the pristine face, which is what keeps this honest.
+ *
+ * Restricting the admitted range belongs in the `@font-face` rule, where it is declarative,
+ * reversible and does not alter the glyph data.
  */
-const VARIATION_AXES = { wght: { min: 400, max: 700 } };
-
 const sourceDir = fileURLToPath(new URL('../fonts-src/', import.meta.url));
 const outDir = fileURLToPath(new URL('../public/fonts/', import.meta.url));
 const text = subsetText();
 
-for (const { file: face, variable } of FACES) {
+for (const { file: face } of FACES) {
   const source = await readFile(`${sourceDir}${face}`);
-  const subset = await subsetFont(source, text, {
-    targetFormat: 'woff2',
-    ...(variable ? { variationAxes: VARIATION_AXES } : {}),
-  });
+  // Glyph subset only: the axis is preserved exactly as the upstream face declares it.
+  const subset = await subsetFont(source, text, { targetFormat: 'woff2' });
   if (subset.length >= source.length) {
     throw new Error(
       `${face}: subset (${subset.length} B) is not smaller than the source; refusing to write`,

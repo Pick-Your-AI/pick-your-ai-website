@@ -21,9 +21,9 @@
   --orange: #f3b76c;
   --red: #fb817c;
   --blue: #91b8fa;
-  --mono: 'IBM Plex Mono', monospace;
-  --display: 'Space Grotesk', sans-serif;
-  --body: 'DM Sans', sans-serif;
+  --mono: 'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace;
+  --display: 'Space Grotesk', 'Space Grotesk Fallback', sans-serif;
+  --body: 'DM Sans', 'DM Sans Fallback', sans-serif;
   --radius: 12px;
   --shadow: 0 24px 90px rgba(0, 0, 0, 0.38);
 }

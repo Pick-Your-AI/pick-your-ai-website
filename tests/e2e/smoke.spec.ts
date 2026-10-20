@@ -69,6 +69,13 @@ for (const [path, heading] of PAGES) {
 
 test('light theme passes axe on every route too', async ({ page }, info) => {
   test.skip(info.project.name.startsWith('mobile'), 'dark theme covers mobile; light is desktop');
+  /*
+   * This one test sweeps all 16 routes: 16 full page loads plus 16 axe scans. Measured at ~24 s in
+   * isolation, which left too little headroom against the 30 s default once the rest of the suite is
+   * running in parallel and competing for CPU — it timed out intermittently rather than failing an
+   * assertion. Give the sweep an explicit budget instead of making it look like a real defect.
+   */
+  test.setTimeout(120_000);
   await page.goto('/');
   await page.getByRole('button', { name: 'Switch to light theme' }).click();
   await expect(page.locator('html')).toHaveClass(/light/);

@@ -31,9 +31,13 @@ All notable changes to this project are documented here. The format follows [Kee
 - **The dialog did not contain keyboard focus.** Tab is trapped inside the modal and focus returns to the opener on close.
 - **Builder and revision comparison were lost in the redesign.** Restored on top of the design system as `?revisions=` and `?builds=`, sharing one diff renderer with selections by tier, objectives/policy/locks, outcome changes and cost.
 
+- **The landing page's primary call to action seeded a preselected stack.** "Build your AI stack" started the builder from `STARTERS[0]`, so a first-time visitor arrived at a complete stack with prices and a `Compatible` verdict they had not chosen — the same preselected-recommendation problem the builder's own first-visit rule forbids. It now starts a blank build, and choosing a starter stays an explicit action on `/templates`. `tests/e2e/start-blank-build.spec.ts` asserts the landing CTA lands on `Incomplete — 0 of 4 required choices made` with zero selections.
+
 ### Performance
 
-- Web fonts are subset to the glyphs the UI renders and the variable `wght` axis is clipped to 400–700: ~91 kB of faces became 49 kB. `fonts-src/` keeps the pristine upstream files (never shipped); `npm run fonts:subset` regenerates. Guards: a unit test fails on a character outside the subset or a payload over 50 kB, and an e2e test loads each pristine face beside its subset and asserts all 120 codepoints measure to the same advance width.
+- Web fonts are glyph-subset to the characters the UI renders: ~91 kB of faces became ~58 kB. `fonts-src/` keeps the pristine upstream files (never shipped); `npm run fonts:subset` regenerates. The `wght` axis is **not** clipped — doing so rewrote the retained masters and changed interpolated advances between the named weights (Space Grotesk at 550 differed by 0.25%). Which weights may be used is declared in CSS instead.
+- Each family has a metric-matched `'<Family> Fallback'` face (`size-adjust`, `ascent-override`, `descent-override`) so the `font-display: swap` swap does not reflow: the line box matches the webfont exactly and the advance is within ~3%. The mono faces use `font-display: optional`, since a late swap would re-lay every numeric column.
+- Guards: a unit test fails on a character outside the subset, on a payload over 64 kB, or if the subset script re-introduces axis clipping; an e2e test loads each pristine face beside its subset and asserts all 120 codepoints measure identically **and** that the variable faces interpolate identically at 400/450/500/550/600/650/700; a second e2e test asserts the fallback faces match and are measurably closer than the plain generic family.
 - `dense.css` is imported by the modules that render the parts register instead of globally, so the marketing pages no longer ship table CSS they cannot match.
 
 ### Added

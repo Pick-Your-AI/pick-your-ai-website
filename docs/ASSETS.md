@@ -27,6 +27,20 @@ third-party request.
 | DM Sans       | 400–700 | `public/fonts/dm-sans-var.woff2` (variable)       | SIL Open Font License 1.1 |
 | IBM Plex Mono | 400/600 | `public/fonts/ibm-plex-mono-{400,600}.woff2`      | SIL Open Font License 1.1 |
 
+### Metric-matched fallbacks
+
+`fonts.css` also declares a `'<Family> Fallback'` face per family, naming a local system font and
+correcting it with `size-adjust` / `ascent-override` / `descent-override`. `font-display: swap` paints
+text immediately in the fallback and swaps when the webfont lands; without matched metrics that swap
+reflows the page. The line box matches the webfont **exactly** for all three families, and the advance
+width is within ~3% (the browser quantises `size-adjust` to whole pixels, so an exact width match is
+not achievable by scaling). `tests/e2e/font-fallback-metrics.spec.ts` asserts both the match and that
+the adjusted fallback is measurably closer than the plain generic family — otherwise deleting the
+overrides would still pass.
+
+The two mono faces use `font-display: optional`: they are the last thing painted, and a late swap
+would re-lay every numeric column.
+
 ### Subsetting
 
 `public/fonts/` holds **generated** subsets, not the upstream files. `fonts-src/` holds the pristine
@@ -40,14 +54,17 @@ npm run fonts:subset
 The glyph set lives in `scripts/font-charset.mjs`: printable ASCII plus the punctuation and math
 characters the UI renders (`—`, `·`, `…`, `→`, `×`, `§`, `≥`, `≠`, `≤`, `⊆`, `✓`, `✕`, …).
 
-Two reductions apply, and both are verified rather than assumed:
+**Glyph subsetting is the only transformation applied.** Shipping the full faces cost ~91 kB; the
+glyph subset is ~58 kB.
 
-- **Glyph subset.** Shipping the full faces cost ~91 kB; the glyph subset is ~59 kB.
-- **Clipped `wght` axis.** The two variable faces are clipped to 400–700, the only span the
-  stylesheet selects, which drops the unused masters (DM Sans 25.9 kB → 16.1 kB, and all four
-  faces together 59.4 kB → 49.4 kB). All four weights
-  in use still interpolate distinctly, and the visual baselines are pixel-identical after clipping.
-  Weights outside the range clamp to the nearest master; nothing in the UI asks for one.
+The `wght` axis is deliberately **not** clipped, even though clipping to 400–700 would save a further
+~10 kB. Clipping rewrites the retained masters into the axis endpoints, so the interpolated advance at
+a given weight stops matching the one the designer drew. Measured, it was lossless at exactly
+400/500/600/700 and wrong in between — Space Grotesk at 550 differed by 0.25%, and the "WAV" advance
+at 400 changed by a whole pixel. Which weights may be _used_ is declared in CSS instead
+(`font-weight: 400 700` in `fonts.css`), which is declarative and does not touch the glyph data.
+`tests/e2e/font-subset.spec.ts` measures advances against the pristine face at 400, 450, 500, 550,
+600, 650 and 700, so a re-introduction fails the build.
 
 `src/styles/fonts.css` deliberately declares **no `unicode-range`**. It previously carried Google
 Fonts' default _latin_ range, which stops at U+2193, so nine characters the UI renders (`→ ↗ ↥ ≠ ≤ ≥

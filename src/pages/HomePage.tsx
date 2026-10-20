@@ -77,7 +77,14 @@ function Hero() {
               className="btn btn-primary"
               type="button"
               onClick={() => {
-                startNew(starter.build(), starter.title);
+                /*
+                 * Start a BLANK build, not the hero's example stack. Seeding the builder from
+                 * STARTERS[0] would present a preselected recommendation as the default starting
+                 * point, which is the same thing the builder's own first-visit rule forbids: an
+                 * unconfigured stack must read as Incomplete rather than arriving pre-filled with
+                 * someone else's choices. Choosing a starter stays an explicit action on /templates.
+                 */
+                startNew();
                 void navigate('/builder');
               }}
             >

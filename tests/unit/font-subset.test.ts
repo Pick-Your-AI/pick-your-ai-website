@@ -64,12 +64,11 @@ describe('subset web fonts', () => {
         .filter((f) => f.endsWith('.woff2'))
         .map((f) => [f, statSync(join(FONT_DIR, f)).size]),
     );
-    // Full faces totalled ~91 kB, which cost ~4 performance points on the parts routes.
-    // The subset lands near 59 kB; the ceiling leaves headroom for a future weight, not for a revert.
+    // Full upstream faces totalled ~91 kB. Glyph subsetting alone lands near 58 kB, which is the
+    // shipped size: the `wght` axis is deliberately NOT clipped (see font-weight-range.test.ts), so
+    // the ceiling allows the full axis but not a revert to unsubset faces.
     const total = Object.values(sizes).reduce((sum, n) => sum + n, 0);
-    // Full faces ~91 kB; glyph-subset ~59 kB; glyph-subset + clipped wght axis ~44 kB.
-    // The ceiling guards against a revert to unclipped or unsubset faces.
-    expect(total, `fonts: ${JSON.stringify(sizes)}`).toBeLessThan(50 * 1024);
+    expect(total, `fonts: ${JSON.stringify(sizes)}`).toBeLessThan(64 * 1024);
   });
 
   it('declares no unicode-range that would exclude a glyph the UI renders', () => {

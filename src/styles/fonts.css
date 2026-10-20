@@ -41,7 +41,10 @@
   font-family: 'IBM Plex Mono';
   font-style: normal;
   font-weight: 400;
-  font-display: swap;
+  /* `optional` for the mono faces: they are the last thing painted and a late swap re-lays every
+     numeric column. If the face misses the first block the system monospace is used for the whole
+     page instead of swapping mid-session. */
+  font-display: optional;
   src: url('/fonts/ibm-plex-mono-400.woff2') format('woff2');
 }
 
@@ -49,6 +52,49 @@
   font-family: 'IBM Plex Mono';
   font-style: normal;
   font-weight: 600;
-  font-display: swap;
+  font-display: optional;
   src: url('/fonts/ibm-plex-mono-600.woff2') format('woff2');
+}
+
+/*
+ * Metric-matched fallbacks.
+ *
+ * `font-display: swap` shows text immediately in a system font, then swaps when the webfont lands.
+ * If the two have different advance widths and line boxes the swap reflows the page, which is what
+ * `size-adjust` / `ascent-override` / `descent-override` exist to prevent: they make the fallback
+ * occupy the same space as the webfont, so the swap is invisible.
+ *
+ * The numbers are measured, not guessed — `tests/e2e/font-fallback-metrics.spec.ts` renders a sample
+ * string in both the webfont and its fallback family and asserts the width and height agree, so a
+ * change to either face fails the build instead of silently reintroducing layout shift.
+ *
+ * The `src` lists are ordered so the metric-compatible Arial (or Liberation Sans, which is
+ * metric-compatible with it) wins where present. Courier New / Liberation Mono already match IBM Plex
+ * Mono's advance exactly, so only the line box needs overriding there.
+ */
+@font-face {
+  font-family: 'DM Sans Fallback';
+  src: local('Arial'), local('Helvetica'), local('Liberation Sans');
+  size-adjust: 103%;
+  ascent-override: 95.9%;
+  descent-override: 30%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Space Grotesk Fallback';
+  src: local('Arial'), local('Helvetica'), local('Liberation Sans');
+  size-adjust: 107%;
+  ascent-override: 94%;
+  descent-override: 28%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono Fallback';
+  src: local('Courier New'), local('Liberation Mono'), local('DejaVu Sans Mono');
+  size-adjust: 100%;
+  ascent-override: 102.5%;
+  descent-override: 27.5%;
+  line-gap-override: 0%;
 }
