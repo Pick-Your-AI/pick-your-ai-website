@@ -1,19 +1,43 @@
 # PickYour.AI
 
-Build a compatible AI stack, part by part.
-
-PickYour.AI is a static React + TypeScript single-page app for comparing and
-assembling AI stacks like a PC parts list: start with workload and deployment
-mode, then choose models, infrastructure, data, tooling, and deployment
-Evidence while checking compatibility as you go.
+**Build a compatible AI stack, part by part.** PickYour.AI is a builder for
+complete AI solutions in the spirit of a PC parts list: choose a workload and
+deployment mode, then models, infrastructure, data, tooling, and deployment
+evidence while checking compatibility as you go.
 
 - Live site: https://pickyour.ai
 - Research and contracts: [Pick-Your-AI/pick-your-ai-research](https://github.com/Pick-Your-AI/pick-your-ai-research)
 - Contributor recognition planning: [pick-your-ai-leaderboard](https://github.com/Pick-Your-AI/pick-your-ai-leaderboard) · [Delivery project](https://github.com/orgs/Pick-Your-AI/projects/6) · [Program tracking](https://github.com/Pick-Your-AI/pick-your-ai-website/issues/1)
 
-> Preview status. The real component catalog is still being researched. Every
-> component, price, and compatibility result on the site today is synthetic
-> demonstration data, clearly labelled as such.
+> **Preview status.** The real component catalog is still being researched.
+> Every component, price, and compatibility result on the site today is
+> **synthetic demonstration data**, labelled as such.
+
+## Quick start
+
+```sh
+npm ci
+npm run dev
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for scripts and workflow, and
+[AGENTS.md](AGENTS.md) for the rules every change must follow.
+
+## Documentation
+
+| Topic | Document |
+| --- | --- |
+| Architecture, data flow, state | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Research → website mapping and traceability | [docs/RESEARCH_MAPPING.md](docs/RESEARCH_MAPPING.md) |
+| Moving from fixtures to real data | [docs/DATA_INTEGRATION.md](docs/DATA_INTEGRATION.md) |
+| Product, sitemap, journeys | [docs/PRODUCT.md](docs/PRODUCT.md) |
+| Design system and accessibility | [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) |
+| Testing strategy | [docs/TESTING.md](docs/TESTING.md) |
+| Build contract for deployment | [docs/DEPLOYMENT_CONTRACT.md](docs/DEPLOYMENT_CONTRACT.md) |
+| Image asset provenance | [docs/ASSETS.md](docs/ASSETS.md) |
+| Operations (deploy, DNS, rollback) | [docs/operations/](docs/operations/) |
+
+Some documents are added by later PRs; see `CHANGELOG.md`.
 
 ## What this repo contains
 
@@ -27,54 +51,6 @@ logic and catalog rules driven by the vendorized research contract under
 - Contract-first compatibility evaluation from the research repo
 - Synthetic fixture data until real catalog research lands
 - Accessibility-first UI work aiming for WCAG 2.2 AA
-
-## Quick start
-
-Requirements: Node 22 LTS or newer, npm, and git.
-
-```sh
-npm ci
-npm run dev
-```
-
-The app runs in fixture mode by default for local development. For different data
-modes, copy `.env.example` to `.env.local` and set `VITE_DATA_MODE` to
-`fixture` or `http`.
-
-## Scripts
-
-```sh
-npm ci
-npm run dev                 # http://localhost:5173
-npm run build               # static production build in dist/
-npm run preview             # preview dist/ on port 4317
-npm run format              # format files
-npm run format:check        # check formatting
-npm run lint                # ESLint (zero warnings enforced)
-npm run typecheck           # TypeScript strict checks
-npm run contracts:verify    # validate vendored contract integrity
-npm run contracts:update    # re-vendor contracts from a specific upstream SHA
-npm run contracts:types     # regenerate generated contract types
-npm test                    # Vitest unit/integration tests
-npm run test:e2e            # Playwright + axe smoke tests against preview build
-npm run audit               # production dependency audit
-```
-
-## Documentation
-
-| Topic | Document |
-| --- | --- |
-| Architecture, state and data flow | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| Research-to-website traceability | [docs/RESEARCH_MAPPING.md](docs/RESEARCH_MAPPING.md) |
-| Moving from fixtures to real data | [docs/DATA_INTEGRATION.md](docs/DATA_INTEGRATION.md) |
-| Product, journeys, sitemap | [docs/PRODUCT.md](docs/PRODUCT.md) |
-| Design system and accessibility | [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) |
-| Testing strategy | [docs/TESTING.md](docs/TESTING.md) |
-| Deployment build contract | [docs/DEPLOYMENT_CONTRACT.md](docs/DEPLOYMENT_CONTRACT.md) |
-| Asset provenance | [docs/ASSETS.md](docs/ASSETS.md) |
-| Operations and deployment | [docs/operations/](docs/operations/) |
-| Contribution workflow and rules | [CONTRIBUTING.md](CONTRIBUTING.md) |
-| Agent instructions | [AGENTS.md](AGENTS.md) |
 
 ## Contract and source-of-truth rules
 
