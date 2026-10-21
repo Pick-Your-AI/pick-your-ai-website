@@ -273,7 +273,7 @@ export function PartList({
   };
 
   const inStack = (item: CatalogItem) =>
-    build.selections.some((s) => s.enabled && s.catalog_item_id === item.id);
+    build.selections.some((s) => s.catalog_item_id === item.id);
   /*
    * Except when explicitly adding another many-kind selection, Add must be a no-op for an already selected component: `addOrReplace` runs
    * `replaceSelection` over the existing selection, which resets every setting the user configured

@@ -253,6 +253,59 @@ test('selected model keeps its settings when revisited in compare and detail', a
   expect(saved).toEqual(original);
 });
 
+test('catalog preserves a disabled model and its configured settings', async ({ page }) => {
+  await page.goto('/catalog/model/demo~model~aurora-large');
+  await page.getByRole('button', { name: /Add to my stack/ }).click();
+  await expect(page.getByRole('button', { name: /In your build/ })).toBeDisabled();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const id = localStorage.getItem('pyai.currentBuildId');
+        return id ? localStorage.getItem(`pyai.build.${id}`) : null;
+      }),
+    )
+    .not.toBeNull();
+  const original = await page.evaluate(() => {
+    const id = localStorage.getItem('pyai.currentBuildId')!;
+    const key = `pyai.build.${id}`;
+    const stored = JSON.parse(localStorage.getItem(key)!);
+    const model = stored.build.selections.find(
+      (s: { catalog_item_id: string }) => s.catalog_item_id === 'demo.model.aurora-large',
+    );
+    model.settings.temperature = 0.37;
+    model.enabled = false;
+    localStorage.setItem(key, JSON.stringify(stored));
+    return stored.build;
+  });
+  await page.goto('/catalog/model?show=all');
+  const row = page.getByRole('row', { name: /Demo Aurora Large/ });
+  await expect(row.getByRole('button', { name: /In stack/ })).toBeDisabled();
+  await page.reload();
+  await expect(row.getByRole('button', { name: /In stack/ })).toBeDisabled();
+  const saved = await page.evaluate(() => {
+    const id = localStorage.getItem('pyai.currentBuildId')!;
+    return JSON.parse(localStorage.getItem(`pyai.build.${id}`)!).build;
+  });
+  expect(saved).toEqual(original);
+});
+
+test('summary revision comparison opens the build chooser', async ({ page }) => {
+  await page.goto('/catalog/model/demo~model~aurora-large');
+  await page.getByRole('button', { name: /Add to my stack/ }).click();
+  await expect(page.getByRole('button', { name: /In your build/ })).toBeDisabled();
+  await page.goto('/summary');
+  await page.getByRole('link', { name: 'Compare two revisions' }).click();
+  await expect(page).toHaveURL(/\/compare\?mode=builds$/);
+  await expect(
+    page.getByRole('heading', { name: 'Revisions of your current build' }),
+  ).toBeVisible();
+  const revisions = page.getByRole('group', { name: /^Revisions of/ });
+  await revisions.getByRole('checkbox', { name: /^Revision 1 / }).check();
+  await revisions.getByRole('checkbox', { name: /^Revision 2 / }).check();
+  await page.getByRole('button', { name: 'Compare these two' }).click();
+  await expect(page).toHaveURL(/\/compare\?revisions=1,2$/);
+});
+
 test('builder announces the storage failure and its explanation', async ({ page }) => {
   await page.addInitScript(() => {
     const setItem = Storage.prototype.setItem;

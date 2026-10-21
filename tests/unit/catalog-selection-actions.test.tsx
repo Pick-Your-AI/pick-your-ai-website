@@ -15,7 +15,7 @@ import { useBuilder } from '../../src/app/builder-context';
 import { DataContext } from '../../src/app/data-context';
 import type { BuildSnapshot, ComponentKind } from '../../src/contracts';
 import { createFixtureProviders } from '../../src/data/fixture/providers';
-import { addOrReplace, createDraft, updateSettings } from '../../src/domain/build';
+import { addOrReplace, createDraft, setEnabled, updateSettings } from '../../src/domain/build';
 import { PartList } from '../../src/features/catalog/PartList';
 import { BY_ID, NOW, buildWith, apiChat, item } from './scenarios';
 
@@ -62,6 +62,24 @@ function apiChatPicks(): [string, string][] {
 }
 
 describe('catalog selection actions', () => {
+  it('preserves a disabled model and its configured settings when revisited', async () => {
+    const build = setEnabled(
+      updateSettings(apiChat(), 'sel_model', { temperature: 0.37 }),
+      'sel_model',
+      false,
+    );
+    const { apply } = show(build, '/catalog/model?show=all', 'model');
+    const row = await screen.findByRole('row', { name: /Demo Aurora Large/ });
+    const button = within(row).getByRole('button', { name: /In stack/ });
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(apply).not.toHaveBeenCalled();
+    expect(build.selections.find((s) => s.id === 'sel_model')).toMatchObject({
+      enabled: false,
+      settings: { temperature: 0.37 },
+    });
+  });
+
   it('does not re-apply a component that is already in the stack', async () => {
     // A configured tool: re-adding it would have reset these settings to their defaults.
     const build = updateSettings(withTool(), 'sel_tool', {

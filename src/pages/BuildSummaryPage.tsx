@@ -451,7 +451,7 @@ export default function BuildSummaryPage() {
           </ol>
           {draft.revisions.length >= 2 ? (
             <p className="no-print">
-              <Link className="text-link" to="/compare">
+              <Link className="text-link" to="/compare?mode=builds">
                 Compare two revisions
               </Link>
             </p>

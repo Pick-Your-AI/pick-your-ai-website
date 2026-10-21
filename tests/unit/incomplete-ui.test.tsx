@@ -12,10 +12,10 @@ vi.mock('../../src/app/builder-context', () => ({ useBuilder: vi.fn() }));
 
 const { useBuilder } = await import('../../src/app/builder-context');
 
-function show(build = buildWith([])) {
+function show(build = buildWith([]), revisions = [build]) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   vi.mocked(useBuilder).mockReturnValue({
-    draft: createDraft(build),
+    draft: { ...createDraft(build), revisions },
     ready: true,
     catalogById: BY_ID,
     lastChange: null,
@@ -37,6 +37,15 @@ function show(build = buildWith([])) {
 }
 
 describe('incomplete build wording', () => {
+  it('links retained revision history to the build comparison chooser', async () => {
+    const build = buildWith([]);
+    show(build, [{ ...build, revision: build.revision - 1 }, build]);
+    expect(await screen.findByRole('link', { name: 'Compare two revisions' })).toHaveAttribute(
+      'href',
+      '/compare?mode=builds',
+    );
+  });
+
   it('shows provisional completion guidance while retaining the raw failure', async () => {
     show();
     const panel = await screen.findByTestId('overall-status');
