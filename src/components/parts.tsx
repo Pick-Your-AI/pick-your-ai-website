@@ -13,7 +13,7 @@ import { useId, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import type { CatalogItem, CostEstimate, EvaluationReport } from '../contracts';
 import { Icon, type IconName } from './icon';
-import { costShort } from '../lib/cost-format';
+import { costShort } from '../lib/item-cost';
 
 // --------------------------------------------------------------------------------- chips -----
 

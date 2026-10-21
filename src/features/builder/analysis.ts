@@ -1,5 +1,5 @@
-import { formatMoney } from '../../lib/cost-format';
-export { formatMoney, costShort, type CostShort } from '../../lib/cost-format';
+import { formatMoney } from '../../lib/item-cost';
+export { formatMoney, costShort, type CostShort } from '../../lib/item-cost';
 import type { BuildSnapshot, ComponentKind, CostEstimate, EvaluationReport } from '../../contracts';
 import { KIND_LABELS, withArticle } from '../../contracts';
 import type { Coverage } from '../../domain/activation';
