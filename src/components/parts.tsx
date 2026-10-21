@@ -13,6 +13,7 @@ import { useId, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import type { CatalogItem, CostEstimate, EvaluationReport } from '../contracts';
 import { Icon, type IconName } from './icon';
+import { costShort } from '../features/builder/analysis';
 
 // --------------------------------------------------------------------------------- chips -----
 
@@ -232,12 +233,7 @@ export function MiniBuild({
   incomplete?: { chosen: number; total: number; remediation: string } | undefined;
 }) {
   // An empty stack has no cost yet — `$0.00` would read as a measured zero.
-  const total =
-    selected === 0 || !cost
-      ? '—'
-      : cost.coverage === 'complete'
-        ? `$${cost.total.amount}`
-        : `≥ $${cost.total.amount}`;
+  const total = costShort(selected === 0 ? undefined : cost);
   return (
     <Box title="Your stack">
       <div className="pbox-row">
@@ -260,7 +256,7 @@ export function MiniBuild({
       </div>
       <div className="pbox-row total">
         <span>Est. {cost?.period_days ?? 30}-day cost</span>
-        <strong>{total}</strong>
+        <strong title={total.note}>{total.text}</strong>
       </div>
       {/*
         The status line grows from one line to three once an evaluation lands, which used to push the

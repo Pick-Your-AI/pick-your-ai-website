@@ -26,6 +26,50 @@ test('builder: objectives mount on first expansion and preserve unsaved edits', 
   await expect(field).toHaveValue('1234');
 });
 
+test('builder: restoring retained history creates a new revision and survives reload', async ({
+  page,
+}, info) => {
+  test.skip(desktopOnly(info.project.name), 'the dense table is a desktop layout');
+  await page.goto('/catalog/tool?show=all');
+  await page
+    .getByRole('row', { name: /Demo Web Search Tool/ })
+    .getByRole('button', { name: 'Add' })
+    .click();
+  await page.getByRole('link', { name: /Back to builder/ }).click();
+  await expect(page.locator('.pbar')).toContainText('rev 2');
+  await page.goto('/catalog/tool?show=all');
+  await page
+    .getByRole('row', { name: /Demo Ticket Writer/ })
+    .getByRole('button', { name: 'Add' })
+    .click();
+  await page.getByRole('link', { name: /Back to builder/ }).click();
+  await expect(page.locator('.pbar')).toContainText('rev 3');
+  await page.locator('summary').filter({ hasText: 'Revision history' }).click();
+  await page.getByRole('button', { name: 'Restore revision 2 as new revision' }).click();
+  await expect(page.locator('.pbar')).toContainText('rev 4');
+  await expect(page.locator('.pt tbody tr[data-kind="tool"]')).toContainText(
+    'Demo Web Search Tool',
+  );
+  await expect(page.locator('.pt tbody tr[data-kind="tool"]')).not.toContainText(
+    'Demo Ticket Writer',
+  );
+  await expect(page.locator('.pbox-save-error')).toHaveCount(0);
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const id = localStorage.getItem('pyai.currentBuildId');
+        const stored = id ? localStorage.getItem(`pyai.build.${id}`) : null;
+        return stored ? JSON.parse(stored).build.revision : null;
+      }),
+    )
+    .toBe(4);
+  await page.reload();
+  await expect(page.locator('.pbar')).toContainText('rev 4');
+  await expect(page.locator('.pt tbody tr[data-kind="tool"]')).toContainText(
+    'Demo Web Search Tool',
+  );
+});
+
 test('catalog: add another permits the same product and keeps both selections', async ({
   page,
 }, info) => {
@@ -111,6 +155,7 @@ test('builder: a disabled selection stays visible with enable and remove control
   await row.getByRole('button', { name: /^Disable / }).click();
   await expect(row).toHaveClass(/is-disabled/);
   await expect(row).toContainText('Disabled — excluded from checks');
+  await expect(row.locator('[data-label="Est. cost"]')).toHaveText('Excluded');
   await expect(row.getByRole('button', { name: /^Remove .* from the stack/ })).toBeEnabled();
 
   await row.getByRole('button', { name: /^Enable / }).click();

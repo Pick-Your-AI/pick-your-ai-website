@@ -97,6 +97,26 @@ describe('component comparison', () => {
     ).toBeGreaterThan(0);
   });
 
+  it('resolves every accelerator reference in hosting comparisons', async () => {
+    show('/compare?ids=demo~hosting_platform~nimbus-cloud,demo~hosting_platform~onprem-rack');
+    const table = await screen.findByRole('table');
+    const row = within(table).getByRole('row', { name: /Accelerator/ });
+    expect(row).toHaveTextContent('Demo C24 GPU');
+    expect(row).toHaveTextContent('Demo C80 GPU');
+    expect(row).toHaveTextContent('Demo R48 Accelerator');
+    expect(row).not.toHaveTextContent('demo.accelerator.');
+    expect(row.querySelector('.is-diff')).not.toBeNull();
+  });
+
+  it('resolves data-source reference arrays in knowledge-base comparisons', async () => {
+    show('/compare?ids=demo~knowledge_base~policies,demo~knowledge_base~customers');
+    const table = await screen.findByRole('table');
+    const row = within(table).getByRole('row', { name: /Data source/ });
+    expect(row).toHaveTextContent('Demo Policy File Share');
+    expect(row).toHaveTextContent('Demo CRM Connector');
+    expect(row).not.toHaveTextContent('demo.data_source.');
+  });
+
   it('keeps an explicitly cleared comparison empty', async () => {
     // `ids=` is the explicit "cleared" form; a missing `ids` means "first visit" and seeds defaults.
     show('/compare?layer=T1&ids=');

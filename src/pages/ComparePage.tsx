@@ -210,10 +210,18 @@ function ComponentCompare() {
     }
   }
 
-  /** Resolve a `*_ref` value to the referenced catalog item's display name. */
+  /** Resolve scalar and array references without displaying raw catalog identifiers. */
   const refName = (value: unknown): string | undefined => {
+    if (Array.isArray(value)) {
+      if (!value.length) return 'None recorded';
+      return value
+        .map((id) =>
+          typeof id === 'string' ? (catalog.byId.get(id)?.name ?? 'Not recorded') : 'Not recorded',
+        )
+        .join(', ');
+    }
     if (typeof value !== 'string') return undefined;
-    return catalog.byId.get(value)?.name;
+    return catalog.byId.get(value)?.name ?? 'Not recorded';
   };
 
   /*

@@ -18,20 +18,23 @@ import { createFixtureProviders } from '../../src/data/fixture/providers';
 import { ToastProvider } from '../../src/components/feedback';
 import {
   addOrReplace,
+  commit,
   createBuild,
   createDraft,
   setEnabled,
   updateSettings,
+  type BuildDraft,
 } from '../../src/domain/build';
 import BuilderPage from '../../src/features/builder/BuilderPage';
 import { BY_ID, NOW, apiChat, item } from './scenarios';
 
 vi.mock('../../src/app/builder-context', () => ({ useBuilder: vi.fn() }));
 
-function show(build: BuildSnapshot) {
+function show(build: BuildSnapshot, draft: BuildDraft = createDraft(build)) {
   const apply = vi.fn();
+  const restore = vi.fn();
   vi.mocked(useBuilder).mockReturnValue({
-    draft: createDraft(build),
+    draft,
     ready: true,
     catalogById: BY_ID,
     lastChange: null,
@@ -39,7 +42,7 @@ function show(build: BuildSnapshot) {
     apply,
     startNew: vi.fn(),
     open: vi.fn(),
-    restore: vi.fn(),
+    restore,
   });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   const view = render(
@@ -53,7 +56,7 @@ function show(build: BuildSnapshot) {
       </DataContext.Provider>
     </QueryClientProvider>,
   );
-  return { ...view, apply };
+  return { ...view, apply, restore };
 }
 
 describe('builder selection controls', () => {
@@ -63,6 +66,8 @@ describe('builder selection controls', () => {
 
     const row = await screen.findByRole('row', { name: /Demo Aurora Large/ });
     expect(row).toHaveClass('is-disabled');
+    expect(row).toHaveTextContent('Excluded');
+    expect(row).not.toHaveTextContent('$324');
     expect(row).toHaveTextContent('Disabled — excluded from checks');
 
     // Configure and Remove stay reachable, and the toggle offers Enable rather than Disable.
@@ -92,6 +97,24 @@ describe('builder selection controls', () => {
     expect(rows).toHaveLength(4);
     expect(rows.filter((row) => row.textContent?.includes('$0.20'))).toHaveLength(2);
     expect(rows.filter((row) => row.textContent?.includes('$2'))).toHaveLength(2);
+  });
+
+  it('restores retained history and withholds rollback for unavailable revisions', async () => {
+    const original = apiChat();
+    const draft = commit(
+      createDraft(original),
+      (build) => ({ ...build, name: 'Changed' }),
+      'Renamed',
+      [],
+    );
+    draft.changes.unshift({ revision: 0, summary: 'Pruned revision', at: NOW, changedKinds: [] });
+    const { restore } = show(draft.build, draft);
+    await userEvent.click(await screen.findByText(/Revision history/));
+    const button = screen.getByRole('button', { name: 'Restore revision 1 as new revision' });
+    await userEvent.click(button);
+    expect(restore).toHaveBeenCalledWith(1);
+    expect(screen.queryByRole('button', { name: 'Restore revision 0 as new revision' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Restore revision 2 as new revision' })).toBeNull();
   });
 
   it('reports why a draft cannot be shared instead of throwing', async () => {

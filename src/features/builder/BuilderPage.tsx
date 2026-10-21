@@ -165,7 +165,7 @@ function ComponentRow({
         )}
       </td>
       <td className="num" data-label="Est. cost">
-        <CostCell price={price} />
+        <CostCell price={price} excluded={!enabled} />
       </td>
       <td data-label="Actions">
         <div className="pt-actions">
@@ -222,7 +222,19 @@ function ComponentRow({
  * only partly priced is marked as a lower bound so a partial charge is never read as the full
  * monthly price.
  */
-function CostCell({ price }: { price: ReturnType<typeof itemPrice> | undefined }) {
+function CostCell({
+  price,
+  excluded,
+}: {
+  price: ReturnType<typeof itemPrice> | undefined;
+  excluded: boolean;
+}) {
+  if (excluded)
+    return (
+      <span className="dim" title="Disabled selections are excluded from the estimate">
+        Excluded
+      </span>
+    );
   if (!price) return <span className="dim">—</span>;
   if (price.amount === null)
     return (
@@ -271,7 +283,7 @@ const BUILDER_DESCRIPTION =
 export default function BuilderPage() {
   const navigate = useNavigate();
   const toast = useToast();
-  const { draft, ready, apply, startNew, saveState, lastChange } = useBuilder();
+  const { draft, ready, apply, startNew, restore, saveState, lastChange } = useBuilder();
   const { mode } = useData();
   const catalog = useCatalog();
   const pricebook = usePricebook();
@@ -438,7 +450,11 @@ export default function BuilderPage() {
             kind={kind}
             selectionId={selection.id}
             item={item}
-            price={item ? itemPrice(item, build, byId, pricebook.data, selection) : undefined}
+            price={
+              item && selection.enabled
+                ? itemPrice(item, build, byId, pricebook.data, selection)
+                : undefined
+            }
             enabled={selection.enabled}
             addAnother={many && index === selections.length - 1}
             onConfigure={() => setConfigure(selection.id)}
@@ -781,6 +797,17 @@ export default function BuilderPage() {
                     <time className="dim" dateTime={c.at}>
                       {new Date(c.at).toLocaleString()}
                     </time>
+                    {c.revision !== build.revision &&
+                    draft.revisions.some((r) => r.revision === c.revision) ? (
+                      <button
+                        type="button"
+                        className="pbtn"
+                        aria-label={`Restore revision ${c.revision} as new revision`}
+                        onClick={() => restore(c.revision)}
+                      >
+                        Restore as new revision
+                      </button>
+                    ) : null}
                   </li>
                 ))}
               </ol>
