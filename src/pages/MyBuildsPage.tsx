@@ -191,7 +191,7 @@ export default function MyBuildsPage() {
 
   const workingTotal = analysis.costIsCurrent ? analysis.cost : undefined;
   const workingCost = costShort(workingTotal);
-  const workingConflicts = analysis.report?.summary.failed ?? 0;
+  const workingConflicts = analysis.reportIsCurrent ? analysis.report?.summary.failed : undefined;
   const workingLayers = draft ? filledLayers(draft.build) : 0;
 
   return (
@@ -293,9 +293,11 @@ export default function MyBuildsPage() {
                   {workingCost.qualifier ? ` ${workingCost.qualifier}` : ''}
                 </span>
                 <span>
-                  {workingConflicts
-                    ? `${workingConflicts} conflict${workingConflicts === 1 ? '' : 's'}`
-                    : 'No demo conflicts'}
+                  {workingConflicts === undefined
+                    ? 'Not checked'
+                    : workingConflicts
+                      ? `${workingConflicts} conflict${workingConflicts === 1 ? '' : 's'}`
+                      : 'No demo conflicts'}
                 </span>
                 <span>IN PROGRESS</span>
               </div>

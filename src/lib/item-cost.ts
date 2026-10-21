@@ -16,7 +16,7 @@
  *
  * Amounts are synthetic (see methodology → pricing).
  */
-import type { BuildSnapshot, CatalogItem, CostEstimate, Pricebook } from '../contracts';
+import type { BuildSnapshot, CatalogItem, CostEstimate, Pricebook, Selection } from '../contracts';
 import { estimateCost } from '../domain/cost';
 import { addOrReplace } from '../domain/build';
 import { addDecimals } from '../domain/decimal';
@@ -64,9 +64,10 @@ function probeBuild(
   item: CatalogItem,
   build: BuildSnapshot,
   catalog: ReadonlyMap<string, CatalogItem>,
+  selection?: Selection,
 ): BuildSnapshot {
   const base: BuildSnapshot = { ...build, id: `probe.${item.id}`, revision: 1, selections: [] };
-  const existing = build.selections.find((s) => s.catalog_item_id === item.id);
+  const existing = selection ?? build.selections.find((s) => s.catalog_item_id === item.id);
   if (existing) {
     // Reuse the current selection verbatim: instances, region, budget and reserved hours all
     // change the projected quantity, so defaulting them here would misprice the row.
@@ -86,12 +87,13 @@ export function itemPrice(
   build: BuildSnapshot | null | undefined,
   catalog: ReadonlyMap<string, CatalogItem>,
   pricebook: Pricebook | undefined,
+  selected?: Selection,
 ): ItemPrice {
   const currency = build?.objectives.currency ?? 'USD';
   if (item.billing_class === 'unknown') return { ...UNKNOWN, currency };
   if (!build || !pricebook) return { ...UNKNOWN, currency };
 
-  const probe = probeBuild(item, build, catalog);
+  const probe = probeBuild(item, build, catalog, selected);
   const selection = probe.selections[0];
   if (!selection) return { ...UNKNOWN, currency };
 

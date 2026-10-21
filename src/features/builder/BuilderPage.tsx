@@ -437,7 +437,7 @@ export default function BuilderPage() {
             kind={kind}
             selectionId={selection.id}
             item={item}
-            price={item ? itemPrice(item, build, byId, pricebook.data) : undefined}
+            price={item ? itemPrice(item, build, byId, pricebook.data, selection) : undefined}
             enabled={selection.enabled}
             addAnother={many && index === selections.length - 1}
             onConfigure={() => setConfigure(selection.id)}

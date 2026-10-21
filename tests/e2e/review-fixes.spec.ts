@@ -10,6 +10,27 @@ import { expect, test } from '@playwright/test';
 
 const desktopOnly = (name: string) => name.startsWith('mobile');
 
+test('catalog: add another permits the same product and keeps both selections', async ({
+  page,
+}, info) => {
+  test.skip(desktopOnly(info.project.name), 'the dense table is a desktop layout');
+  await page.goto('/catalog/tool?show=all');
+  await page
+    .getByRole('row', { name: /Demo Web Search Tool/ })
+    .getByRole('button', { name: 'Add' })
+    .click();
+  await page.goto('/catalog/tool?show=all&add=1');
+  const row = page.getByRole('row', { name: /Demo Web Search Tool/ });
+  await expect(row.getByRole('button', { name: /Add|In stack/ })).toBeEnabled();
+  await row.getByRole('button', { name: /Add|In stack/ }).click();
+  await page.goto('/builder');
+  await expect(page.locator('.pt tbody tr[data-kind="tool"]')).toHaveCount(2);
+  await expect(page.locator('.pt tbody tr[data-kind="tool"]')).toContainText([
+    'Demo Web Search Tool',
+    'Demo Web Search Tool',
+  ]);
+});
+
 test('catalog: an already-selected component cannot be re-applied', async ({ page }, info) => {
   test.skip(desktopOnly(info.project.name), 'the dense table is a desktop layout');
   await page.goto('/catalog/tool?show=all');

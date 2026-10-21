@@ -7,7 +7,8 @@
  * treated as compatible. The failing rule ids are kept so a card can say *why*, not just that.
  */
 import { useQuery } from '@tanstack/react-query';
-import type { BuildSnapshot, ComponentKind } from '../contracts';
+import { kindDef, type BuildSnapshot, type ComponentKind } from '../contracts';
+import { nextRole } from '../domain/build';
 import type { CompatibleOption } from '../data/types';
 import { useData } from '../app/data-context';
 
@@ -17,16 +18,34 @@ export type VerdictMap = ReadonlyMap<string, CompatOption>;
 export const verdictKey = (kind: ComponentKind, itemId: string) => `${kind}|${itemId}`;
 
 /** One query for many kinds, so a layer (or the whole catalog) needs a single round of work. */
-export function useCompatByKind(build: BuildSnapshot | null | undefined, kinds: ComponentKind[]) {
+export function useCompatByKind(
+  build: BuildSnapshot | null | undefined,
+  kinds: ComponentKind[],
+  options: { role?: string; additional?: boolean } = {},
+) {
   const { compatibility } = useData();
   const unique = [...new Set(kinds)];
+  const roles = unique.map(
+    (kind) =>
+      options.role ??
+      (build && options.additional && kindDef(kind).cardinality === 'many'
+        ? nextRole(build, kind)
+        : 'primary'),
+  );
   return useQuery({
-    queryKey: ['compat', build?.id ?? 'none', build?.revision ?? 0, unique.join(',')],
+    queryKey: [
+      'compat',
+      build?.id ?? 'none',
+      build?.revision ?? 0,
+      unique.join(','),
+      roles.join(','),
+    ],
     queryFn: async (): Promise<VerdictMap> => {
       // Settled, not all: one kind failing to evaluate must not blank every other verdict.
       const results = await Promise.allSettled(
         unique.map(
-          async (kind) => [kind, await compatibility.compatibleOptions(build!, kind)] as const,
+          async (kind, index) =>
+            [kind, await compatibility.compatibleOptions(build!, kind, roles[index])] as const,
         ),
       );
       const map = new Map<string, CompatOption>();
@@ -38,7 +57,6 @@ export function useCompatByKind(build: BuildSnapshot | null | undefined, kinds: 
       return map;
     },
     enabled: Boolean(build) && unique.length > 0,
-    placeholderData: (previous) => previous,
   });
 }
 

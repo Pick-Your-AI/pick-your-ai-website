@@ -129,7 +129,11 @@ export function PartList({
     [mode, kind, layer],
   );
 
-  const compat = useCompatByKind(build, kinds);
+  const replaceTarget = replaceId ? build?.selections.find((s) => s.id === replaceId) : undefined;
+  const compat = useCompatByKind(build, kinds, {
+    role: replaceTarget?.role,
+    additional: !replaceId && adding,
+  });
   const byId = catalog.byId;
 
   const ctx = useMemo(() => (build ? buildContext(build, byId) : undefined), [build, byId]);
@@ -270,14 +274,15 @@ export function PartList({
 
   const inStack = (item: CatalogItem) =>
     build.selections.some((s) => s.enabled && s.catalog_item_id === item.id);
-  const replaceTarget = replaceId ? build.selections.find((s) => s.id === replaceId) : undefined;
   /*
-   * The Add action must be a no-op for a component that is already selected: `addOrReplace` runs
+   * Except when explicitly adding another many-kind selection, Add must be a no-op for an already selected component: `addOrReplace` runs
    * `replaceSelection` over the existing selection, which resets every setting the user configured
    * (a model's temperature, an instance count) while the toast claims nothing happened.
    */
   const addIsNoop = (item: CatalogItem) =>
-    replaceTarget ? replaceTarget.catalog_item_id === item.id : inStack(item);
+    replaceTarget
+      ? replaceTarget.catalog_item_id === item.id
+      : !(adding && kindDef(item.kind).cardinality === 'many') && inStack(item);
 
   const add = (item: CatalogItem) => {
     if (replaceId) {

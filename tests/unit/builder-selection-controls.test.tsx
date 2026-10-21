@@ -16,9 +16,15 @@ import { DataContext } from '../../src/app/data-context';
 import type { BuildSnapshot } from '../../src/contracts';
 import { createFixtureProviders } from '../../src/data/fixture/providers';
 import { ToastProvider } from '../../src/components/feedback';
-import { createBuild, createDraft, setEnabled } from '../../src/domain/build';
+import {
+  addOrReplace,
+  createBuild,
+  createDraft,
+  setEnabled,
+  updateSettings,
+} from '../../src/domain/build';
 import BuilderPage from '../../src/features/builder/BuilderPage';
-import { BY_ID, NOW, apiChat } from './scenarios';
+import { BY_ID, NOW, apiChat, item } from './scenarios';
 
 vi.mock('../../src/app/builder-context', () => ({ useBuilder: vi.fn() }));
 
@@ -71,6 +77,21 @@ describe('builder selection controls', () => {
     expect(summary).toMatch(/Enabled/);
     const next = change(build);
     expect(next.selections.find((s) => s.id === 'sel_model')?.enabled).toBe(true);
+  });
+
+  it('prices repeated storage rows using each selection settings', async () => {
+    const storage = item('storage', 'object');
+    let build = addOrReplace(apiChat(), storage, BY_ID);
+    build = updateSettings(build, 'sel_storage', { provisioned_gb: 10 });
+    build = addOrReplace(build, storage, BY_ID, { additional: true });
+    const second = build.selections.find((s) => s.kind === 'storage' && s.role === 'secondary')!;
+    build = updateSettings(build, second.id, { provisioned_gb: 100 });
+    show(build);
+    const rows = await screen.findAllByRole('row', { name: /Demo Object Storage/ });
+    // The all-parts view and layer view each render the two selections.
+    expect(rows).toHaveLength(4);
+    expect(rows.filter((row) => row.textContent?.includes('$0.20'))).toHaveLength(2);
+    expect(rows.filter((row) => row.textContent?.includes('$2'))).toHaveLength(2);
   });
 
   it('reports why a draft cannot be shared instead of throwing', async () => {

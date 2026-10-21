@@ -118,7 +118,7 @@ export function commit(
 
 const ROLE_SEQUENCE = ['primary', 'secondary', 'tertiary'];
 
-function nextRole(build: BuildSnapshot, kind: ComponentKind): string {
+export function nextRole(build: BuildSnapshot, kind: ComponentKind): string {
   const used = new Set(build.selections.filter((s) => s.kind === kind).map((s) => s.role));
   for (const r of ROLE_SEQUENCE) if (!used.has(r)) return r;
   let n = ROLE_SEQUENCE.length + 1;

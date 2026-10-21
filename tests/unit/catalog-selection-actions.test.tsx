@@ -13,15 +13,15 @@ import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { useBuilder } from '../../src/app/builder-context';
 import { DataContext } from '../../src/app/data-context';
-import type { BuildSnapshot } from '../../src/contracts';
+import type { BuildSnapshot, ComponentKind } from '../../src/contracts';
 import { createFixtureProviders } from '../../src/data/fixture/providers';
-import { createDraft, updateSettings } from '../../src/domain/build';
+import { addOrReplace, createDraft, updateSettings } from '../../src/domain/build';
 import { PartList } from '../../src/features/catalog/PartList';
-import { BY_ID, NOW, buildWith } from './scenarios';
+import { BY_ID, NOW, buildWith, apiChat, item } from './scenarios';
 
 vi.mock('../../src/app/builder-context', () => ({ useBuilder: vi.fn() }));
 
-function show(build: BuildSnapshot, path: string) {
+function show(build: BuildSnapshot, path: string, kind: ComponentKind = 'tool') {
   const apply = vi.fn();
   vi.mocked(useBuilder).mockReturnValue({
     draft: createDraft(build),
@@ -35,16 +35,18 @@ function show(build: BuildSnapshot, path: string) {
     restore: vi.fn(),
   });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  const providers = createFixtureProviders({ now: () => NOW });
+  const compatibleOptions = vi.spyOn(providers.compatibility, 'compatibleOptions');
   const view = render(
     <QueryClientProvider client={client}>
-      <DataContext.Provider value={createFixtureProviders({ now: () => NOW })}>
+      <DataContext.Provider value={providers}>
         <MemoryRouter initialEntries={[path]}>
-          <PartList mode="kind" kind="tool" />
+          <PartList mode="kind" kind={kind} />
         </MemoryRouter>
       </DataContext.Provider>
     </QueryClientProvider>,
   );
-  return { ...view, apply };
+  return { ...view, apply, compatibleOptions };
 }
 
 const withTool = () => buildWith([...apiChatPicks(), ['tool', 'search']]);
@@ -95,6 +97,43 @@ describe('catalog selection actions', () => {
     expect(tools[0]!.settings).toEqual({ enabled: true, permissions: 'read-only' });
     expect(tools[1]!.catalog_item_id).toBe('demo.tool.ticket-writer');
     expect(tools[1]!.role).toBe('secondary');
+  });
+
+  it('allows another copy of the selected item with independent settings', async () => {
+    const build = updateSettings(withTool(), 'sel_tool', { permissions: 'read-only' });
+    const { apply } = show(build, '/catalog/tool?show=all&add=1');
+    const row = await screen.findByRole('row', { name: /Demo Web Search/ });
+    const button = within(row).getByRole('button', { name: /Add|In stack/ });
+    expect(button).toBeEnabled();
+    await userEvent.click(button);
+    const [change] = apply.mock.calls[0] as [(b: BuildSnapshot) => BuildSnapshot];
+    const selections = change(build).selections.filter((s) => s.kind === 'tool');
+    expect(selections).toHaveLength(2);
+    expect(selections[0]).toEqual(build.selections.find((s) => s.kind === 'tool'));
+    expect(selections[1]!.catalog_item_id).toBe(selections[0]!.catalog_item_id);
+    expect(selections[1]!.role).toBe('secondary');
+  });
+
+  it('evaluates the role of a secondary replacement through the picker', async () => {
+    const build = addOrReplace(apiChat(), item('model_provider', 'openlab'), BY_ID, {
+      additional: true,
+    });
+    const secondary = build.selections.find(
+      (s) => s.kind === 'model_provider' && s.role === 'secondary',
+    )!;
+    const { compatibleOptions } = show(
+      build,
+      `/catalog/model-provider?replace=${secondary.id}`,
+      'model_provider',
+    );
+    await screen.findByRole('row', { name: /Demo Open Weights Lab/ });
+    expect(compatibleOptions).toHaveBeenCalledWith(build, 'model_provider', 'secondary');
+  });
+
+  it('keeps the no-op guard for single-cardinality kinds even with add=1', async () => {
+    show(apiChat(), '/catalog/workload?show=all&add=1', 'workload');
+    const row = await screen.findByRole('row', { name: /Demo Customer Support Chat/ });
+    expect(within(row).getByRole('button', { name: /In stack/ })).toBeDisabled();
   });
 
   it('keeps replacing the primary selection when ?add=1 is absent', async () => {
