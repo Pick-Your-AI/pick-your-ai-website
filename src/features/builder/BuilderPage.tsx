@@ -282,6 +282,7 @@ export default function BuilderPage() {
   const [name, setName] = useState<string | null>(null);
   const [configure, setConfigure] = useState<string | null>(null);
   const [jsonOpen, setJsonOpen] = useState(false);
+  const [objectivesMounted, setObjectivesMounted] = useState(false);
 
   const byId = catalog.byId;
   const ctx = useMemo(() => (build ? buildContext(build, byId) : undefined), [build, byId]);
@@ -741,22 +742,29 @@ export default function BuilderPage() {
             </div>
           </details>
 
-          <details className="pdetails">
+          <details
+            className="pdetails"
+            onToggle={(event) => {
+              if (event.currentTarget.open) setObjectivesMounted(true);
+            }}
+          >
             <summary>
               <Icon name="list" /> Objectives and policy
             </summary>
             <div className="pdetails-body">
-              <ObjectivesForm
-                key={`${build.id}-${build.revision}`}
-                build={build}
-                onApply={(objectives, policy) =>
-                  apply(
-                    (b) => ({ ...updateObjectives(b, objectives), policy }),
-                    'Updated build objectives',
-                    ['workload', 'cost_policy', 'hosting_platform', 'deployment_target'],
-                  )
-                }
-              />
+              {objectivesMounted ? (
+                <ObjectivesForm
+                  key={`${build.id}-${build.revision}`}
+                  build={build}
+                  onApply={(objectives, policy) =>
+                    apply(
+                      (b) => ({ ...updateObjectives(b, objectives), policy }),
+                      'Updated build objectives',
+                      ['workload', 'cost_policy', 'hosting_platform', 'deployment_target'],
+                    )
+                  }
+                />
+              ) : null}
             </div>
           </details>
 

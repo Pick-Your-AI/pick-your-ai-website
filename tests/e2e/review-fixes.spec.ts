@@ -10,6 +10,22 @@ import { expect, test } from '@playwright/test';
 
 const desktopOnly = (name: string) => name.startsWith('mobile');
 
+test('builder: objectives mount on first expansion and preserve unsaved edits', async ({
+  page,
+}) => {
+  await page.goto('/builder');
+  const field = page.getByRole('textbox', { name: 'Requests per day' });
+  await expect(field).toHaveCount(0);
+  const summary = page.locator('summary').filter({ hasText: 'Objectives and policy' });
+  await summary.click();
+  await expect(field).toBeVisible();
+  await field.fill('1234');
+  await summary.click();
+  await expect(field).toBeHidden();
+  await summary.click();
+  await expect(field).toHaveValue('1234');
+});
+
 test('catalog: add another permits the same product and keeps both selections', async ({
   page,
 }, info) => {
