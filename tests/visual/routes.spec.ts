@@ -15,6 +15,12 @@ for (const theme of ['light', 'dark'] as const) {
       await page.goto(route.path);
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(route.heading);
       await expect(page.getByRole('note', { name: 'Demo mode' })).toBeVisible();
+      if (route.name === 'home') {
+        // Fixture analysis resolves in memory, so networkidle does not mean the preview is ready.
+        const preview = page.getByRole('group', { name: 'Example demo AI stack' });
+        await expect(preview.locator('.preview-footer strong')).toHaveText('$324.00 per 30 days');
+        await expect(preview.locator('.preview-stamp')).toHaveText('0 detected conflicts');
+      }
       await page.waitForLoadState('networkidle');
       // Standardize the system-font aliases across Linux runners; keep mono text mono.
       await page.addStyleTag({
