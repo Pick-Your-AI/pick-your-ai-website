@@ -6,8 +6,12 @@ deployment mode, then models, infrastructure, data, tooling, and deployment
 evidence while checking compatibility as you go.
 
 - Live site: https://pickyour.ai
-- Research and contracts: [Pick-Your-AI/pick-your-ai-research](https://github.com/Pick-Your-AI/pick-your-ai-research)
-- Contributor recognition planning: [pick-your-ai-leaderboard](https://github.com/Pick-Your-AI/pick-your-ai-leaderboard) · [Delivery project](https://github.com/orgs/Pick-Your-AI/projects/6) · [Program tracking](https://github.com/Pick-Your-AI/pick-your-ai-website/issues/1)
+- Research and contracts:
+  [Pick-Your-AI/pick-your-ai-research](https://github.com/Pick-Your-AI/pick-your-ai-research)
+- Contributor recognition planning:
+  [pick-your-ai-leaderboard](https://github.com/Pick-Your-AI/pick-your-ai-leaderboard)
+  · [Delivery project](https://github.com/orgs/Pick-Your-AI/projects/6) ·
+  [Program tracking](https://github.com/Pick-Your-AI/pick-your-ai-website/issues/1)
 
 > **Preview status.** The real component catalog is still being researched.
 > Every component, price, and compatibility result on the site today is
