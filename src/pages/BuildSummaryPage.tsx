@@ -1,3 +1,4 @@
+import type { ComponentKind } from '../contracts';
 /*
  * Full, printable summary of the current draft: locks, selections by tier, objectives, findings,
  * the cost breakdown (#cost), capacity and freshness evidence, and revision history. Results are
@@ -15,7 +16,7 @@ import { useBuilder } from '../app/builder-context';
 import { useData } from '../app/data-context';
 import { useBuildAnalysis, useCatalog, useRuleset } from '../app/queries';
 import { itemPath } from '../lib/catalog-view';
-import { formatValue, humanize } from '../lib/schema-fields';
+import { formatValue, humanize, settingsFields } from '../lib/schema-fields';
 import { EmptyState, ErrorState, Loading, Notice } from '../components/feedback';
 import { Icon } from '../components/icon';
 import { PageHeader } from '../components/layout';
@@ -477,12 +478,20 @@ function KeyValues({ entries }: { entries: [string, string][] }) {
   );
 }
 
-function settingsSummary(settings: object): string {
+function settingsSummary(settings: object, kind: ComponentKind): string {
   const entries = Object.entries(settings as Record<string, unknown>).filter(
     ([, v]) => v !== undefined,
   );
   if (!entries.length) return 'Defaults';
-  return entries.map(([k, v]) => `${humanize(k)}: ${formatValue(v, { key: k })}`).join(' · ');
+  return entries
+    .map(
+      ([k, v]) =>
+        `${humanize(k)}: ${formatValue(
+          v,
+          settingsFields(kind).find((f) => f.key === k),
+        )}`,
+    )
+    .join(' · ');
 }
 
 function SelectionsSection({
@@ -556,7 +565,7 @@ function SelectionsSection({
                         </td>
                         <td>{s.role}</td>
                         <td>{s.enabled ? 'Yes' : 'No (disabled)'}</td>
-                        <td className="dim">{settingsSummary(s.settings)}</td>
+                        <td className="dim">{settingsSummary(s.settings, s.kind)}</td>
                       </tr>
                     );
                   })}

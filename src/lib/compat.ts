@@ -6,7 +6,7 @@
  * Verdicts are the contract's three-valued `compatible | incompatible | unknown`; unknown is never
  * treated as compatible. The failing rule ids are kept so a card can say *why*, not just that.
  */
-import { useQuery } from '@tanstack/react-query';
+import { useQueries } from '@tanstack/react-query';
 import { kindDef, type BuildSnapshot, type ComponentKind } from '../contracts';
 import { nextRole } from '../domain/build';
 import type { CompatibleOption } from '../data/types';
@@ -17,7 +17,7 @@ export type VerdictMap = ReadonlyMap<string, CompatOption>;
 
 export const verdictKey = (kind: ComponentKind, itemId: string) => `${kind}|${itemId}`;
 
-/** One query for many kinds, so a layer (or the whole catalog) needs a single round of work. */
+/** Independent kind queries retain successful verdicts while failed kinds can retry. */
 export function useCompatByKind(
   build: BuildSnapshot | null | undefined,
   kinds: ComponentKind[],
@@ -32,32 +32,27 @@ export function useCompatByKind(
         ? nextRole(build, kind)
         : 'primary'),
   );
-  return useQuery({
-    queryKey: [
-      'compat',
-      build?.id ?? 'none',
-      build?.revision ?? 0,
-      unique.join(','),
-      roles.join(','),
-    ],
-    queryFn: async (): Promise<VerdictMap> => {
-      // Settled, not all: one kind failing to evaluate must not blank every other verdict.
-      const results = await Promise.allSettled(
-        unique.map(
-          async (kind, index) =>
-            [kind, await compatibility.compatibleOptions(build!, kind, roles[index])] as const,
-        ),
-      );
-      const map = new Map<string, CompatOption>();
-      for (const result of results) {
-        if (result.status !== 'fulfilled') continue;
-        const [kind, options] = result.value;
-        for (const option of options) map.set(verdictKey(kind, option.catalog_item_id), option);
-      }
-      return map;
-    },
-    enabled: Boolean(build) && unique.length > 0,
+  const queries = useQueries({
+    queries: unique.map((kind, index) => ({
+      queryKey: ['compat-kind', build?.id ?? 'none', build?.revision ?? 0, kind, roles[index]],
+      queryFn: () => compatibility.compatibleOptions(build!, kind, roles[index]),
+      enabled: Boolean(build),
+    })),
   });
+  const map = new Map<string, CompatOption>();
+  queries.forEach((query, index) => {
+    for (const option of query.data ?? []) {
+      map.set(verdictKey(unique[index]!, option.catalog_item_id), option);
+    }
+  });
+  const failed = queries.filter((query) => query.isError);
+  return {
+    data: map as VerdictMap,
+    isSuccess: queries.length > 0 && queries.every((query) => query.isSuccess),
+    isError: failed.length > 0,
+    error: failed[0]?.error ?? null,
+    refetch: () => Promise.all(failed.map((query) => query.refetch())),
+  };
 }
 
 /** Verdict for one item, defaulting to `unknown` while the evaluation is in flight. */

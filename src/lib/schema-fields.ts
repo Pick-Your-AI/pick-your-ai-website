@@ -66,7 +66,7 @@ const LABEL_OVERRIDES: Record<string, string> = {
 };
 
 export function humanize(key: string): string {
-  if (LABEL_OVERRIDES[key]) return LABEL_OVERRIDES[key]!;
+  if (Object.hasOwn(LABEL_OVERRIDES, key)) return LABEL_OVERRIDES[key]!;
   const s = key.replace(/_/g, ' ');
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
@@ -164,18 +164,22 @@ const VALUE_LABELS: Record<string, string> = {
 
 const wordize = (raw: string): string => {
   const key = raw.trim();
-  if (VALUE_LABELS[key]) return VALUE_LABELS[key]!;
+  if (Object.hasOwn(VALUE_LABELS, key)) return VALUE_LABELS[key]!;
   const spaced = key.replace(/_/g, ' ');
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 };
 
-export function formatValue(value: unknown, field?: Pick<FieldDef, 'key'>): string {
+export function formatValue(
+  value: unknown,
+  field?: Pick<FieldDef, 'key'> & Partial<Pick<FieldDef, 'type'>>,
+): string {
   if (value === undefined || value === null) return 'Not specified';
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value === 'number') {
     return field?.key.endsWith('_pct') ? `${value}%` : value.toLocaleString('en-US');
   }
-  if (Array.isArray(value))
-    return value.length ? value.map((v) => wordize(String(v))).join(', ') : 'None';
-  return wordize(String(value));
+  const format = (v: unknown) =>
+    field?.type === 'enum' || field?.type === 'enum-array' ? wordize(String(v)) : String(v);
+  if (Array.isArray(value)) return value.length ? value.map(format).join(', ') : 'None';
+  return format(value);
 }

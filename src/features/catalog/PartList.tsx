@@ -47,8 +47,8 @@ import { itemPrice } from '../../lib/item-cost';
 import { KEY_FIELDS, itemPath, kindPath, rowSubtitle, specValue } from '../../lib/catalog-view';
 import { useCompatByKind, verdictFor } from '../../lib/compat';
 import { LAYERS, headlineKind, itemLogo, layerOf } from '../../lib/layers';
-import { humanize, formatValue } from '../../lib/schema-fields';
-import { Loading, useToast } from '../../components/feedback';
+import { humanize, formatValue, specFields as schemaSpecFields } from '../../lib/schema-fields';
+import { ErrorState, Loading, useToast } from '../../components/feedback';
 
 const MAX_COMPARE = 3;
 
@@ -456,6 +456,9 @@ export function PartList({
         </aside>
 
         <div>
+          {compat.isError ? (
+            <ErrorState error={compat.error} onRetry={() => void compat.refetch()} />
+          ) : null}
           <div className="plist-head">
             <h2>{pageHeading}</h2>
             <span className="count" aria-live="polite">
@@ -646,7 +649,10 @@ export function PartList({
                                     —
                                   </span>
                                 ) : (
-                                  formatValue(v, { key: f })
+                                  formatValue(
+                                    v,
+                                    schemaSpecFields(item.kind).find((field) => field.key === f),
+                                  )
                                 )}
                               </td>
                             );

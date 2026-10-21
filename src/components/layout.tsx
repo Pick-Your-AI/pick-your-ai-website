@@ -196,14 +196,39 @@ function Footer() {
 }
 
 /** Moves focus to the main heading after client-side navigation (screen-reader friendly). */
-function RouteFocus() {
+export function RouteFocus() {
   const location = useLocation();
   useEffect(() => {
-    const h1 = document.querySelector<HTMLElement>('main h1');
-    if (h1) {
-      h1.setAttribute('tabindex', '-1');
-      h1.focus({ preventScroll: true });
-    }
+    let heading: HTMLElement | null = null;
+    let ownsFocus = true;
+    const focusHeading = () => {
+      if (!ownsFocus || (heading && heading.isConnected)) return;
+      const next = document.querySelector<HTMLElement>('main h1');
+      if (!next) return;
+      heading = next;
+      heading.setAttribute('tabindex', '-1');
+      heading.focus({ preventScroll: true });
+    };
+    const onFocus = (event: FocusEvent) => {
+      if (event.target !== heading) ownsFocus = false;
+    };
+    const onPointer = () => {
+      ownsFocus = false;
+    };
+    focusHeading();
+    // Lazy route/data boundaries can replace the heading without changing the pathname.
+    const observer = new MutationObserver(focusHeading);
+    observer.observe(document.querySelector('main') ?? document.body, {
+      childList: true,
+      subtree: true,
+    });
+    document.addEventListener('focusin', onFocus);
+    document.addEventListener('pointerdown', onPointer);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('focusin', onFocus);
+      document.removeEventListener('pointerdown', onPointer);
+    };
   }, [location.pathname]);
   return null;
 }

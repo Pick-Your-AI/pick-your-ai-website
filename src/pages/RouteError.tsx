@@ -12,7 +12,7 @@ export function RouteError() {
     <main id="main" className="app-page">
       <div className="container notfound-body">
         <div className="no-results" role="alert">
-          <strong>Something went wrong</strong>
+          <h1>Something went wrong</h1>
           <p className="notice-message">{message}</p>
           <p>If this followed a site update, reloading the page loads the latest version.</p>
           <div className="notfound-actions">

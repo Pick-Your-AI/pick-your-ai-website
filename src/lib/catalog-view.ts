@@ -1,3 +1,4 @@
+import { specFields } from './schema-fields';
 import type { CatalogItem, ComponentKind } from '../contracts';
 import { KIND_LABELS, kindSlug } from '../contracts';
 import { formatValue } from './schema-fields';
@@ -71,9 +72,13 @@ export function specValue(item: CatalogItem, key: string): unknown {
 export function itemSummary(item: CatalogItem, max = 3): string {
   return KEY_FIELDS[item.kind]
     .slice(0, max)
-    .map((k) => specValue(item, k))
-    .filter((v) => v !== undefined)
-    .map((v) => formatValue(v))
+    .filter((k) => specValue(item, k) !== undefined)
+    .map((k) =>
+      formatValue(
+        specValue(item, k),
+        specFields(item.kind).find((f) => f.key === k),
+      ),
+    )
     .join(' · ');
 }
 
@@ -99,7 +104,7 @@ const SPEC_SHORT: Record<string, string> = {
   max_allowed_tokens: 'max tokens',
   vram_gb: 'GB VRAM',
   requests_per_day: 'req/day',
-  accelerator_count: 'GPU',
+  accelerator_count: 'accelerators',
   cpu_cores: 'cores',
   ram_gb: 'GB RAM',
   embedding_dimensions: 'dims',
@@ -158,13 +163,17 @@ export function rowSubtitle(item: CatalogItem): string {
     return !t || LOW_SIGNAL.has(t) || context.includes(t);
   };
   // formatValue knows the acronym/enum wording ("api" -> "API"), so reuse it rather than guessing.
-  const word = (raw: string) => formatValue(raw);
+  const word = (raw: string, key: string) =>
+    formatValue(
+      raw,
+      specFields(item.kind).find((f) => f.key === key),
+    );
 
   // Pass 2: a short list of values ("text, structured") beats a single generic word.
   for (const key of candidates) {
     const v = spec[key];
     if (!Array.isArray(v) || !v.length) continue;
-    const words = v.map((x) => word(String(x)));
+    const words = v.map((x) => word(String(x), key));
     const joined = words.slice(0, 2).join(', ');
     if (restates(words[0]!)) continue;
     return joined;
@@ -174,7 +183,7 @@ export function rowSubtitle(item: CatalogItem): string {
   for (const key of candidates) {
     const v = spec[key];
     if (typeof v !== 'string' || !v.trim()) continue;
-    const text = word(v);
+    const text = word(v, key);
     if (restates(text)) continue;
     if (text.includes(' ') || text.length > 6) return text;
   }

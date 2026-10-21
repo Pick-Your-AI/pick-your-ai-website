@@ -63,9 +63,21 @@ function deploymentPath(item: CatalogItem): string {
     if (modes.includes('api')) return 'Provider API (shared capacity)';
     if (modes.includes('weights')) return 'Self-hosted weights';
   }
-  if (typeof spec.mode === 'string') return formatValue(spec.mode);
-  if (typeof spec.hosting_type === 'string') return formatValue(spec.hosting_type);
-  if (typeof spec.target_type === 'string') return formatValue(spec.target_type);
+  if (typeof spec.mode === 'string')
+    return formatValue(
+      spec.mode,
+      specFields(item.kind).find((f) => f.key === 'mode'),
+    );
+  if (typeof spec.hosting_type === 'string')
+    return formatValue(
+      spec.hosting_type,
+      specFields(item.kind).find((f) => f.key === 'hosting_type'),
+    );
+  if (typeof spec.target_type === 'string')
+    return formatValue(
+      spec.target_type,
+      specFields(item.kind).find((f) => f.key === 'target_type'),
+    );
   return 'Not recorded';
 }
 
@@ -241,7 +253,12 @@ function ComponentCompare() {
     for (const f of specFields(item.kind)) {
       if (f.isRef || specKeys.includes(f.key)) continue;
       const signature = `${f.label}|${filled
-        .map((i) => formatValue((i.spec as Record<string, unknown>)[f.key], { key: f.key }))
+        .map((i) =>
+          formatValue(
+            (i.spec as Record<string, unknown>)[f.key],
+            specFields(i.kind).find((field) => field.key === f.key),
+          ),
+        )
         .join('|')}`;
       if (specSignatures.has(signature)) continue;
       specSignatures.add(signature);
@@ -350,7 +367,7 @@ function ComponentCompare() {
     {
       key: 'status',
       label: 'Catalog status',
-      render: (item) => formatValue(item.status),
+      render: (item) => formatValue(item.status, { key: 'status', type: 'enum' }),
       compare: (item) => item.status,
     },
     {
@@ -387,13 +404,19 @@ function ComponentCompare() {
               —
             </span>
           );
-        return formatValue(value, { key });
+        return formatValue(
+          value,
+          specFields(item.kind).find((f) => f.key === key),
+        );
       },
       compare: (item) => {
         const value = (item.spec as Record<string, unknown>)[key];
         return value === undefined || value === null
           ? '\u0000missing'
-          : formatValue(value, { key });
+          : formatValue(
+              value,
+              specFields(item.kind).find((f) => f.key === key),
+            );
       },
     })),
     {
