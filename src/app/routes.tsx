@@ -1,7 +1,8 @@
-/* Route table. Every page is lazy-loaded (code splitting). No route path may end in ".<ext>". */
+/* Page content is lazy-loaded; the small builder loading shell is available immediately. */
 import { createBrowserRouter, type RouteObject } from 'react-router';
 import { Layout } from '../components/layout';
 import { RouteError } from '../pages/RouteError';
+import BuilderRoute from '../features/builder/BuilderRoute';
 
 const page = (load: () => Promise<{ default: React.ComponentType }>) => async () => ({
   Component: (await load()).default,
@@ -13,7 +14,7 @@ export const routes: RouteObject[] = [
     errorElement: <RouteError />,
     children: [
       { index: true, lazy: page(() => import('../pages/HomePage')) },
-      { path: 'builder', lazy: page(() => import('../features/builder/BuilderPage')) },
+      { path: 'builder', Component: BuilderRoute },
       { path: 'catalog', lazy: page(() => import('../features/catalog/CatalogIndexPage')) },
       { path: 'catalog/:kindSlug', lazy: page(() => import('../features/catalog/SelectionPage')) },
       {

@@ -23,6 +23,8 @@ Vite 8 · React 19 · TypeScript 6 (strict, `noUncheckedIndexedAccess`) · plain
 
 The presentation layer imports provider _interfaces_ only, through `useData()`. Switching `VITE_DATA_MODE` swaps implementations without touching any page.
 
+The builder route includes a small loading shell in the initial bundle so its heading can paint before the editor, forms and schema metadata load. The editor remains lazy-loaded behind Suspense, and the same shell covers pending build data. Its parts-list styles load with the shell; other page content remains route-split.
+
 ## Data flow for a change
 
 ```text

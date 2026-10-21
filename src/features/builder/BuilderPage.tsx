@@ -41,6 +41,7 @@ import { LAYERS, itemLogo, layerOf } from '../../lib/layers';
 import { download } from './BuildToolbar';
 import { ObjectivesForm } from './ObjectivesForm';
 import { SettingsForm } from './SettingsForm';
+import { BuilderLoading, BUILDER_DESCRIPTION } from './BuilderLoading';
 
 function GroupRow({
   tier,
@@ -277,9 +278,6 @@ function EmptyRow({ kind, onChoose }: { kind: ComponentKind; onChoose: () => voi
   );
 }
 
-const BUILDER_DESCRIPTION =
-  'One row per component slot, in dependency order. Prices and compatibility come from synthetic demo data; nothing here is a quote or a vendor specification.';
-
 export default function BuilderPage() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -317,25 +315,7 @@ export default function BuilderPage() {
         </div>
       </div>
     );
-  if (!ready || !build || !catalog.data || !ctx || !cov)
-    return (
-      <div className="app-page parts-page">
-        <div className="container">
-          {/* Paint the page identity immediately: waiting on the catalog before showing the
-              heading delays the largest paint for no benefit. */}
-          <PartsHead
-            crumbs={
-              <>
-                <Link to="/">PickYour.AI</Link> <span>/</span> Builder
-              </>
-            }
-            title="Choose your parts"
-            description={BUILDER_DESCRIPTION}
-          />
-          <Loading label="Loading the parts register…" />
-        </div>
-      </div>
-    );
+  if (!ready || !build || !catalog.data || !ctx || !cov) return <BuilderLoading />;
 
   const report = analysis.reportIsCurrent ? analysis.report : undefined;
   const failed = report?.summary.failed ?? 0;
