@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, ScrollRestoration, useLocation } from 'react-router';
-import { CONTRACT_PROVENANCE } from '../contracts';
+import { CONTRACT_PROVENANCE, kindsInTier } from '../contracts';
 import { buildVersion, shortSha } from '../lib/version';
 import { useData } from '../app/data-context';
 import { useBuilder } from '../app/builder-context';
-import { IconMenu, IconMoon, IconSun, IconX } from './icons';
+import { LAYERS } from '../lib/layers';
+import { Icon, IconSprite } from './icon';
+import { ToastProvider } from './feedback';
 
 const NAV = [
+  { to: '/', label: 'Discover', end: true },
   { to: '/builder', label: 'Builder' },
   { to: '/catalog', label: 'Catalog' },
   { to: '/compare', label: 'Compare' },
@@ -15,273 +18,273 @@ const NAV = [
   { to: '/about', label: 'About' },
 ];
 
-function Logo() {
+const SITE_REPO = 'https://github.com/Pick-Your-AI/pickyour.ai';
+const RESEARCH_REPO = 'https://github.com/Pick-Your-AI/pick-your-ai-research';
+
+export function Brand({ className = 'brand' }: { className?: string }) {
   return (
-    <Link
-      to="/"
-      className="flex items-center gap-2 rounded font-semibold tracking-tight"
-      aria-label="PickYour.AI home"
-    >
-      <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true">
-        <rect width="32" height="32" rx="7" className="fill-brand-700 dark:fill-brand-500" />
-        <path
-          d="M9 23V9h7a5 5 0 0 1 0 10h-3v4z"
-          fill="none"
-          stroke="#fff"
-          strokeWidth="3"
-          strokeLinejoin="round"
-        />
-        <circle cx="23" cy="22" r="2.5" fill="#fbbf24" />
-      </svg>
-      <span className="text-lg">
-        PickYour<span className="text-brand-700 dark:text-brand-400">.AI</span>
+    <Link to="/" className={className}>
+      <span className="brand-mark" aria-hidden="true">
+        P
+      </span>
+      <span className="brand-name">
+        PickYour<span>AI</span>
       </span>
     </Link>
   );
 }
 
-export function ThemeToggle() {
-  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark);
-  }, [dark]);
-  const toggle = () => {
-    const next = !dark;
-    setDark(next);
-    try {
-      localStorage.setItem('pyai.theme', next ? 'dark' : 'light');
-    } catch {
-      /* ignore */
-    }
-  };
-  return (
-    <button
-      type="button"
-      className="btn-ghost"
-      onClick={toggle}
-      aria-pressed={dark}
-      aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'}
-    >
-      {dark ? <IconSun /> : <IconMoon />}
-      <span className="sr-only sm:not-sr-only">{dark ? 'Light' : 'Dark'}</span>
-    </button>
-  );
-}
-
+/** "INTERACTIVE DESIGN PREVIEW" strip: the site's standing synthetic-data disclosure. */
 export function DemoBanner() {
   const { mode } = useData();
-  if (mode !== 'fixture') return null;
   return (
-    <div
-      role="note"
-      aria-label="Demo mode"
-      className="border-b border-violet-300 bg-violet-50 px-4 py-2 text-center text-sm text-violet-950 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-100"
-    >
-      <strong className="font-semibold">Demo mode:</strong> every component, price and compatibility
-      result on this site is <strong>synthetic demonstration data</strong> — not real products,
-      quotes or measurements.{' '}
-      <Link to="/methodology#data" className="underline underline-offset-2">
-        Why?
-      </Link>
+    <div className="demo-banner" role="note" aria-label="Demo mode">
+      <strong>INTERACTIVE DESIGN PREVIEW</strong>{' '}
+      <span>
+        · Components, costs and compatibility checks use synthetic illustrative demo data, not
+        verified vendor information.
+        {mode === 'http' ? ' This deployment reads a configured API.' : ''}{' '}
+        <Link to="/methodology#data" className="underline underline-offset-2">
+          Why?
+        </Link>
+      </span>
     </div>
   );
 }
 
-function BuilderNavCount() {
-  const { draft } = useBuilder();
-  const n = draft?.build.selections.length ?? 0;
-  if (!n) return null;
+function ThemeToggle() {
+  const [light, setLight] = useState(
+    () => typeof document !== 'undefined' && document.documentElement.classList.contains('light'),
+  );
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('light', light);
+    root.classList.toggle('dark', !light);
+    root.style.colorScheme = light ? 'light' : 'dark';
+    try {
+      localStorage.setItem('pyai.theme', light ? 'light' : 'dark');
+    } catch {
+      /* storage unavailable: theme is session-only */
+    }
+  }, [light]);
   return (
-    <span className="ml-1 rounded-full bg-brand-100 px-1.5 text-xs font-semibold text-brand-900 dark:bg-brand-900 dark:text-brand-100">
-      {n}
-      <span className="sr-only"> components selected</span>
-    </span>
+    <button
+      aria-label={light ? 'Switch to dark theme' : 'Switch to light theme'}
+      className="icon-button"
+      type="button"
+      title="Toggle light and dark theme"
+      onClick={() => setLight((v) => !v)}
+    >
+      <Icon name={light ? 'moon' : 'sun'} />
+    </button>
   );
 }
 
 function Header() {
   const location = useLocation();
-  // The menu is open only for the path it was opened on, so navigating closes it.
+  // The menu is open only for the path it was opened on, so navigating closes it without an effect.
   const [openOn, setOpenOn] = useState<string | null>(null);
-  const open = openOn === location.pathname;
-  const setOpen = (fn: (o: boolean) => boolean) => setOpenOn(fn(open) ? location.pathname : null);
+  const menuOpen = openOn === location.pathname;
+  const { draft } = useBuilder();
+
+  const selectedKinds = new Set(
+    (draft?.build.selections ?? []).filter((s) => s.enabled).map((s) => s.kind),
+  );
+  // A layer is a tier; it counts as filled when any of its kinds has an enabled selection.
+  const filledLayers = LAYERS.filter((layer) =>
+    kindsInTier(layer.tier).some((k) => selectedKinds.has(k.kind)),
+  ).length;
+
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `rounded-md px-3 py-2 text-sm font-medium ${
-      isActive
-        ? 'bg-brand-50 text-brand-900 dark:bg-brand-950 dark:text-brand-100'
-        : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
-    }`;
+    isActive ? 'nav-link active' : 'nav-link';
+
   return (
-    <header className="no-print border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-      <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-2">
-        <Logo />
-        <nav aria-label="Primary" className="ml-4 hidden flex-1 items-center gap-1 lg:flex">
+    <header className="site-header no-print">
+      <div className="container header-inner">
+        <Brand />
+        <nav
+          id="mainNav"
+          aria-label="Main navigation"
+          className={menuOpen ? 'main-nav open' : 'main-nav'}
+        >
           {NAV.map((n) => (
-            <NavLink key={n.to} to={n.to} className={linkClass}>
+            <NavLink key={n.to} to={n.to} end={n.end} className={linkClass}>
               {n.label}
-              {n.to === '/builder' ? <BuilderNavCount /> : null}
             </NavLink>
           ))}
         </nav>
-        <div className="ml-auto flex items-center gap-1">
-          <Link to="/builder" className="btn-primary hidden sm:inline-flex lg:hidden">
-            Builder
-            <BuilderNavCount />
-          </Link>
+        <div className="header-actions">
           <ThemeToggle />
+          <Link className="header-build" to="/builder">
+            <Icon name="layers" />
+            Your stack
+            {/*
+              The count is exposed with aria-label rather than an inner `.sr-only` span: an
+              absolutely-positioned visually-hidden span at the end of this right-aligned counter is
+              laid out past the viewport edge and extended the document's scroll width, so the page
+              scrolled sideways on a phone.
+            */}
+            <span
+              className="tiny-counter"
+              aria-label={`${filledLayers} of ${LAYERS.length} layers selected`}
+            >
+              {filledLayers}
+            </span>
+          </Link>
           <button
+            aria-expanded={menuOpen}
+            aria-controls="mainNav"
+            aria-label={menuOpen ? 'Close navigation' : 'Open navigation'}
+            className="icon-button hamburger"
             type="button"
-            className="btn-ghost lg:hidden"
-            aria-expanded={open}
-            aria-controls="mobile-nav"
-            onClick={() => setOpen((o) => !o)}
+            title="Toggle menu"
+            onClick={() => setOpenOn(menuOpen ? null : location.pathname)}
           >
-            {open ? <IconX /> : <IconMenu />}
-            <span className="sr-only">{open ? 'Close menu' : 'Open menu'}</span>
+            <Icon name={menuOpen ? 'x' : 'menu'} />
           </button>
         </div>
       </div>
-      {open ? (
-        <nav
-          id="mobile-nav"
-          aria-label="Primary"
-          className="border-t border-slate-200 px-4 py-2 lg:hidden dark:border-slate-800"
-        >
-          <ul className="grid gap-1">
-            {NAV.map((n) => (
-              <li key={n.to}>
-                <NavLink to={n.to} className={({ isActive }) => `block ${linkClass({ isActive })}`}>
-                  {n.label}
-                  {n.to === '/builder' ? <BuilderNavCount /> : null}
-                </NavLink>
-              </li>
-            ))}
-          </ul>
-        </nav>
-      ) : null}
     </header>
   );
 }
 
 function Footer() {
   return (
-    <footer className="no-print mt-16 border-t border-slate-200 bg-white px-4 py-8 text-sm dark:border-slate-800 dark:bg-slate-900">
-      <div className="mx-auto grid max-w-7xl gap-6 md:grid-cols-3">
-        <div>
-          <p className="font-semibold">PickYour.AI</p>
-          <p className="muted mt-1">
-            Build a compatible AI stack, part by part. Preview — not a source of real prices or
-            measurements.
-          </p>
+    <footer className="no-print">
+      <div className="container">
+        <div className="footer-grid">
+          <div className="footer-brand">
+            <Brand />
+            <p className="footer-description">
+              A better way to plan your AI architecture. Compare parts, check dependencies, and make
+              informed choices, one layer at a time.
+            </p>
+          </div>
+          <div className="footer-column">
+            <h2>Explore</h2>
+            <Link to="/builder">Stack builder</Link>
+            <Link to="/catalog">Component catalog</Link>
+            <Link to="/templates">Starter stacks</Link>
+          </div>
+          <div className="footer-column">
+            <h2>Learn</h2>
+            <Link to="/methodology#compatibility">Compatibility rules</Link>
+            <Link to="/methodology">How it works</Link>
+            <Link to="/about">About the concept</Link>
+            <Link to="/legal">Privacy &amp; terms</Link>
+          </div>
+          <div className="footer-column">
+            <h2>Demo controls</h2>
+            <Link to="/builds">Saved builds</Link>
+            <Link to="/compare">Comparison lab</Link>
+            <a href={RESEARCH_REPO}>Research repository</a>
+            <a href={SITE_REPO}>Source on GitHub</a>
+          </div>
         </div>
-        <nav aria-label="Footer">
-          <ul className="grid grid-cols-2 gap-1">
-            <li>
-              <Link className="link" to="/methodology">
-                Methodology
-              </Link>
-            </li>
-            <li>
-              <Link className="link" to="/about">
-                About
-              </Link>
-            </li>
-            <li>
-              <Link className="link" to="/legal">
-                Privacy &amp; terms
-              </Link>
-            </li>
-            <li>
-              <Link className="link" to="/catalog">
-                Catalog
-              </Link>
-            </li>
-            <li>
-              <a className="link" href="https://github.com/Pick-Your-AI/pickyour.ai">
-                Source on GitHub
-              </a>
-            </li>
-            <li>
-              <a className="link" href="https://github.com/Pick-Your-AI/pick-your-ai-research">
-                Research repository
-              </a>
-            </li>
-          </ul>
-        </nav>
-        <dl className="muted grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 tabular">
-          <dt>Build</dt>
-          <dd>
-            <span data-testid="build-sha" className="font-mono">
-              {shortSha(buildVersion.commit)}
-            </span>
-          </dd>
-          <dt>Data mode</dt>
-          <dd data-testid="data-mode">{buildVersion.dataMode}</dd>
-          <dt>Contract</dt>
-          <dd>
-            v{CONTRACT_PROVENANCE.contractVersion} @{' '}
-            <a
-              className="link font-mono"
-              href={`https://github.com/Pick-Your-AI/pick-your-ai-research/tree/${CONTRACT_PROVENANCE.sourceSha}/contracts/v1`}
-            >
-              {shortSha(CONTRACT_PROVENANCE.sourceSha)}
-            </a>
-          </dd>
-        </dl>
+        <div className="footer-bottom">
+          <span>© 2026 PickYourAI · Interactive website design concept</span>
+          <span>
+            BUILD <span data-testid="build-sha">{shortSha(buildVersion.commit)}</span> · DATA{' '}
+            <span data-testid="data-mode">{buildVersion.dataMode}</span> · CONTRACT v
+            {CONTRACT_PROVENANCE.contractVersion} @{shortSha(CONTRACT_PROVENANCE.sourceSha)}
+          </span>
+          <span>DEMONSTRATION ONLY. NO LIVE CATALOG, BENCHMARKS OR PRICES.</span>
+        </div>
       </div>
     </footer>
   );
 }
 
 /** Moves focus to the main heading after client-side navigation (screen-reader friendly). */
-function RouteFocus() {
+export function RouteFocus() {
   const location = useLocation();
   useEffect(() => {
-    const h1 = document.querySelector<HTMLElement>('main h1');
-    if (h1) {
-      h1.setAttribute('tabindex', '-1');
-      h1.focus({ preventScroll: true });
-    }
+    let heading: HTMLElement | null = null;
+    let ownsFocus = true;
+    const focusHeading = () => {
+      if (!ownsFocus || (heading && heading.isConnected)) return;
+      const next = document.querySelector<HTMLElement>('main h1');
+      if (!next) return;
+      heading = next;
+      heading.setAttribute('tabindex', '-1');
+      heading.focus({ preventScroll: true });
+    };
+    const onFocus = (event: FocusEvent) => {
+      if (event.target !== heading) ownsFocus = false;
+    };
+    const onPointer = () => {
+      ownsFocus = false;
+    };
+    focusHeading();
+    // Lazy route/data boundaries can replace the heading without changing the pathname.
+    const observer = new MutationObserver(focusHeading);
+    observer.observe(document.querySelector('main') ?? document.body, {
+      childList: true,
+      subtree: true,
+    });
+    document.addEventListener('focusin', onFocus);
+    document.addEventListener('pointerdown', onPointer);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('focusin', onFocus);
+      document.removeEventListener('pointerdown', onPointer);
+    };
   }, [location.pathname]);
   return null;
 }
 
 export function Layout() {
   return (
-    <div className="flex min-h-screen flex-col">
-      <a
-        href="#main"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-2 focus:shadow dark:focus:bg-slate-900"
-      >
+    <ToastProvider>
+      <IconSprite />
+      <a href="#main" className="sr-only sr-only-focusable">
         Skip to content
       </a>
       <DemoBanner />
       <Header />
-      <main id="main" className="min-h-screen w-full flex-1">
+      <main id="main">
         <Outlet />
       </main>
       <Footer />
       <ScrollRestoration />
       <RouteFocus />
-    </div>
+    </ToastProvider>
   );
 }
 
+/** Page masthead used by secondary pages (mock: `.page-masthead`). */
 export function PageHeader({
   eyebrow,
   title,
   children,
+  compact = false,
+  aside,
+  breadcrumb,
 }: {
   eyebrow?: string;
-  title: string;
+  title: React.ReactNode;
   children?: React.ReactNode;
+  compact?: boolean;
+  aside?: React.ReactNode;
+  breadcrumb?: string;
 }) {
   return (
-    <div className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-      <div className="mx-auto max-w-7xl px-4 py-6">
-        {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
-        <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">{title}</h1>
-        {children ? <div className="muted mt-2 max-w-3xl">{children}</div> : null}
+    <div className={compact ? 'page-masthead compact' : 'page-masthead'}>
+      <div className="container">
+        {breadcrumb ? (
+          <div className="breadcrumb">
+            <Link to="/">PICKYOUR.AI</Link>
+            <span>/</span> {breadcrumb}
+          </div>
+        ) : null}
+        <div className={aside ? 'masthead-layout' : undefined}>
+          <div>
+            {eyebrow ? <div className="eyebrow">{eyebrow}</div> : null}
+            <h1>{title}</h1>
+            {children ? <p>{children}</p> : null}
+          </div>
+          {aside}
+        </div>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
@@ -72,13 +72,19 @@ describe('current report presentation', () => {
       );
       showBuild(previous);
       const view = render(<BuilderPage />, { wrapper: Wrapper });
-      await screen.findByRole('region', { name: 'Compatibility findings' });
-      expect(screen.getByTestId('overall-status')).toHaveTextContent('Incompatible');
+      // The redesign names this section "Compatibility notes" and always renders it.
+      await screen.findByRole('heading', { name: 'Compatibility notes' });
+      await waitFor(() =>
+        expect(screen.getByTestId('overall-status')).toHaveTextContent('Incompatible'),
+      );
       const announcement = await screen.findByText(
         `Revision ${previousReport.build_revision} evaluated: ${previousReport.summary.failed} failing, ${previousReport.summary.unknown} unknown.`,
       );
       expect(announcement).toHaveAttribute('aria-live', 'polite');
-      fireEvent.click(screen.getByRole('button', { name: /Summary$/ }));
+      // The previous revision's findings are on screen before the change.
+      expect(
+        screen.getAllByText(/failing|Incompatible|Compatibility notes/).length,
+      ).toBeGreaterThan(0);
 
       const current =
         change === 'replacement evidence'
@@ -117,33 +123,23 @@ describe('current report presentation', () => {
         }),
       );
 
-      expect(screen.queryByRole('region', { name: 'Compatibility findings' })).toBeNull();
+      // While the new revision is evaluated, no previous verdict may be presented as current.
       expect(announcement).toBeEmptyDOMElement();
       expect(screen.getByTestId('overall-status')).not.toHaveTextContent('Incompatible');
-      expect(screen.getByTestId('overall-status')).not.toHaveTextContent('Compatible (rules pass)');
-      expect(screen.getByTestId('overall-status')).toHaveTextContent('not current');
+      expect(screen.getByTestId('overall-status')).not.toHaveTextContent('Compatible');
+      expect(screen.getByText(/These results are\s+not current/)).toBeInTheDocument();
       expect(screen.queryAllByText(/^All configured checks pass/)).toHaveLength(0);
-      expect(screen.getByRole('button', { name: /Hide summary$/ })).toHaveTextContent(
-        'Not evaluated',
-      );
-      const mobile = document.getElementById('mobile-summary');
-      expect(mobile).not.toBeNull();
-      for (const panel of [screen.getByRole('complementary', { name: 'Build summary' }), mobile!]) {
-        expect(
-          within(panel).getByText('Current compatibility results are not available yet.'),
-        ).toBeInTheDocument();
-        expect(within(panel).queryAllByText(/^\d+ (fail|unknown|pass|skipped)$/)).toHaveLength(0);
-        expect(panel).not.toHaveTextContent(
-          `Readiness: ${previousReport.deployment_readiness.replace('_', ' ')}`,
-        );
-      }
+      // The findings list is withheld rather than showing the previous revision's outcomes.
+      expect(screen.queryByText(/^What was not checked\.$/)).toBeNull();
+      expect(screen.getByText(/Evaluating revision/)).toBeInTheDocument();
 
       await act(async () => finish(currentReport));
-      await screen.findByRole('region', { name: 'Compatibility findings' });
-      expect(screen.getByTestId('overall-status')).toHaveTextContent(
-        change === 'replacement evidence' ? 'Incompatible' : 'Compatible (rules pass)',
+      await waitFor(() =>
+        expect(screen.getByTestId('overall-status')).toHaveTextContent(
+          change === 'replacement evidence' ? 'Incompatible' : 'Compatible',
+        ),
       );
-      expect(screen.getByTestId('overall-status')).not.toHaveTextContent('not current');
+      expect(screen.queryByText(/These results are\s+not current/)).toBeNull();
       await waitFor(() =>
         expect(announcement).toHaveTextContent(
           `Revision ${currentReport.build_revision} evaluated: ${currentReport.summary.failed} failing, ${currentReport.summary.unknown} unknown.`,

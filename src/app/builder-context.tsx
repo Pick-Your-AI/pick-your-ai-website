@@ -85,6 +85,11 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
     if (!snapshotId || ready) return;
     let cancelled = false;
     const id = readCurrentId();
+    /*
+     * The first visit opens an empty canvas, not a prefilled stack: a preselected demo stack would
+     * read as a recommendation, and "unknown is not pass" applies to a build nobody has configured.
+     * Templates remain an explicit choice on /templates.
+     */
     const fresh = () => createDraft(createBuild({ catalogSnapshotId: snapshotId }));
     (id ? builds.get(id) : Promise.reject(new Error('none')))
       .then((stored) => {

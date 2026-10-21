@@ -1,0 +1,1610 @@
+/*
+ * Dense "parts list" layer.
+ *
+ * The builder, catalog and compare pages follow the PCPartPicker interaction patterns recorded in
+ * docs/research/pcpartpicker-ux-notes.md (fixed category rows, a compatibility filter that is on by
+ * default, dense sortable tables, aligned comparison rows). Those patterns need a tighter, flatter
+ * visual language than the editorial marketing pages, so this file adds it:
+ *
+ *   .pt          the parts table (sticky head, zebra rows, tabular numbers)
+ *   .pbar        the toolbar above a table (name, actions, status strip)
+ *   .prail       the left filter/context rail
+ *   .pchip       a small status/label chip
+ *   .pbtn        the compact button used inside tables
+ *   .pbox        a bordered panel with a small heading
+ *
+ * Colours come from the existing tokens in mock.css; nothing here introduces a second palette.
+ * Status is always icon + word, never colour alone.
+ */
+
+/* ------------------------------------------------------------------ page frame ---------------- */
+
+.parts-page {
+  padding: 22px 0 70px;
+}
+.parts-page .container {
+  max-width: 1360px;
+}
+
+/* Compact title row: no hero band, no display type — the table is the page. */
+.parts-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding-bottom: 14px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.parts-head h1 {
+  font: 700 21px/1.2 var(--display);
+  letter-spacing: -0.4px;
+  margin: 3px 0 0;
+}
+.parts-head .crumbs {
+  font: 10px var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.parts-head .crumbs a {
+  color: var(--accent);
+}
+.parts-head p {
+  margin: 5px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+  max-width: 720px;
+}
+.parts-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* In-band tabs, as the research notes recommend for the title band. */
+.parts-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 16px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  /* The tabs are a scroller, so they must not also widen their grid/flex parent. */
+  min-width: 0;
+  max-width: 100%;
+}
+.parts-tab {
+  flex: none;
+  appearance: none;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  background: none;
+  color: var(--muted);
+  font: 600 12px var(--body);
+  padding: 8px 13px;
+  border-radius: 4px 4px 0 0;
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+.parts-tab:hover {
+  color: var(--text);
+}
+.parts-tab[aria-selected='true'],
+.parts-tab.on {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--text);
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+/* ------------------------------------------------------------------ toolbar ------------------ */
+
+.pbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 5px 5px 0 0;
+  padding: 8px 10px;
+}
+.pbar + .pbar {
+  border-top: 0;
+  border-radius: 0;
+}
+.pbar-field {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  flex: 1 1 240px;
+}
+.pbar-field > .ico {
+  width: 15px;
+  height: 15px;
+  color: var(--muted);
+  flex: none;
+}
+.pbar-input {
+  width: 100%;
+  min-height: 30px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text);
+  font: 600 13px var(--body);
+  padding: 4px 7px;
+}
+.pbar-input:hover {
+  border-color: var(--line2);
+}
+.pbar-input:focus-visible {
+  border-color: var(--accent2);
+  background: #0c1520;
+}
+.pbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+/* `abbr[title]` carries the long form of the legend terms; dotted underline + help cursor keeps it
+   distinguishable from a link, which is solid and accent-coloured. */
+.pbar-meta abbr[title] {
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: help;
+}
+.pbar-meta {
+  font: 10px var(--mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--dim);
+  /* Wraps rather than forcing the parts table wider than the viewport on a phone. */
+  min-width: 0;
+}
+
+/* Status strip: worst outcome across the evaluation, plus live estimates (research §3.3, §3.4). */
+.pstatus {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-top: 0;
+  background: var(--bg2);
+  flex-wrap: wrap;
+}
+/*
+ * The headline grows from one line ("5 required components missing") to three once an evaluation
+ * lands ("Incomplete — 0 of 4 required choices made …"), and because the strip wraps, that pushed the
+ * whole parts table down by ~32 px on mobile. Reserve the taller state so the row count of the page
+ * is stable while that async result arrives.
+ */
+@media (max-width: 700px) {
+  .pstatus-main {
+    min-height: calc(4 * 1.45em + 22px);
+  }
+}
+.pstatus-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.pstatus-main .ico {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+.pstatus-main small {
+  font-weight: 400;
+  color: var(--muted);
+}
+.pstatus-pass {
+  background: #10291f;
+  border-right: 1px solid #2f6d5b;
+  color: #b7e8d5;
+}
+.pstatus-fail {
+  background: #39282d;
+  border-right: 1px solid #805354;
+  color: #ffd7d3;
+}
+.pstatus-unknown {
+  background: #33291f;
+  border-right: 1px solid #80624c;
+  color: #f8d09d;
+}
+.pstatus-neutral {
+  border-right: 1px solid var(--line);
+  color: var(--muted);
+}
+.pstat {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 13px;
+  border-left: 1px solid var(--line);
+  white-space: nowrap;
+}
+.pstat-label {
+  font: 9px var(--mono);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.pstat-value {
+  font: 600 12px var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.pstat-value.is-unknown {
+  color: var(--orange);
+}
+
+/* ------------------------------------------------------------------ parts table --------------- */
+
+.pt-wrap {
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 5px 5px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.pt-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+.pt {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  min-width: 640px;
+}
+.pt caption {
+  text-align: left;
+  padding: 8px 11px;
+  font: 10px var(--mono);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface2);
+}
+.pt thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--line2);
+  border-right: 1px solid var(--line);
+  padding: 0;
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.pt thead th:last-child {
+  border-right: 0;
+}
+.pt thead th > span,
+.pt-sort {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 7px 10px;
+  font: 600 9.5px var(--mono);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.pt-sort {
+  appearance: none;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+}
+.pt-sort:hover {
+  color: var(--text);
+  background: var(--surface3);
+}
+.pt-sort .ico {
+  width: 11px;
+  height: 11px;
+  opacity: 0.55;
+}
+.pt-sort[aria-sort='ascending'],
+.pt-sort[aria-sort='descending'] {
+  color: var(--accent);
+}
+.pt-sort[aria-sort='ascending'] .ico,
+.pt-sort[aria-sort='descending'] .ico {
+  opacity: 1;
+}
+.pt th.num > span,
+.pt td.num,
+.pt-sort.num {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.pt tbody tr {
+  border-bottom: 1px solid var(--line);
+}
+.pt tbody tr:nth-child(even) {
+  background: #0c141e;
+}
+.pt tbody tr:hover {
+  background: #14212d;
+}
+.pt tbody tr:last-child {
+  border-bottom: 0;
+}
+.pt tbody tr.is-selected {
+  background: #12241f;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.pt tbody tr.is-blocked {
+  background: #241a1d;
+}
+.pt tbody tr.is-blocked:hover {
+  background: #2d2024;
+}
+/*
+ * A disabled selection is still part of the build, so it keeps its row and its controls. The marker
+ * is a chip in the Selection cell (never colour alone); the rule below only adds the quiet cue.
+ */
+.pt tbody tr.is-disabled {
+  box-shadow: inset 3px 0 0 var(--line);
+}
+.pt tbody tr.is-disabled td,
+.pt tbody tr.is-disabled th {
+  color: #93a6a4;
+}
+.pt td,
+.pt tbody th {
+  padding: 6px 9px;
+  border-right: 1px solid var(--line);
+  vertical-align: middle;
+  color: #c6d6d4;
+  line-height: 1.45;
+}
+.pt td:last-child,
+.pt tbody th:last-child {
+  border-right: 0;
+}
+.pt tbody th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text);
+  background: transparent;
+}
+.pt .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pt .dim {
+  color: var(--dim);
+}
+/* Keep rows around 48 px: the marketing pages use 34 px logo tiles, the table does not. */
+.pt .component-logo {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  font-size: 9.5px;
+  flex: none;
+}
+.pt-sub {
+  display: block;
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--muted);
+  margin-top: 0;
+}
+.pt-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.pt-name strong {
+  font-weight: 600;
+  color: var(--text);
+}
+.pt-name a {
+  color: var(--text);
+  font-weight: 600;
+}
+.pt-name a:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.pt-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+.pt-rowlead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.pt-tier {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 18px;
+  padding: 0 4px;
+  border: 1px solid var(--line2);
+  border-radius: 3px;
+  font: 600 9.5px var(--mono);
+  color: var(--muted);
+  background: #0f1a24;
+}
+.pt-tier.on {
+  border-color: #42735d;
+  background: #14291f;
+  color: #83eac0;
+}
+.pt-tier.req {
+  border-color: #80624c;
+  color: #f8d09d;
+}
+.pt-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  border: 1px solid var(--line);
+  border-top: 0;
+  background: var(--surface2);
+  padding: 9px 11px;
+  font-size: 12px;
+}
+.pt-foot .total {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.pt-foot .total strong {
+  font: 700 16px var(--display);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.pt-foot .total small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* Empty "choose a …" state inside a row (research §3.1). */
+.pt-choose {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px dashed var(--line2);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--accent);
+  font: 600 11.5px var(--body);
+  padding: 4px 9px;
+  cursor: pointer;
+  min-height: 28px;
+}
+.pt-choose:hover {
+  border-style: solid;
+  border-color: var(--accent2);
+  background: #12241f;
+}
+.pt-choose .ico {
+  width: 13px;
+  height: 13px;
+}
+.pt-skip {
+  font: 10px var(--mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+/* ------------------------------------------------------------------ chips -------------------- */
+
+.pchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--line2);
+  border-radius: 3px;
+  background: #131f2b;
+  padding: 1px 6px;
+  font: 500 10.5px var(--body);
+  white-space: nowrap;
+  color: var(--muted);
+}
+.pchip .ico {
+  width: 10px;
+  height: 10px;
+}
+.pchip-pass {
+  color: #83eac0;
+  border-color: #42735d;
+  background: #14291f;
+}
+.pchip-fail {
+  color: #ffada6;
+  border-color: #805354;
+  background: #39282d;
+}
+.pchip-unknown {
+  color: #f8d09d;
+  border-color: #80624c;
+  background: #33291f;
+}
+.pchip-skip {
+  color: #b9c7cd;
+  border-color: #40545a;
+  background: #16222c;
+}
+.pchip-muted {
+  color: var(--dim);
+  border-style: dashed;
+}
+
+/* ------------------------------------------------------------------ buttons ------------------ */
+
+.pbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 27px;
+  padding: 3px 9px;
+  border: 1px solid var(--line2);
+  border-radius: 3px;
+  background: #16222e;
+  color: var(--text);
+  font: 600 11px var(--body);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pbtn:hover {
+  border-color: var(--accent2);
+  background: #1a2b32;
+}
+.pbtn .ico {
+  width: 13px;
+  height: 13px;
+}
+.pbtn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #072b25;
+}
+.pbtn-primary:hover {
+  background: #7fefc9;
+  border-color: #7fefc9;
+}
+.pbtn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+}
+.pbtn-ghost:hover {
+  background: #16222e;
+  border-color: var(--line2);
+  color: var(--text);
+}
+.pbtn-icon {
+  min-height: 27px;
+  width: 27px;
+  padding: 0;
+}
+.pbtn[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pbtn-add {
+  background: #14372d;
+  border-color: #3f7f68;
+  color: #b7e8d5;
+}
+.pbtn-add:hover {
+  background: #1a4738;
+  border-color: var(--accent2);
+}
+.pbtn-blocked {
+  background: #3a262a;
+  border-color: #805354;
+  color: #ffada6;
+}
+.pbtn-selected {
+  background: #12241f;
+  border-color: var(--accent2);
+  color: #b7e8d5;
+}
+
+/* ------------------------------------------------------------------ rail / boxes ------------- */
+
+.parts-cols {
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+/*
+ * Grid and flex children default to `min-width: auto`, so a track can be forced wider than the
+ * viewport by its content's min-content size. That made the whole page scroll horizontally on a
+ * 320 px screen: the rail's `minmax(220px, 1fr)` collapsed to 2 x 220 px and pushed the document to
+ * 456 px wide. Every direct child here is allowed to shrink instead.
+ */
+.parts-cols > * {
+  min-width: 0;
+}
+.prail {
+  display: grid;
+  gap: 10px;
+  position: sticky;
+  top: 12px;
+}
+.pbox {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.pbox-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface2);
+  font: 600 9.5px var(--mono);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.pbox-body {
+  padding: 10px;
+}
+.pbox-body.tight {
+  padding: 6px 0;
+}
+.pbox-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.pbox-row strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.pbox-row.total {
+  border-top: 1px solid var(--line);
+  margin-top: 5px;
+  padding-top: 7px;
+  font-weight: 600;
+  color: var(--text);
+}
+.pbox-note {
+  padding: 0 10px 8px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--dim);
+}
+/*
+ * The builder-context status line is the one note whose length depends on asynchronous evaluation,
+ * so it reserves its tallest state. Without this the catalog rail grows by ~47 px when the evaluation
+ * lands and pushes the parts table down (the largest layout shift on the parts routes).
+ */
+.pbox-note-reserved {
+  min-height: calc(4 * 1.5em + 8px);
+}
+
+/* Compatibility filter with separate buckets (research §4.1). Unknown is its own bucket. */
+.pfacet {
+  border-bottom: 1px solid var(--line);
+}
+.pfacet:last-child {
+  border-bottom: 0;
+}
+.pfacet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 8px;
+  padding: 7px 10px;
+  background: none;
+  border: 0;
+  color: var(--text);
+  font: 600 11.5px var(--body);
+  cursor: pointer;
+  text-align: left;
+}
+.pfacet-head:hover {
+  background: var(--surface2);
+}
+.pfacet-head .ico {
+  width: 12px;
+  height: 12px;
+  color: var(--muted);
+}
+.pfacet-body {
+  padding: 0 10px 9px;
+  display: grid;
+  gap: 5px;
+}
+.popt {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  color: var(--muted);
+  cursor: pointer;
+  min-height: 24px;
+  padding: 1px 0;
+}
+a.popt {
+  min-height: 28px;
+  align-items: center;
+}
+.popt input {
+  accent-color: var(--accent);
+  margin: 0;
+  flex: none;
+}
+.popt-count {
+  margin-left: auto;
+  font: 10px var(--mono);
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+.popt:hover {
+  color: var(--text);
+}
+/* A zero count is information, not something to hide: dim only the number, never the label.
+   Opacity here would also drag the status chip under the 4.5:1 floor. */
+.popt.is-zero .popt-count {
+  color: var(--dim);
+  font-style: italic;
+}
+.popt.is-zero .pchip {
+  border-style: dashed;
+}
+
+/* Result count headline + active filter chips (research §4.4). */
+.plist-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  background: var(--surface);
+  border-radius: 5px 5px 0 0;
+}
+.plist-head h2 {
+  font: 700 13px var(--display);
+  margin: 0;
+}
+.plist-head .count {
+  font: 11px var(--mono);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.pchips {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  padding: 7px 11px;
+  border: 1px solid var(--line);
+  border-top: 0;
+  background: var(--bg2);
+}
+.pchips-label {
+  font: 9.5px var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.pchip-x {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--line2);
+  border-radius: 3px;
+  background: #16222e;
+  padding: 2px 4px 2px 7px;
+  font-size: 10.5px;
+  color: var(--text);
+}
+.pchip-x button {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 2px;
+  display: grid;
+  place-items: center;
+}
+.pchip-x button:hover {
+  color: var(--red);
+}
+.pchip-x .ico {
+  width: 11px;
+  height: 11px;
+}
+
+/* ------------------------------------------------------------------ compare table ------------ */
+
+.pcmp {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  font-size: 12px;
+  min-width: 760px;
+}
+.pcmp th,
+.pcmp td {
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  padding: 8px 10px;
+  vertical-align: top;
+  text-align: left;
+  background: var(--surface);
+}
+.pcmp thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--line2);
+  vertical-align: bottom;
+}
+.pcmp .rowkey {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  width: 168px;
+  min-width: 168px;
+  font: 600 9.5px var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface2);
+}
+.pcmp thead .rowkey {
+  z-index: 4;
+}
+.pcmp tbody tr:nth-child(even) th,
+.pcmp tbody tr:nth-child(even) td {
+  background: #0c141e;
+}
+.pcmp tbody tr:nth-child(even) .rowkey {
+  background: #101b26;
+}
+.pcmp .cmpcol {
+  min-width: 200px;
+}
+.pcmp .cmpcol-head {
+  display: grid;
+  gap: 5px;
+}
+.pcmp .cmpcol-head .pt-name {
+  white-space: normal;
+}
+.pcmp .is-diff {
+  background: #16211a;
+  box-shadow: inset 2px 0 0 #2f6d5b;
+}
+.pcmp tbody tr:nth-child(even) .is-diff {
+  background: #17231c;
+}
+.pcmp .diffmark {
+  color: var(--accent2);
+}
+.pcmp .diffmark {
+  font: 9px var(--mono);
+  color: var(--accent);
+  margin-left: 4px;
+}
+.pcmp .cmp-empty {
+  color: var(--dim);
+  font-style: normal;
+}
+.pcmp-actions {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-top: 7px;
+}
+.pcmp-num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------ misc --------------------- */
+
+.pnotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border: 1px solid var(--line2);
+  border-radius: 4px;
+  background: var(--bg2);
+  padding: 8px 10px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.pnotice .ico {
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+  flex: none;
+  color: var(--blue);
+}
+.pnotice strong {
+  color: var(--text);
+}
+.pnotice-warn {
+  border-color: #80624c;
+  background: #2a2119;
+  color: #f0d6b3;
+}
+.pnotice-warn .ico {
+  color: var(--orange);
+}
+.pnotice-fail {
+  border-color: #805354;
+  background: #2b1e21;
+  color: #ffd7d3;
+}
+.pnotice-fail .ico {
+  color: var(--red);
+}
+
+/* Lettered findings (research §3.5). */
+.pfindings {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.pfinding {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.pfinding:last-child {
+  border-bottom: 0;
+}
+.pfinding-letter {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  border: 1px solid var(--line2);
+  font: 700 10px var(--mono);
+  color: var(--muted);
+  background: #16222e;
+}
+.pfinding-fail .pfinding-letter {
+  color: #ffada6;
+  border-color: #805354;
+  background: #39282d;
+}
+.pfinding-unknown .pfinding-letter {
+  color: #f8d09d;
+  border-color: #80624c;
+  background: #33291f;
+}
+.pfinding-body strong {
+  color: var(--text);
+}
+.pfinding-body p {
+  margin: 2px 0 0;
+  color: var(--muted);
+}
+.pfinding-fix {
+  color: var(--muted);
+}
+.pfinding-meta {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Disclosure used for secondary detail (cost breakdown, revision history). */
+.pdetails {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.pdetails > summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 11px;
+  cursor: pointer;
+  font: 600 11.5px var(--body);
+  color: var(--text);
+  background: var(--surface2);
+}
+.pdetails > summary::marker {
+  color: var(--muted);
+}
+.pdetails[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+.pdetails-body {
+  padding: 11px;
+}
+
+/* Sticky compare tray (research §4.10). */
+.ptray {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  border: 1px solid var(--line2);
+  border-radius: 5px;
+  background: #101c28;
+  box-shadow: 0 16px 44px #0009;
+  padding: 7px 10px;
+  font-size: 12px;
+  color: var(--text);
+}
+.ptray-count {
+  font: 10px var(--mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------------ light theme -------------- */
+
+html.light .pbar,
+html.light .pt-wrap,
+html.light .pbox,
+html.light .pfindings,
+html.light .pdetails,
+html.light .plist-head,
+html.light .pcmp th,
+html.light .pcmp td {
+  background: #fff;
+}
+html.light .pt caption,
+html.light .pt thead th,
+html.light .pbox-head,
+html.light .pt-foot,
+html.light .pdetails > summary,
+html.light .pcmp thead th,
+html.light .pcmp .rowkey {
+  background: #f1f6f4;
+}
+html.light .pt tbody tr:nth-child(even) {
+  background: #fafcfb;
+}
+html.light .pcmp tbody tr:nth-child(even) th,
+html.light .pcmp tbody tr:nth-child(even) td {
+  background: #fafcfb;
+}
+html.light .pt tbody tr:hover {
+  background: #eef5f2;
+}
+html.light .pt tbody tr.is-selected {
+  background: #e7f4ee;
+}
+html.light .pt tbody tr.is-blocked {
+  background: #fdf1f0;
+}
+html.light .pt tbody tr.is-disabled td,
+html.light .pt tbody tr.is-disabled th {
+  color: #4a625e;
+}
+html.light .pt td,
+html.light .pcmp td {
+  color: #24443f;
+}
+html.light .pt td,
+html.light .pt tbody th,
+html.light .pcmp th,
+html.light .pcmp td,
+html.light .pt thead th,
+html.light .pbox-head,
+html.light .pfinding,
+html.light .pt-foot,
+html.light .plist-head {
+  border-color: #d6e3e0;
+}
+html.light .pbar,
+html.light .pt-wrap,
+html.light .pbox,
+html.light .pfindings,
+html.light .pdetails,
+html.light .plist-head,
+html.light .pchips,
+html.light .pstatus {
+  border-color: #cfdedb;
+}
+html.light .pstatus {
+  background: #f6fbf9;
+}
+html.light .pstatus-pass {
+  background: #e6f4ee;
+  border-right-color: #9ecdc0;
+  color: #0f5f45;
+}
+html.light .pstatus-fail {
+  background: #fdeceb;
+  border-right-color: #e0a7a3;
+  color: #922f2a;
+}
+html.light .pstatus-unknown {
+  background: #fdf3e2;
+  border-right-color: #e3c08c;
+  color: #7a4d13;
+}
+html.light .pchip {
+  background: #eef4f2;
+  border-color: #c3d5d1;
+  color: #41605a;
+}
+html.light .pchip-pass {
+  color: #0f5f45;
+  border-color: #9ecdc0;
+  background: #e6f4ee;
+}
+html.light .pchip-fail {
+  color: #922f2a;
+  border-color: #e0a7a3;
+  background: #fdeceb;
+}
+html.light .pchip-unknown {
+  color: #6b4512;
+  border-color: #c9a35f;
+  background: #fbeed6;
+}
+/* A chip inside a dark island (or on a striped row) must keep its dark-theme palette. */
+html.light .pcmp tbody tr:nth-child(even) .pchip-unknown {
+  color: #f8d09d;
+  border-color: #80624c;
+  background: #33291f;
+}
+html.light .pbtn {
+  background: #f3f8f6;
+  border-color: #c3d5d1;
+  color: #12302e;
+}
+html.light .pbtn:hover {
+  background: #e9f2ef;
+  border-color: #8fb3ab;
+}
+html.light .pbtn-primary {
+  background: #13775e;
+  border-color: #13775e;
+  color: #fff;
+}
+html.light .pbtn-primary:hover {
+  background: #0f6350;
+  border-color: #0f6350;
+}
+html.light .pbtn-add {
+  background: #e6f4ee;
+  border-color: #9ecdc0;
+  color: #0f5f45;
+}
+html.light .pbtn-blocked {
+  background: #fdeceb;
+  border-color: #e0a7a3;
+  color: #922f2a;
+}
+html.light .pbtn-selected {
+  background: #e6f4ee;
+  border-color: #4d9c83;
+  color: #0f5f45;
+}
+html.light .pbar-input:focus-visible {
+  background: #fff;
+}
+html.light .pt-tier {
+  background: #f1f6f4;
+  border-color: #c3d5d1;
+  color: #41605a;
+}
+html.light .pt-tier.on {
+  background: #e6f4ee;
+  border-color: #9ecdc0;
+  color: #0f5f45;
+}
+html.light .pt-choose {
+  color: #0d5741;
+}
+html.light .pt-choose:hover {
+  background: #e6f4ee;
+}
+html.light .pfinding-letter {
+  background: #f1f6f4;
+  border-color: #c3d5d1;
+  color: #41605a;
+}
+html.light .pfinding-fail .pfinding-letter {
+  background: #fdeceb;
+  border-color: #e0a7a3;
+  color: #922f2a;
+}
+html.light .pfinding-unknown .pfinding-letter {
+  background: #fdf3e2;
+  border-color: #e3c08c;
+  color: #7a4d13;
+}
+html.light .pchips,
+html.light .pstatus,
+html.light .pnotice {
+  background: #f6fbf9;
+}
+html.light .pchip-x {
+  background: #fff;
+  border-color: #c3d5d1;
+  color: #12302e;
+}
+html.light .pcmp .rowkey {
+  color: #41605a;
+  background: #f1f6f4;
+}
+html.light .pcmp tbody tr:nth-child(even) .rowkey {
+  background: #eaf2ef;
+}
+html.light .pcmp .is-diff {
+  background: #f2faf6;
+  box-shadow: inset 2px 0 0 #9ecdc0;
+}
+html.light .pcmp tbody tr:nth-child(even) .is-diff {
+  background: #eef8f3;
+}
+html.light .ptray {
+  background: #fff;
+  box-shadow: 0 16px 44px #0b2b2440;
+}
+html.light .pnotice-warn {
+  border-color: #e3c08c;
+  background: #fdf3e2;
+  color: #6b4512;
+}
+html.light .pnotice-fail {
+  border-color: #e0a7a3;
+  background: #fdeceb;
+  color: #922f2a;
+}
+
+/* ------------------------------------------------------------------ responsive ---------------- */
+
+@media (max-width: 1080px) {
+  .parts-cols {
+    grid-template-columns: 1fr;
+  }
+  .prail {
+    position: static;
+    /* `min(220px, 100%)` keeps one column readable when the viewport is narrower than 220 px. */
+    grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  }
+}
+
+/* Below 760 px every table row becomes a stacked card (research §3.13, §9). */
+@media (max-width: 760px) {
+  .parts-page {
+    padding-top: 14px;
+  }
+  .parts-head h1 {
+    font-size: 18px;
+  }
+  .parts-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  /* The table itself stops being a table: no sticky head, no fixed widths, no min-width. */
+  .pt-wrap {
+    border-radius: 5px;
+  }
+  .pt {
+    min-width: 0;
+    display: block;
+  }
+  .pt caption {
+    display: block;
+  }
+  .pt thead {
+    display: none;
+  }
+  .pt tbody,
+  .pt tr {
+    display: block;
+  }
+  .pt tbody tr {
+    padding: 10px 12px;
+    height: auto;
+    border-bottom: 1px solid var(--line);
+  }
+  .pt tbody tr.pt-group {
+    padding: 0;
+  }
+  .pt tbody tr.pt-group th {
+    display: block;
+    padding: 7px 12px;
+  }
+  /* Label left, value right: half the height of label-above-value, and scannable. */
+  .pt td,
+  .pt tbody th {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    width: auto;
+    border-right: 0;
+    padding: 3px 0;
+    text-align: right;
+  }
+  .pt td:empty,
+  .pt tbody th:empty {
+    display: none;
+  }
+  .pt td[data-label]::before,
+  .pt tbody th[data-label]::before {
+    content: attr(data-label);
+    flex: none;
+    font: 600 9px var(--mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-align: left;
+  }
+  .pt .num {
+    text-align: left;
+  }
+  /* The component name is the card title: no label, larger, first. */
+  .pt tbody th[data-label='Component'] {
+    display: block;
+    padding-bottom: 2px;
+    text-align: left;
+  }
+  .pt tbody th[data-label='Component']::before {
+    display: none;
+  }
+  .pt tbody th[data-label='Component'] .dim {
+    font-size: 10px !important;
+  }
+  .pt .pt-name {
+    gap: 7px;
+  }
+  /* The selection (name + logo) is the card's subject: full width, left aligned. */
+  .pt td[data-label='Selection'] {
+    display: block;
+    text-align: left;
+    padding: 2px 0 4px;
+  }
+  .pt td[data-label='Selection']::before {
+    display: block;
+    margin-bottom: 2px;
+  }
+  .pt td[data-label='Actions'] {
+    display: block;
+    margin-top: 7px;
+  }
+  .pt td[data-label='Actions']::before {
+    display: none;
+  }
+  .pt-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+  .pt .pbtn {
+    min-height: 30px;
+    padding: 4px 10px;
+    font-size: 11.5px;
+  }
+  .pt .pbtn-icon {
+    width: 30px;
+  }
+  .pt-foot {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .pt-foot .pbtn {
+    width: 100%;
+  }
+
+  /* Compare: one block per product row, the property name as the block heading. */
+  .pcmp,
+  .pcmp tbody,
+  .pcmp tr,
+  .pcmp th,
+  .pcmp td {
+    display: block;
+    width: auto;
+    min-width: 0;
+  }
+  .pcmp thead {
+    display: none;
+  }
+  .pcmp tbody tr {
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    margin-bottom: 8px;
+    overflow: hidden;
+  }
+  .pcmp .rowkey {
+    position: static;
+    width: auto;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--line);
+    padding: 6px 10px;
+  }
+  .pcmp td {
+    border-right: 0;
+    padding: 6px 10px;
+  }
+  .pcmp td::before {
+    content: attr(data-col);
+    display: block;
+    font: 600 9px var(--mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 1px;
+  }
+  .pcmp .is-diff {
+    box-shadow: inset 3px 0 0 #2f6d5b;
+  }
+  /* Slot pickers stack above the table on small screens. */
+  .pbar {
+    border-radius: 5px 5px 0 0;
+  }
+
+  .ptray {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    transform: none;
+    justify-content: space-between;
+  }
+}
+
+/* Group header row inside the parts table (one per layer/tier). */
+.pt tbody tr.pt-group {
+  background: var(--surface2);
+}
+.pt tbody tr.pt-group:hover {
+  background: var(--surface2);
+}
+.pt tbody tr.pt-group th {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line2);
+  font: 600 10px var(--mono);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.pt-group-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pt-group-inner .grow {
+  flex: 1 1 auto;
+}
+.pt-group-inner .pbtn {
+  min-height: 22px;
+  padding: 1px 7px;
+  font-size: 10px;
+}
+html.light .pt tbody tr.pt-group,
+html.light .pt tbody tr.pt-group:hover {
+  background: #eef4f2;
+}
+
+/* Secondary sections below the parts table. */
+.parts-sections {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+.parts-h2 {
+  font: 700 13px var(--display);
+  letter-spacing: -0.2px;
+  margin: 0 0 8px;
+  color: var(--text);
+}
+.parts-sections .summary-history li {
+  font-size: 11.5px;
+  border-color: var(--line);
+}
+
+/* Compact controls inside table rows. */
+.pt .pbtn {
+  min-height: 23px;
+  padding: 2px 7px;
+  font-size: 10.5px;
+}
+.pt .pbtn .ico {
+  width: 11px;
+  height: 11px;
+}
+.pt .pbtn-icon {
+  width: 23px;
+}
+
+/* Facet disclosure caret (rotates rather than swapping glyphs). */
+.pfacet-head .facet-caret {
+  transition: transform 0.12s ease;
+  color: var(--muted);
+}
+.pfacet-head .facet-caret.is-open {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .pfacet-head .facet-caret {
+    transition: none;
+  }
+}
+
+/* Slot pickers for small screens (the table head holds them on desktop). */
+.pcmp-slots {
+  display: none;
+}
+@media (max-width: 760px) {
+  .pcmp-slots {
+    display: grid;
+    gap: 8px;
+    border: 1px solid var(--line);
+    border-radius: 5px 5px 0 0;
+    background: var(--surface);
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+}

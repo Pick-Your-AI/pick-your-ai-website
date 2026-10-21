@@ -1,3 +1,5 @@
+import { formatMoney } from '../../lib/item-cost';
+export { formatMoney, costShort, type CostShort } from '../../lib/item-cost';
 import type { BuildSnapshot, ComponentKind, CostEstimate, EvaluationReport } from '../../contracts';
 import { KIND_LABELS, withArticle } from '../../contracts';
 import type { Coverage } from '../../domain/activation';
@@ -52,19 +54,6 @@ export function overall(report: EvaluationReport | undefined): Outcome | null {
   if (report.summary.unknown) return 'unknown';
   if (report.summary.passed) return 'pass';
   return 'skipped';
-}
-
-export function formatMoney(amount: string, currency: string): string {
-  const n = Number(amount);
-  try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 2,
-    }).format(n);
-  } catch {
-    return `${amount} ${currency}`;
-  }
 }
 
 export function costHeadline(cost: CostEstimate | undefined): { text: string; detail: string } {

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render, renderHook, screen, waitFor, within } from '@testing-library/react';
+import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
@@ -9,11 +9,9 @@ import { useBuilder } from '../../src/app/builder-context';
 import type { BuildSnapshot, CostEstimate, EvaluationReport } from '../../src/contracts';
 import { createFixtureProviders } from '../../src/data/fixture/providers';
 import type { ResourceEstimateResult } from '../../src/data/types';
-import { buildContext, coverage } from '../../src/domain/activation';
 import { createDraft } from '../../src/domain/build';
-import { SummaryPanel } from '../../src/features/builder/SummaryPanel';
 import BuildSummaryPage from '../../src/pages/BuildSummaryPage';
-import { BY_ID, CATALOG, NOW, apiChat, resourceEstimate } from './scenarios';
+import { BY_ID, NOW, apiChat, resourceEstimate } from './scenarios';
 
 vi.mock('../../src/app/builder-context', () => ({ useBuilder: vi.fn() }));
 
@@ -273,10 +271,10 @@ describe('build analysis identity', () => {
     h.unmount();
   });
 
-  it('hides another build’s capacity evidence in both summary views until current resources arrive', async () => {
+  it('hides another build’s capacity evidence in the summary until current resources arrive', async () => {
     const h = await analysisHarness();
-    function SummaryViews({ build }: { build: BuildSnapshot }) {
-      const analysis = useBuildAnalysis(build);
+    // The builder summary is the only summary view after the redesign, so this exercises it directly.
+    function SummaryView({ build }: { build: BuildSnapshot }) {
       vi.mocked(useBuilder).mockReturnValue({
         draft: createDraft(build),
         ready: true,
@@ -288,34 +286,17 @@ describe('build analysis identity', () => {
         open: vi.fn(),
         restore: vi.fn(),
       });
-      return (
-        <>
-          <SummaryPanel
-            variant="aside"
-            build={build}
-            byId={BY_ID}
-            snapshot={CATALOG}
-            coverage={coverage(build, buildContext(build, BY_ID))}
-            {...analysis}
-          />
-          <BuildSummaryPage />
-        </>
-      );
+      return <BuildSummaryPage />;
     }
-    const view = render(<SummaryViews build={h.build} />, { wrapper: h.wrapper });
-    const aside = within(screen.getByRole('complementary', { name: 'Build summary' }));
+    const view = render(<SummaryView build={h.build} />, { wrapper: h.wrapper });
     await waitFor(() =>
       expect(screen.getByRole('region', { name: 'Capacity evidence' })).toHaveTextContent('8 gb'),
     );
-    expect(aside.getByText(/Estimator evidence for revision/)).toBeInTheDocument();
 
     const nextBuild = { ...h.build, id: 'build.other' };
-    h.rerender({ current: nextBuild });
-    view.rerender(<SummaryViews build={nextBuild} />);
-    expect(aside.queryByText(/Estimator evidence for revision/)).not.toBeInTheDocument();
-    expect(aside.getByText('Checking…')).toBeInTheDocument();
+    view.rerender(<SummaryView build={nextBuild} />);
     const capacity = screen.getByRole('region', { name: 'Capacity evidence' });
-    expect(capacity).toHaveTextContent('Checking capacity evidence…');
+    await waitFor(() => expect(capacity).toHaveTextContent('Checking capacity evidence…'));
     expect(capacity).not.toHaveTextContent('8 gb');
 
     await act(async () =>
@@ -326,7 +307,6 @@ describe('build analysis identity', () => {
     );
     await waitFor(() => expect(capacity).toHaveTextContent('16 gb'));
     expect(capacity).not.toHaveTextContent('8 gb');
-    expect(aside.getByText(/Estimator evidence for revision/)).toBeInTheDocument();
     view.unmount();
     h.unmount();
   });

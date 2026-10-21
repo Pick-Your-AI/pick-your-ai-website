@@ -1,239 +1,508 @@
+/*
+ * Discover (home). Structure, copy and class names are ported from the approved design mock
+ * (`docs/design/pickyourai-complete.html`, `#homeScreen`); the numbers and component names come from the
+ * contract-driven demo catalog and the real preview estimator, never from the mock's placeholder
+ * dataset. Everything shown is synthetic demo data and is labelled as such.
+ */
+import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { KIND_LABELS, TIER_LABELS, TIER_SUMMARIES, TIERS, kindsInTier } from '../contracts';
+import { BASELINE_RULESET, KIND_LABELS, kindDef, kindsInTier } from '../contracts';
+import { useBuildAnalysis, useCatalog, usePricebook } from '../app/queries';
 import { useBuilder } from '../app/builder-context';
 import { useData } from '../app/data-context';
 import { STARTERS, type Starter } from '../data/fixture/starters';
-import { SyntheticBadge } from '../components/status';
-import { IconCheck, IconInfo, IconLayers, IconQuestion } from '../components/icons';
-import heroAvif640 from '../assets/images/hero-stack-640.avif';
-import heroWebp640 from '../assets/images/hero-stack-640.webp';
-import heroWebp400 from '../assets/images/hero-stack-400.webp';
+import { itemPrice, costShort } from '../lib/item-cost';
+import { LAYERS } from '../lib/layers';
+import { Icon, type IconName } from '../components/icon';
 
-const STATES = [
-  { term: 'Selected', desc: 'what is in your stack, tier by tier' },
-  { term: 'Missing', desc: 'what the stack still needs for the choices you made' },
-  { term: 'Incompatible', desc: 'which published rule fails, and why' },
-  { term: 'Unknown', desc: 'what cannot be checked yet — never shown as compatible' },
-  { term: 'Estimated cost', desc: 'only where prices are evidenced, with coverage shown' },
-];
+const STARTER_STYLE: Record<string, { icon: IconName; tone: string }> = {
+  'api-support-chat': { icon: 'message', tone: '' },
+  'self-hosted-one-gpu': { icon: 'cpu', tone: 'gold' },
+  'document-qa-rag': { icon: 'database', tone: 'blue' },
+  'ticket-triage-agent': { icon: 'workflow', tone: 'purple' },
+};
+
+const TIER_ICON: Record<string, IconName> = {
+  T0: 'list',
+  T1: 'brain',
+  T2: 'server',
+  T3: 'database',
+  T4: 'workflow',
+  T5: 'wand',
+  T6: 'chart',
+};
 
 function Hero() {
+  const navigate = useNavigate();
+  const { startNew } = useBuilder();
+  const { mode } = useData();
+
   return (
-    <section
-      aria-labelledby="home-title"
-      className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
-    >
-      <div className="mx-auto grid max-w-7xl items-center gap-8 px-4 py-10 md:grid-cols-[1fr_auto] md:py-14">
-        <div className="max-w-2xl">
-          <p className="eyebrow">AI stack builder · preview</p>
-          <h1 id="home-title" className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
-            Pick your AI stack. Check it fits. See what is missing.
+    <section className="hero" id="home">
+      <div className="container hero-inner">
+        <div className="hero-copy">
+          <div className="hero-pill">
+            <span className="live-dot" /> THE COMPATIBILITY-AWARE AI STACK BUILDER
+          </div>
+          <h1>
+            Great AI starts
+            <br />
+            with the <em>right stack.</em>
           </h1>
-          <p className="muted mt-4 text-lg">
-            PickYour.AI is a parts list for AI systems. Choose compatible components across seven
-            tiers, T0 to T6, and see at a glance:
+          <p className="hero-desc">
+            Stop piecing together tools from a dozen tabs. Choose your models, infrastructure,
+            retrieval and operations components in one place, with rule-based compatibility checks
+            as you build.
           </p>
-          <ul className="mt-4 grid gap-2">
-            {STATES.map((s) => (
-              <li key={s.term} className="flex items-start gap-2">
-                <IconCheck className="mt-1 shrink-0 text-brand-700 dark:text-brand-400" />
-                <span>
-                  <strong className="font-semibold">{s.term}</strong> — {s.desc}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            <Link to="/builder" className="btn-primary px-5 text-base">
-              Start a stack
+          <div className="hero-ctas">
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={() => {
+                /*
+                 * Start a BLANK build, not the hero's example stack. Seeding the builder from
+                 * STARTERS[0] would present a preselected recommendation as the default starting
+                 * point, which is the same thing the builder's own first-visit rule forbids: an
+                 * unconfigured stack must read as Incomplete rather than arriving pre-filled with
+                 * someone else's choices. Choosing a starter stays an explicit action on /templates.
+                 */
+                startNew();
+                void navigate('/builder');
+              }}
+            >
+              Build your AI stack <Icon name="arrow-right" />
+            </button>
+            <Link className="btn btn-outline" to="/templates">
+              Explore starter builds <Icon name="arrow-up-right" />
             </Link>
-            <Link to="/catalog" className="btn-secondary">
-              Browse the catalog
-            </Link>
-            <Link to="/methodology" className="link text-sm">
-              How compatibility is checked
-            </Link>
+          </div>
+          <div className="hero-trust">
+            <span>
+              <Icon name="check-circle" /> Rule-based compatibility
+            </span>
+            <i />
+            <span>
+              <Icon name="check-circle" /> Side-by-side comparison
+            </span>
+            <i />
+            <span>
+              <Icon name="check-circle" /> Transparent cost coverage
+            </span>
           </div>
         </div>
-        <picture className="mx-auto block w-full max-w-[320px] md:max-w-[360px]">
-          <source
-            type="image/avif"
-            srcSet={`${heroAvif640} 640w`}
-            sizes="(min-width: 768px) 360px, 320px"
-          />
-          <source
-            type="image/webp"
-            srcSet={`${heroWebp400} 400w, ${heroWebp640} 640w`}
-            sizes="(min-width: 768px) 360px, 320px"
-          />
-          <img
-            src={heroWebp640}
-            width={640}
-            height={734}
-            alt="Illustration: seven stacked layers of modular AI components connected by dependency lines"
-            loading="eager"
-            fetchPriority="high"
-            decoding="async"
-            className="h-auto w-full"
-          />
-        </picture>
+
+        {mode === 'fixture' ? <HeroPreview /> : null}
       </div>
     </section>
   );
 }
 
-function HowItWorks() {
-  return (
-    <section aria-labelledby="how-title" className="mx-auto max-w-7xl px-4 py-10">
-      <h2 id="how-title" className="text-2xl font-semibold tracking-tight">
-        How it works
-      </h2>
-      <p className="muted mt-2 max-w-3xl">
-        Every stack is organised into the same seven tiers. Only the tiers your choices activate are
-        required — an API-only chat assistant does not need GPUs. Changing one tier re-checks the
-        tiers that depend on it, in both directions.
-      </p>
-      <ol className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
-        {TIERS.map((tier) => {
-          const kinds = kindsInTier(tier);
-          return (
-            <li key={tier} className="card flex flex-col p-4">
-              <p className="font-mono text-sm font-semibold text-brand-800 dark:text-brand-300">
-                {tier}
-              </p>
-              <h3 className="mt-1 font-semibold">{TIER_LABELS[tier]}</h3>
-              <p className="muted mt-1 flex-1 text-sm">{TIER_SUMMARIES[tier]}</p>
-              <p className="mt-3 text-xs">
-                <span className="tabular font-semibold">{kinds.length}</span> component kinds
-                <span className="sr-only">
-                  : {kinds.map((k) => KIND_LABELS[k.kind]).join(', ')}
-                </span>
-              </p>
-            </li>
-          );
-        })}
-      </ol>
-    </section>
-  );
-}
+function HeroPreview() {
+  const catalog = useCatalog();
+  const starter = STARTERS[0]!;
+  const build = useMemo(() => starter.build(), [starter]);
+  const pricebook = usePricebook(build.locks.pricebook_id);
+  const analysis = useBuildAnalysis(build);
 
-function StarterCard({ starter }: { starter: Starter }) {
-  const { startNew } = useBuilder();
-  const navigate = useNavigate();
-  const titleId = `starter-${starter.id}`;
+  const rows = build.selections.map((sel) => {
+    const item = catalog.byId.get(sel.catalog_item_id);
+    const tier = kindDef(sel.kind).tier;
+    return {
+      id: sel.id,
+      tier,
+      icon: TIER_ICON[tier] ?? 'layers',
+      name: item?.name ?? sel.catalog_item_id,
+      kind: KIND_LABELS[sel.kind],
+      price: item ? itemPrice(item, build, catalog.byId, pricebook.data).label : 'Unknown',
+    };
+  });
+  const total = costShort(analysis.costIsCurrent ? analysis.cost : undefined);
+  const report = analysis.reportIsCurrent ? analysis.report : undefined;
+  const status = !report
+    ? analysis.evaluation.isError
+      ? 'Evaluation unavailable'
+      : 'Not checked'
+    : report.summary.failed
+      ? `${report.summary.failed} detected conflict${report.summary.failed === 1 ? '' : 's'}`
+      : report.summary.unknown
+        ? `${report.summary.unknown} unknown finding${report.summary.unknown === 1 ? '' : 's'}`
+        : '0 detected conflicts';
+  const statusIcon: IconName =
+    !report || report.summary.unknown ? 'info' : report.summary.failed ? 'alert' : 'check-circle';
+
   return (
-    <li className="card flex flex-col p-5">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <h3 id={titleId} className="font-semibold">
-          {starter.title}
-        </h3>
-        <SyntheticBadge />
+    <div aria-label="Example demo AI stack" className="hero-art" role="group">
+      <div className="orbit" />
+      <div className="orbit two" />
+      <span className="decor-plus p1">+</span>
+      <span className="decor-plus p2">+</span>
+      <div className="float-chip left">
+        <Icon name="shield" /> Dependency checks, built in
       </div>
-      <p className="muted mt-2 text-sm">{starter.summary}</p>
-      <dl className="mt-4 grid flex-1 gap-2 text-sm">
-        {starter.rationale.map((r) => (
-          <div key={r.kind}>
-            <dt className="font-medium">{KIND_LABELS[r.kind]}</dt>
-            <dd className="muted">{r.why}</dd>
+      <div className="preview-panel">
+        <div className="preview-top">
+          <div>
+            <div className="preview-kicker">STACK PREVIEW / DEMO</div>
+            <div className="preview-title">{starter.title.replace(/\s*\(demo\)$/i, '')}</div>
           </div>
-        ))}
-      </dl>
-      <button
-        type="button"
-        className="btn-primary mt-4 self-start"
-        onClick={() => {
-          startNew(starter.build(), starter.title);
-          void navigate('/builder');
-        }}
-      >
-        Open in builder
-        <span className="sr-only">: {starter.title}</span>
-      </button>
-    </li>
+          <span className="preview-tag">
+            <span className="live-dot" /> DEMO STACK
+          </span>
+        </div>
+        <div className="preview-body">
+          {rows.map((row) => (
+            <div className="preview-row" key={row.id}>
+              <span className="preview-line">
+                <span className="preview-node" />
+              </span>
+              <span className="preview-icon">
+                <Icon name={row.icon} />
+              </span>
+              <div className="preview-info">
+                <strong>{row.name}</strong>
+                <small>
+                  {row.tier} · {row.kind.toUpperCase()}
+                </small>
+              </div>
+              <span className="preview-price">{row.price}</span>
+            </div>
+          ))}
+        </div>
+        <div className="preview-footer">
+          <div>
+            <strong title={total.note}>
+              {total.text}
+              {total.qualifier ? <small> {total.qualifier}</small> : null}
+            </strong>
+            <small> Illustrative baseline</small>
+          </div>
+          <div className="preview-stamp">
+            <Icon name={statusIcon} /> {status}
+          </div>
+        </div>
+      </div>
+      <div className="float-chip right">
+        <Icon name={statusIcon} /> {report ? 'Checked against the ruleset' : status}
+      </div>
+    </div>
   );
 }
 
-function Starters() {
+function StatsBand() {
+  return (
+    <section className="stats-band">
+      <div className="container stats-inner">
+        <div className="stat-intro">
+          <strong>Every layer of your AI system.</strong>
+          <br />
+          One builder. One source of clarity.
+        </div>
+        <div className="stat">
+          <b>{LAYERS.length} layers</b>
+          <span>ACROSS THE WHOLE STACK</span>
+        </div>
+        <div className="stat">
+          <b>Live checks</b>
+          <span>AS YOUR CHOICES CHANGE</span>
+        </div>
+        <div className="stat">
+          <b>No guessing</b>
+          <span>VISIBLE GAPS &amp; CONFLICTS</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StarterCard({ starter, index }: { starter: Starter; index: number }) {
+  const navigate = useNavigate();
+  const { startNew } = useBuilder();
+  const style = STARTER_STYLE[starter.id] ?? { icon: 'layers' as IconName, tone: '' };
+  const layers = new Set(starter.build().selections.map((s) => kindDef(s.kind).tier)).size;
+  return (
+    <button
+      className="template-card"
+      type="button"
+      onClick={() => {
+        startNew(starter.build(), starter.title);
+        void navigate('/builder');
+      }}
+    >
+      <div className="template-top">
+        <span className={style.tone ? `template-icon ${style.tone}` : 'template-icon'}>
+          <Icon name={style.icon} />
+        </span>
+        <span className="template-type">STARTER / {String(index + 1).padStart(2, '0')}</span>
+      </div>
+      <h3>{starter.title.replace(/\s*\(demo\)$/i, '')}</h3>
+      <p>{starter.summary}</p>
+      <div className="template-bottom">
+        <span>
+          {layers} of {LAYERS.length} layers prefilled
+        </span>
+        <Icon name="arrow-up-right" />
+      </div>
+    </button>
+  );
+}
+
+function Templates() {
   const { mode } = useData();
   if (mode !== 'fixture') return null;
   return (
-    <section
-      aria-labelledby="starters-title"
-      className="border-y border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
-    >
-      <div className="mx-auto max-w-7xl px-4 py-10">
-        <h2 id="starters-title" className="text-2xl font-semibold tracking-tight">
-          Starter stacks (demo)
-        </h2>
-        <p className="muted mt-2 max-w-3xl">
-          Four example shapes built from synthetic demo components. Open one to see how the builder
-          reports selections, gaps and rule results. They are illustrations, not recommendations.
-          Opening a starter creates a new build; your other builds are kept.
-        </p>
-        <ul className="mt-6 grid gap-4 md:grid-cols-2">
-          {STARTERS.map((s) => (
-            <StarterCard key={s.id} starter={s} />
+    <section className="section templates" id="templates">
+      <div className="container">
+        <div className="section-head">
+          <div>
+            <div className="eyebrow">A BETTER STARTING POINT</div>
+            <h2>What are you building?</h2>
+            <p className="section-subtitle">
+              Skip the blank canvas. Open a preconfigured stack, then swap components to match your
+              needs. These are synthetic demonstration templates, not endorsements.
+            </p>
+          </div>
+          <Link className="subtle-link" to="/builder">
+            Or start from scratch <Icon name="arrow-right" />
+          </Link>
+        </div>
+        <div className="template-grid">
+          {STARTERS.map((s, i) => (
+            <StarterCard key={s.id} starter={s} index={i} />
           ))}
-        </ul>
+        </div>
       </div>
     </section>
   );
 }
 
-const PRINCIPLES = [
-  {
-    Icon: IconQuestion,
-    title: 'Unknown is never compatible',
-    body: 'If a rule cannot be checked because evidence is missing, the result is Unknown — shown with its own icon and word, never as a pass.',
-  },
-  {
-    Icon: IconInfo,
-    title: 'Synthetic data is labelled',
-    body: 'While the real catalog is being researched, every demo component, price and result is marked as synthetic.',
-  },
-  {
-    Icon: IconLayers,
-    title: 'Prices are estimates with coverage',
-    body: 'Costs are shown only where a price is evidenced, with coverage stated as complete, partial or unknown. Unknown billing is never counted as zero.',
-  },
-  {
-    Icon: IconCheck,
-    title: 'Rules come from the research contract',
-    body: 'Compatibility rules and dependencies are published by the research project. The website interprets them; it does not invent its own.',
-  },
-];
-
-function HonestByDesign() {
+function CatalogRows() {
+  const catalog = useCatalog();
   return (
-    <section aria-labelledby="honest-title" className="mx-auto max-w-7xl px-4 py-10">
-      <h2 id="honest-title" className="text-2xl font-semibold tracking-tight">
-        Honest by design
-      </h2>
-      <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {PRINCIPLES.map((p) => (
-          <li key={p.title} className="card p-5">
-            <p.Icon className="text-brand-700 dark:text-brand-400" />
-            <h3 className="mt-2 font-semibold">{p.title}</h3>
-            <p className="muted mt-1 text-sm">{p.body}</p>
-          </li>
-        ))}
-      </ul>
-      <p className="mt-6">
-        <Link to="/methodology" className="link">
-          Read the methodology: outcomes, invalidation, pricing and evidence
-        </Link>
-      </p>
+    <section className="section catalog-section" id="catalog">
+      <div className="container">
+        <div className="catalog-header">
+          <div>
+            <div className="eyebrow">EXPLORE THE ECOSYSTEM</div>
+            <h2>Everything has a place.</h2>
+            <p className="section-subtitle">
+              Browse by the role each component plays, rather than scrolling an endless directory of
+              AI tools.
+            </p>
+          </div>
+          <span className="mono dim" style={{ fontSize: 10 }}>
+            07 LAYERS / DEMO CATALOG
+          </span>
+        </div>
+        <div className="catalog-rows">
+          {LAYERS.map((layer) => {
+            const kinds = kindsInTier(layer.tier).map((k) => k.kind);
+            const count = (catalog.data?.items ?? []).filter((i) => kinds.includes(i.kind)).length;
+            return (
+              <div className="catalog-row" key={layer.tier}>
+                <span className="catalog-ico">
+                  <Icon name={layer.ico} />
+                </span>
+                <div className="catalog-info">
+                  <h3>{layer.name}</h3>
+                  <p>{layer.catalog}</p>
+                </div>
+                <div className="catalog-metric">
+                  DEMO CATALOG
+                  <strong>
+                    {count} item{count === 1 ? '' : 's'}
+                  </strong>
+                </div>
+                <div className="catalog-metric second">
+                  ROLE
+                  <strong>{layer.depend}</strong>
+                </div>
+                <div className="catalog-link">
+                  <Link to={`/catalog?layer=${layer.tier}`} aria-label={`Browse ${layer.name}`}>
+                    Browse <Icon name="arrow-right" />
+                  </Link>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** A real published rule, presented with the mock's "compatibility explainer" board. */
+function RuleBoard() {
+  const navigate = useNavigate();
+  const rule =
+    BASELINE_RULESET.rules.find((r) => r.id === 'rule.api.model.access') ??
+    BASELINE_RULESET.rules[0]!;
+  const [firstKind, secondKind] = rule.affected_kinds;
+  const tiles = [firstKind, secondKind].filter(Boolean) as (typeof rule.affected_kinds)[number][];
+  return (
+    <div className="rule-board">
+      <div className="rule-head">
+        <strong>Compatibility explainer</strong>
+        <span>PUBLISHED RULE</span>
+      </div>
+      <div className="rule-main">
+        <div className="rule-case">
+          {tiles.map((kind, i) => (
+            <div key={kind} style={{ display: 'contents' }}>
+              {i === 1 ? <div className="rule-cross">×</div> : null}
+              <div className="rule-product">
+                <span className={`component-logo ${i === 0 ? 'mint' : 'purple'}`}>
+                  {KIND_LABELS[kind]
+                    .split(' ')
+                    .map((w) => w[0])
+                    .join('')
+                    .slice(0, 3)
+                    .toUpperCase()}
+                </span>
+                <div>
+                  <strong>{KIND_LABELS[kind]}</strong>
+                  <small>{kindDef(kind).tier} · COMPONENT KIND</small>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="rule-alert">
+          <strong>
+            <Icon name="alert" /> {rule.message}
+          </strong>
+          <p>
+            {rule.on_unknown === 'block'
+              ? 'When this rule cannot be decided, the build is blocked rather than assumed compatible.'
+              : 'When this rule cannot be decided, the result is Unknown — never a pass.'}
+          </p>
+        </div>
+        <div className="rule-fix">
+          <span>
+            Suggested fix: <strong>{rule.remediation}</strong>
+          </span>
+          <button
+            className="btn btn-small btn-outline"
+            type="button"
+            onClick={() => void navigate('/builder')}
+          >
+            Try it in the builder <Icon name="arrow-right" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Confidence() {
+  return (
+    <section className="section confidence-section" id="compatibility">
+      <div className="container confidence-layout">
+        <div className="confidence-copy">
+          <div className="eyebrow">MORE THAN A CHECKMARK</div>
+          <h2>
+            Know what works. <span className="text-accent">Know what doesn&apos;t.</span>
+          </h2>
+          <p>
+            A stack that looks good on paper can fall apart at deployment. PickYour.AI is designed
+            to surface dependencies, contradictions and unknowns before you commit.
+          </p>
+          <div className="confidence-points">
+            <div className="confidence-point">
+              <Icon name="check-circle" /> Understand why a combination is supported.
+            </div>
+            <div className="confidence-point">
+              <Icon name="alert" /> See missing requirements, not just red warning lights.
+            </div>
+            <div className="confidence-point">
+              <Icon name="info" /> Unverified isn&apos;t quietly treated as compatible.
+            </div>
+          </div>
+        </div>
+        <RuleBoard />
+      </div>
+    </section>
+  );
+}
+
+function Steps() {
+  return (
+    <section className="section steps-section" id="how-it-works">
+      <div className="container">
+        <div className="eyebrow">BUILT FOR DECISION-MAKING</div>
+        <h2>From idea to architecture in minutes.</h2>
+        <div className="how-grid">
+          <div className="how-item">
+            <span className="how-number">01 / DEFINE</span>
+            <span className="how-icon">
+              <Icon name="list" />
+            </span>
+            <h3>Pick a starting point</h3>
+            <p>
+              Start fresh or load a reference stack for a support assistant, document search, agent
+              workflow, or self-hosted model.
+            </p>
+          </div>
+          <div className="how-item">
+            <span className="how-number">02 / CONFIGURE</span>
+            <span className="how-icon">
+              <Icon name="layers" />
+            </span>
+            <h3>Swap and compare</h3>
+            <p>
+              Choose tools for each layer. Filter choices, compare their properties, and watch
+              compatibility feedback update.
+            </p>
+          </div>
+          <div className="how-item">
+            <span className="how-number">03 / EXPORT</span>
+            <span className="how-icon">
+              <Icon name="code" />
+            </span>
+            <h3>Leave with a real plan</h3>
+            <p>
+              Export your component choices as contract-shaped JSON or share a link to the exact
+              demonstration build you configured.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function EndCta() {
+  const navigate = useNavigate();
+  return (
+    <section className="end-cta">
+      <div className="container">
+        <div className="cta-box">
+          <div>
+            <h2>Your next great build starts here.</h2>
+            <p>Less tab-hopping. More building with confidence.</p>
+          </div>
+          <button
+            className="btn btn-primary"
+            type="button"
+            onClick={() => void navigate('/builder')}
+          >
+            Open the stack builder <Icon name="arrow-right" />
+          </button>
+        </div>
+      </div>
     </section>
   );
 }
 
 export default function HomePage() {
   return (
-    <>
+    <div className="app-page">
       <Hero />
-      <HowItWorks />
-      <Starters />
-      <HonestByDesign />
-    </>
+      <StatsBand />
+      <Templates />
+      <CatalogRows />
+      <Confidence />
+      <Steps />
+      <EndCta />
+    </div>
   );
 }

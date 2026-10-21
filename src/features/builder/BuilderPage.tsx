@@ -1,173 +1,859 @@
-import { useMemo } from 'react';
-import { KIND_LABELS } from '../../contracts';
-import { buildContext, coverage as computeCoverage } from '../../domain/activation';
-import { updateObjectives } from '../../domain/build';
+/*
+ * System builder.
+ *
+ * Follows the PCPartPicker builder pattern in docs/research/pcpartpicker-ux-notes.md §3: a fixed,
+ * ordered row per component slot with a "Choose …" empty state, a toolbar above the table, a status
+ * strip carrying the worst outcome plus live estimates, a running total under the table, lettered
+ * findings with a severity word, and an explicit "what was not checked" note.
+ *
+ * Rows are contract component *kinds* grouped by tier, because a tier holds several decisions
+ * (T1 has a model and its provider). Only required kinds get an empty row; optional kinds are
+ * reachable from their group header, so the table stays as short as the build actually is.
+ */
+import '../../styles/dense.css';
+import { useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router';
+import type { BuildSnapshot, CatalogItem, ComponentKind, Tier } from '../../contracts';
+import { KIND_LABELS, kindDef, kindsInTier } from '../../contracts';
+import type { BuildContext } from '../../domain/activation';
+import { KIND_NEED_LABEL, buildContext, coverage, kindNeed } from '../../domain/activation';
+import {
+  removeSelection,
+  rename,
+  setEnabled,
+  updateObjectives,
+  updateSettings,
+} from '../../domain/build';
+import { canExport, encodeShareFragment, exportBuild, exportFileName } from '../../domain/share';
 import { useBuilder } from '../../app/builder-context';
-import { useBuildAnalysis, useCatalog } from '../../app/queries';
-import { ErrorState, Loading } from '../../components/feedback';
-import { PageHeader } from '../../components/layout';
-import emptyArt from '../../assets/images/builder-empty-480.webp';
-import { BuilderTable } from './BuilderTable';
-import { BuildToolbar } from './BuildToolbar';
-import { FindingsList } from './FindingsList';
+import { useData } from '../../app/data-context';
+import { useBuildAnalysis, useCatalog, usePricebook, useRuleset } from '../../app/queries';
+import { ErrorState, Loading, Modal, useToast } from '../../components/feedback';
+import { Icon } from '../../components/icon';
+import { Findings, Money, NotEvaluated, PartsHead, StatusStrip } from '../../components/parts';
+import { flaggedFindings, costHeadline } from './analysis';
+import { evidenceLine } from './evidence';
+import { incompleteBuild } from './incomplete';
+import { itemPrice } from '../../lib/item-cost';
+import { kindPath, rowSubtitle } from '../../lib/catalog-view';
+import { settingsFields } from '../../lib/schema-fields';
+import { LAYERS, itemLogo, layerOf } from '../../lib/layers';
+import { download } from './BuildToolbar';
 import { ObjectivesForm } from './ObjectivesForm';
-import { OverallStrip, SummaryPanel } from './SummaryPanel';
+import { SettingsForm } from './SettingsForm';
+import { BuilderLoading, BUILDER_DESCRIPTION } from './BuilderLoading';
 
-/** Announces compatibility changes to screen readers after each revision is evaluated. */
-function evaluationAnnouncement(
-  revision: number | undefined,
-  summary: { failed: number; unknown: number } | undefined,
-  current: boolean,
-) {
-  if (!current || !summary || revision === undefined) return '';
-  return `Revision ${revision} evaluated: ${summary.failed} failing, ${summary.unknown} unknown.`;
+function GroupRow({
+  tier,
+  ctx,
+  build,
+  onAdd,
+}: {
+  tier: Tier;
+  ctx: BuildContext;
+  build: BuildSnapshot;
+  onAdd: () => void;
+}) {
+  const layer = layerOf(tier);
+  const kinds = kindsInTier(tier).map((k) => k.kind);
+  const required = kinds.filter((k) => kindNeed(k, ctx.mode) === 'needed');
+  const done = required.filter((k) =>
+    build.selections.some((s) => s.enabled && s.kind === k),
+  ).length;
+  const optional = kinds.filter((k) => kindNeed(k, ctx.mode) !== 'needed');
+  const optionalDone = optional.filter((k) =>
+    build.selections.some((s) => s.enabled && s.kind === k),
+  ).length;
+  const status = required.length
+    ? `Required ${done}/${required.length}`
+    : optional.length
+      ? `Optional ${optionalDone}/${optional.length}`
+      : KIND_NEED_LABEL.not_needed;
+  const anySelected = kinds.some((k) => build.selections.some((s) => s.enabled && s.kind === k));
+  return (
+    <tr className="pt-group">
+      <th colSpan={6} scope="colgroup">
+        <div className="pt-group-inner">
+          <span className={anySelected ? 'pt-tier on' : 'pt-tier'}>{tier}</span>
+          <strong>{layer.name}</strong>
+          <span className="grow" />
+          <span className="pt-skip">{status}</span>
+          <button type="button" className="pbtn" onClick={onAdd}>
+            <Icon name="plus" /> Add component
+          </button>
+        </div>
+      </th>
+    </tr>
+  );
+}
+
+function ComponentRow({
+  kind,
+  selectionId,
+  item,
+  price,
+  enabled,
+  addAnother,
+  onConfigure,
+  onToggleEnabled,
+  onRemove,
+}: {
+  kind: ComponentKind;
+  selectionId: string;
+  item: CatalogItem | undefined;
+  price: ReturnType<typeof itemPrice> | undefined;
+  /** A disabled selection is still part of the saved build: it must stay visible and manageable. */
+  enabled: boolean;
+  /** True on the last row of a `cardinality: many` kind, which may take another selection. */
+  addAnother: boolean;
+  onConfigure: () => void;
+  onToggleEnabled: () => void;
+  onRemove: () => void;
+}) {
+  const evidence = item ? evidenceLine(item) : undefined;
+  const logo = item ? itemLogo(item) : undefined;
+  const name = item?.name ?? KIND_LABELS[kind];
+  return (
+    <tr data-kind={kind} className={enabled ? undefined : 'is-disabled'}>
+      <th scope="row" data-label="Component">
+        <span className="pt-name">
+          <span className="dim" style={{ fontSize: 11 }}>
+            {KIND_LABELS[kind]}
+          </span>
+        </span>
+      </th>
+      <td data-label="Selection">
+        <div className="pt-name">
+          {logo ? (
+            <span className={`component-logo ${logo.color}`} aria-hidden="true">
+              {logo.text}
+            </span>
+          ) : null}
+          {item ? (
+            <span>
+              <Link to={`${kindPath(kind)}/${item.id.replace(/\./g, '~')}`}>{item.name}</Link>
+              {rowSubtitle(item) ? <span className="pt-sub">{rowSubtitle(item)}</span> : null}
+              {enabled ? null : (
+                <span className="pchip pchip-unknown">Disabled — excluded from checks</span>
+              )}
+              {addAnother ? (
+                <Link className="pt-sub" to={`${kindPath(kind)}?add=1`}>
+                  <Icon name="plus" /> Add another {KIND_LABELS[kind].toLowerCase()}
+                </Link>
+              ) : null}
+            </span>
+          ) : (
+            <span className="dim">{selectionId}</span>
+          )}
+        </div>
+      </td>
+      <td data-label="Cost basis">
+        {item ? (
+          <span className={item.billing_class === 'unknown' ? 'pchip pchip-unknown' : 'pchip'}>
+            {item.billing_class}
+          </span>
+        ) : (
+          <span className="dim">—</span>
+        )}
+      </td>
+      <td data-label="Evidence">
+        {evidence ? (
+          <span className="pchip" title={evidence.detail}>
+            {evidence.label}
+          </span>
+        ) : (
+          <span className="dim">—</span>
+        )}
+      </td>
+      <td className="num" data-label="Est. cost">
+        <CostCell price={price} excluded={!enabled} />
+      </td>
+      <td data-label="Actions">
+        <div className="pt-actions">
+          <Link
+            className="pbtn pbtn-icon"
+            to={`${kindPath(kind)}?replace=${encodeURIComponent(selectionId)}`}
+            aria-label={`Change ${KIND_LABELS[kind]}`}
+            title="Choose a different component"
+          >
+            <Icon name="arrow-right" />
+          </Link>
+          {settingsFields(kind).length ? (
+            <button
+              type="button"
+              className="pbtn pbtn-icon"
+              aria-label={`Configure ${name}`}
+              onClick={onConfigure}
+            >
+              <Icon name="wand" />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="pbtn pbtn-icon"
+            aria-label={`${enabled ? 'Disable' : 'Enable'} ${name}`}
+            title={
+              enabled
+                ? 'Keep the component but exclude it from checks and cost'
+                : 'Include this component in checks and cost again'
+            }
+            onClick={onToggleEnabled}
+          >
+            <Icon name={enabled ? 'x-circle' : 'check'} />
+          </button>
+          <button
+            type="button"
+            className="pbtn pbtn-icon"
+            aria-label={`Remove ${name} from the stack`}
+            onClick={onRemove}
+          >
+            <Icon name="x" />
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+/**
+ * Price cell.
+ *
+ * `Included` is a word, not "$0": a zero would read as a measured charge. An unverified free item
+ * that the build policy does not admit is `Unknown`, not `Included`. A component whose meters were
+ * only partly priced is marked as a lower bound so a partial charge is never read as the full
+ * monthly price.
+ */
+function CostCell({
+  price,
+  excluded,
+}: {
+  price: ReturnType<typeof itemPrice> | undefined;
+  excluded: boolean;
+}) {
+  if (excluded)
+    return (
+      <span className="dim" title="Disabled selections are excluded from the estimate">
+        Excluded
+      </span>
+    );
+  if (!price) return <span className="dim">—</span>;
+  if (price.amount === null)
+    return (
+      <span className="pchip pchip-unknown" title={price.note}>
+        Unknown
+      </span>
+    );
+  if (price.included)
+    return (
+      <span className={price.label.endsWith('*') ? 'pchip' : 'dim'} title={price.note}>
+        {price.label}
+      </span>
+    );
+  if (price.partial)
+    return (
+      <span className="pchip pchip-unknown" title={price.note}>
+        <Money amount={price.amount} currency={price.currency} approximate /> partial
+      </span>
+    );
+  return <Money amount={price.amount} currency={price.currency} />;
+}
+
+function EmptyRow({ kind, onChoose }: { kind: ComponentKind; onChoose: () => void }) {
+  return (
+    <tr data-kind={kind}>
+      <th scope="row" data-label="Component">
+        <span className="dim" style={{ fontSize: 11 }}>
+          {KIND_LABELS[kind]}
+        </span>
+      </th>
+      <td colSpan={4} data-label="Selection">
+        <button type="button" className="pt-choose" onClick={onChoose}>
+          <Icon name="plus" /> Choose {KIND_LABELS[kind].toLowerCase()}
+        </button>
+      </td>
+      <td data-label="Actions">
+        <span className="pt-skip">Required</span>
+      </td>
+    </tr>
+  );
 }
 
 export default function BuilderPage() {
-  const { draft, ready, lastChange, apply } = useBuilder();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const { draft, ready, apply, startNew, restore, saveState, lastChange } = useBuilder();
+  const { mode } = useData();
   const catalog = useCatalog();
+  const pricebook = usePricebook(draft?.build.locks.pricebook_id);
+  const ruleset = useRuleset();
   const build = draft?.build;
   const analysis = useBuildAnalysis(build);
-  const ctx = useMemo(
-    () => (build ? buildContext(build, catalog.byId) : undefined),
-    [build, catalog.byId],
-  );
-  const cov = useMemo(() => (build && ctx ? computeCoverage(build, ctx) : undefined), [build, ctx]);
-  const announcement = evaluationAnnouncement(
-    analysis.report?.build_revision,
-    analysis.report?.summary,
-    analysis.reportIsCurrent,
-  );
-  const affected = useMemo(
-    () =>
-      new Set(
-        lastChange && lastChange.revision === build?.revision
-          ? [...lastChange.affectedKinds, ...lastChange.changedKinds]
-          : [],
-      ),
-    [lastChange, build?.revision],
-  );
+
+  const [name, setName] = useState<string | null>(null);
+  const [configure, setConfigure] = useState<string | null>(null);
+  const [jsonOpen, setJsonOpen] = useState(false);
+  const [objectivesMounted, setObjectivesMounted] = useState(false);
+
+  const byId = catalog.byId;
+  const ctx = useMemo(() => (build ? buildContext(build, byId) : undefined), [build, byId]);
+  const cov = useMemo(() => (build && ctx ? coverage(build, ctx) : undefined), [build, ctx]);
+
+  const jsonPreview = useMemo(() => {
+    if (!jsonOpen || !build) return '';
+    try {
+      return JSON.stringify(exportBuild(build, mode), null, 2);
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  }, [jsonOpen, build, mode]);
 
   if (catalog.isError)
     return (
-      <div className="mx-auto max-w-7xl px-4 py-8">
-        <ErrorState error={catalog.error} onRetry={() => void catalog.refetch()} />
+      <div className="app-page parts-page">
+        <div className="container">
+          <ErrorState error={catalog.error} onRetry={() => void catalog.refetch()} />
+        </div>
       </div>
     );
-  if (!ready || !build || !catalog.data || !ctx || !cov)
-    return (
-      <div className="mx-auto max-w-7xl px-4">
-        <Loading label="Loading builder…" />
-      </div>
-    );
+  if (!ready || !build || !catalog.data || !ctx || !cov) return <BuilderLoading />;
+
+  const report = analysis.reportIsCurrent ? analysis.report : undefined;
+  const failed = report?.summary.failed ?? 0;
+  const unknown = report?.summary.unknown ?? 0;
+  const flagged = flaggedFindings(report);
+  const total = analysis.costIsCurrent ? analysis.cost : undefined;
+  const headline = costHeadline(total);
+  const selectedCount = build.selections.filter((s) => s.enabled).length;
+  const requiredDone = cov.needed.length - cov.missing.length;
+  /*
+   * A build that is merely missing a required pick is *incomplete*, not incompatible: the frozen
+   * presence rule legitimately fails its existence assertion, so the raw finding is preserved and
+   * the incompleteness is a presentation distinction (#294).
+   */
+  const incomplete = incompleteBuild(build, report, ruleset.data);
+  const outcome: 'pass' | 'fail' | 'unknown' | 'none' = incomplete
+    ? 'unknown'
+    : failed
+      ? 'fail'
+      : unknown
+        ? 'unknown'
+        : report
+          ? cov.missing.length
+            ? 'unknown'
+            : 'pass'
+          : 'none';
+  const announcement = report
+    ? `Revision ${report.build_revision} evaluated: ${failed} failing, ${unknown} unknown.`
+    : '';
+  const affected =
+    lastChange && lastChange.revision === build.revision
+      ? [...new Set([...lastChange.affectedKinds, ...lastChange.changedKinds])]
+      : [];
+
+  const commitName = () => {
+    const next = (name ?? build.name).trim();
+    setName(null);
+    if (next && next !== build.name)
+      apply((b) => rename(b, next), `Renamed build to "${next}"`, []);
+  };
+
+  const remove = (selectionId: string, kind: ComponentKind, itemName: string) => {
+    apply((b) => removeSelection(b, selectionId), `Removed ${KIND_LABELS[kind]}: ${itemName}`, [
+      kind,
+    ]);
+    toast(`${itemName} removed from your stack.`);
+  };
+
+  const exportJson = () => {
+    const problem = canExport(build);
+    if (problem) {
+      toast(problem);
+      return;
+    }
+    download(exportFileName(build), JSON.stringify(exportBuild(build, mode), null, 2) + '\n');
+    toast('Configuration exported as JSON.');
+  };
+
+  const share = async () => {
+    // Encoding a draft the contract rejects throws, so validate first and say why.
+    const problem = canExport(build);
+    if (problem) {
+      toast(problem);
+      return;
+    }
+    let url: string;
+    try {
+      url = `${location.origin}/shared#${encodeShareFragment(build, mode)}`;
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'This build cannot be encoded into a link.');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast('Share link copied. The build travels in the link itself (after #).');
+    } catch {
+      toast('Could not copy the link. Use Export instead.');
+    }
+  };
+
+  const configureSelection = configure
+    ? build.selections.find((s) => s.id === configure)
+    : undefined;
+  const configureItem = configureSelection
+    ? byId.get(configureSelection.catalog_item_id)
+    : undefined;
+
+  /**
+   * Rows for one tier: every selected component — enabled *or* disabled, because a disabled
+   * selection is still part of the saved build and its configure, enable and remove controls must
+   * stay reachable — plus an empty row for each required gap.
+   */
+  const rowsFor = (tier: Tier) => {
+    const kinds = kindsInTier(tier).map((k) => k.kind);
+    const rows: React.ReactNode[] = [];
+    for (const kind of kinds) {
+      const selections = build.selections.filter((s) => s.kind === kind);
+      if (selections.length === 0) {
+        if (kindNeed(kind, ctx.mode) === 'needed')
+          rows.push(
+            <EmptyRow key={kind} kind={kind} onChoose={() => void navigate(kindPath(kind))} />,
+          );
+        continue;
+      }
+      const many = kindDef(kind).cardinality === 'many';
+      selections.forEach((selection, index) => {
+        const item = byId.get(selection.catalog_item_id);
+        const name = item?.name ?? selection.catalog_item_id;
+        rows.push(
+          <ComponentRow
+            key={selection.id}
+            kind={kind}
+            selectionId={selection.id}
+            item={item}
+            price={
+              item && selection.enabled
+                ? itemPrice(item, build, byId, pricebook.data, selection)
+                : undefined
+            }
+            enabled={selection.enabled}
+            addAnother={many && index === selections.length - 1}
+            onConfigure={() => setConfigure(selection.id)}
+            onToggleEnabled={() => {
+              const next = !selection.enabled;
+              apply(
+                (b) => setEnabled(b, selection.id, next),
+                `${next ? 'Enabled' : 'Disabled'} ${KIND_LABELS[kind]}: ${name}`,
+                [kind],
+              );
+              toast(
+                next
+                  ? `${name} is included in checks again.`
+                  : `${name} is kept but excluded from checks and cost.`,
+              );
+            }}
+            onRemove={() => remove(selection.id, kind, name)}
+          />,
+        );
+      });
+    }
+    return rows;
+  };
 
   return (
-    <>
-      <PageHeader eyebrow="AI Stack Builder" title={build.name}>
-        Pick components tier by tier. Every change creates a new revision and re-runs the published
-        compatibility rules across all tiers.
-      </PageHeader>
-      <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 lg:grid-cols-[1fr_22rem]">
-        <div className="grid min-w-0 gap-4">
-          <SummaryPanel
-            variant="mobile"
-            build={build}
-            byId={catalog.byId}
-            snapshot={catalog.data}
-            coverage={cov}
-            report={analysis.report}
-            reportIsCurrent={analysis.reportIsCurrent}
-            cost={analysis.cost}
-            costIsCurrent={analysis.costIsCurrent}
-            resources={analysis.resources}
-          />
-          <div className="card p-4">
-            <BuildToolbar key={build.id} build={build} byId={catalog.byId} />
+    <div className="app-page parts-page">
+      <div className="container">
+        <PartsHead
+          crumbs={
+            <>
+              <Link to="/">PickYour.AI</Link> <span>/</span> Builder
+            </>
+          }
+          title="Choose your parts"
+          description={BUILDER_DESCRIPTION}
+          actions={
+            <>
+              <button type="button" className="pbtn" onClick={() => setJsonOpen(true)}>
+                <Icon name="code" /> View JSON
+              </button>
+              <button type="button" className="pbtn" onClick={() => void share()}>
+                <Icon name="copy" /> Copy share link
+              </button>
+              <button type="button" className="pbtn pbtn-primary" onClick={exportJson}>
+                <Icon name="download" /> Export
+              </button>
+            </>
+          }
+        />
+
+        {/* Toolbar: name, state, local-first actions (research §3.9). */}
+        <div className="pbar">
+          <div className="pbar-field">
+            <Icon name="layers" />
+            <input
+              aria-label="Build name"
+              className="pbar-input"
+              maxLength={160}
+              type="text"
+              value={name ?? build.name}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={commitName}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitName();
+              }}
+            />
+            <span className="pbar-meta">
+              {saveState?.status === 'error' ? 'Not saved' : 'Draft'} · rev {build.revision}
+            </span>
           </div>
-          <OverallStrip build={build} report={analysis.report} current={analysis.reportIsCurrent} />
-          <p className="sr-only" aria-live="polite" role="status">
-            {announcement}
+          <div className="pbar-actions">
+            <button
+              type="button"
+              className="pbtn"
+              onClick={() => {
+                startNew();
+                toast('New blank build created.');
+              }}
+            >
+              <Icon name="plus" /> New
+            </button>
+            <Link className="pbtn" to="/builds">
+              <Icon name="download" /> Save / history
+            </Link>
+            <Link className="pbtn" to="/summary">
+              <Icon name="list" /> Summary
+            </Link>
+          </div>
+        </div>
+
+        <StatusStrip
+          outcome={outcome}
+          headline={
+            incomplete
+              ? `Incomplete — ${incomplete.chosen} of ${incomplete.total} required choices made`
+              : failed
+                ? `Incompatible — ${failed} compatibility error${failed === 1 ? '' : 's'}`
+                : unknown
+                  ? `Unknowns — ${unknown} check${unknown === 1 ? '' : 's'} unknown`
+                  : cov.missing.length
+                    ? `${cov.missing.length} required component${cov.missing.length === 1 ? '' : 's'} missing`
+                    : report
+                      ? 'Compatible (rules pass) — no compatibility errors'
+                      : 'Not evaluated yet'
+          }
+          detail={
+            incomplete
+              ? `${incomplete.remediation} Provisional inference from presence rules; the contract finding below is unchanged.`
+              : failed
+                ? 'See the compatibility notes below.'
+                : unknown
+                  ? 'Unknown is not a pass.'
+                  : cov.missing.length
+                    ? 'The rows marked Required are still empty.'
+                    : undefined
+          }
+          stats={[
+            { label: 'Required', value: `${requiredDone}/${cov.needed.length}` },
+            { label: 'Selected', value: String(selectedCount) },
+            {
+              label: 'Est. monthly',
+              value: total ? headline.text.split(' /')[0]! : '—',
+              unknown: !total || total.coverage !== 'complete',
+            },
+            { label: 'Unknown checks', value: String(unknown), unknown: unknown > 0 },
+          ]}
+        />
+
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className={saveState?.status === 'error' ? 'pnotice pbox-save-error' : undefined}
+        >
+          {saveState?.status === 'error' ? `Not saved: ${saveState.message}` : ''}
+        </div>
+
+        <p className="sr-only" aria-live="polite" role="status">
+          {announcement}
+        </p>
+
+        {!analysis.reportIsCurrent && analysis.report ? (
+          <p className="pbox-note" role="status">
+            Previous evaluation: revision {analysis.report.build_revision}
+            {analysis.report.build_id !== build.id ? ' of another build' : ''}. These results are
+            not current, so they are withheld below until this revision is evaluated.
           </p>
-          {lastChange &&
-          lastChange.revision === build.revision &&
-          lastChange.affectedKinds.length ? (
-            <div className="rounded-lg border border-sky-300 bg-sky-50 p-3 text-sm text-sky-950 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-100">
-              <strong>{lastChange.summary}.</strong> Through the dependency graph this re-checks:{' '}
-              {lastChange.affectedKinds.map((k) => KIND_LABELS[k]).join(', ')}. Earlier evaluations,
-              estimates and quotes for this build are now stale.
-            </div>
-          ) : null}
-          {analysis.evaluation.isError ? (
+        ) : null}
+
+        {affected.length ? (
+          <div className="pnotice" style={{ marginTop: 10 }}>
+            <Icon name="workflow" />
+            <span>
+              <strong>{lastChange?.summary}.</strong> Through the dependency graph this re-checks:{' '}
+              {affected.map((k) => KIND_LABELS[k]).join(', ')}. Earlier evaluations, estimates and
+              quotes for this build are now stale.
+            </span>
+          </div>
+        ) : null}
+
+        {analysis.costQuery.isError ? (
+          <div style={{ marginTop: 10 }}>
+            <ErrorState
+              title="Pricing unavailable"
+              error={analysis.costQuery.error}
+              onRetry={() => void analysis.costQuery.refetch()}
+            />
+          </div>
+        ) : null}
+
+        {analysis.evaluation.isError ? (
+          <div style={{ marginTop: 10 }}>
             <ErrorState
               error={analysis.evaluation.error}
               onRetry={() => void analysis.evaluation.refetch()}
             />
-          ) : null}
-          {analysis.costQuery.isError ? (
-            <ErrorState
-              title="Cost estimate unavailable"
-              error={analysis.costQuery.error}
-              onRetry={() => void analysis.costQuery.refetch()}
-            />
-          ) : null}
-          {build.selections.length === 0 ? (
-            <div className="card flex flex-col items-center gap-4 p-6 text-center sm:flex-row sm:text-left">
-              <img src={emptyArt} alt="" width={160} height={145} className="h-auto w-40" />
-              <div>
-                <p className="text-lg font-semibold">Start your stack</p>
-                <p className="muted mt-1 text-sm">
-                  Begin with T0: what should the system do, and how will it be deployed? Optional
-                  tiers (knowledge, agents, training) can be left out entirely.
-                </p>
-              </div>
-            </div>
-          ) : null}
-          <details className="card p-4">
-            <summary className="cursor-pointer font-semibold">Build objectives and policy</summary>
-            <p className="muted mt-1 text-sm">
-              Region, budget, usage and data classification are inputs to rules and cost estimates.
-            </p>
-            <div className="mt-3">
-              <ObjectivesForm
-                key={`${build.id}-${build.revision}`}
-                build={build}
-                onApply={(objectives, policy) =>
-                  apply(
-                    (b) => ({ ...updateObjectives(b, objectives), policy }),
-                    'Updated build objectives',
-                    ['workload', 'cost_policy', 'hosting_platform', 'deployment_target'],
-                  )
-                }
+          </div>
+        ) : null}
+
+        <div className="pt-wrap">
+          <div className="pt-scroll" tabIndex={0} role="region" aria-label="Scrollable parts table">
+            <table className="pt">
+              <caption>Stack components by layer · T0 to T6 · {selectedCount} selected</caption>
+              <thead>
+                <tr>
+                  <th scope="col">
+                    <span>Component</span>
+                  </th>
+                  <th scope="col">
+                    <span>Selection</span>
+                  </th>
+                  <th scope="col">
+                    <span>Cost basis</span>
+                  </th>
+                  <th scope="col">
+                    <span>Evidence</span>
+                  </th>
+                  <th scope="col" className="num">
+                    <span>Est. cost</span>
+                  </th>
+                  <th scope="col" className="num">
+                    <span>Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {LAYERS.map((layer) => {
+                  return [
+                    <GroupRow
+                      key={`${layer.tier}-group`}
+                      tier={layer.tier}
+                      ctx={ctx}
+                      build={build}
+                      onAdd={() => void navigate(`/catalog?layer=${layer.tier}`)}
+                    />,
+                    ...rowsFor(layer.tier),
+                  ];
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="pt-foot">
+          <div className="total">
+            <span>Estimated total</span>
+            <strong>{total ? headline.text.split(' /')[0] : '—'}</strong>
+            <small>
+              {total
+                ? total.coverage === 'complete'
+                  ? `/${total.period_days} days · synthetic estimate`
+                  : `/${total.period_days} days · lower bound, ${total.unpriced_selection_ids.length} unpriced`
+                : 'nothing priced yet'}
+            </small>
+          </div>
+          <span className="pbar-meta">Not a quote · synthetic demo pricebook</span>
+        </div>
+
+        <div className="parts-sections">
+          <section aria-labelledby="notes-heading">
+            <h2 id="notes-heading" className="parts-h2">
+              Compatibility notes
+            </h2>
+            {!report && build.selections.length && !analysis.evaluation.isError ? (
+              <Loading label={`Evaluating revision ${build.revision}…`} />
+            ) : (
+              <Findings
+                report={report}
+                lettered={flagged.map((f) => ({ rule_id: f.rule_id, letter: f.letter }))}
               />
+            )}
+            <div style={{ marginTop: 8 }}>
+              <NotEvaluated report={report} />
+            </div>
+          </section>
+
+          <details className="pdetails">
+            <summary>
+              <Icon name="chart" /> Cost breakdown ({total?.line_items.length ?? 0} line items)
+            </summary>
+            <div className="pdetails-body">
+              {total ? (
+                <>
+                  <div className="pt-scroll" tabIndex={0} role="region" aria-label="Cost lines">
+                    <table className="pt">
+                      <thead>
+                        <tr>
+                          <th scope="col">
+                            <span>Selection</span>
+                          </th>
+                          <th scope="col">
+                            <span>Meter</span>
+                          </th>
+                          <th scope="col" className="num">
+                            <span>Qty</span>
+                          </th>
+                          <th scope="col" className="num">
+                            <span>Unit</span>
+                          </th>
+                          <th scope="col" className="num">
+                            <span>Amount</span>
+                          </th>
+                          <th scope="col">
+                            <span>Confidence</span>
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {total.line_items.map((li) => {
+                          const sel = build.selections.find((s) => s.id === li.selection_id);
+                          const item = sel ? byId.get(sel.catalog_item_id) : undefined;
+                          return (
+                            <tr key={li.id}>
+                              <th scope="row">{item?.name ?? li.selection_id}</th>
+                              <td>{li.meter.replace(/_/g, ' ')}</td>
+                              <td className="num">{li.quantity}</td>
+                              <td className="num">
+                                <Money
+                                  amount={li.unit_price.amount}
+                                  currency={li.unit_price.currency}
+                                />
+                              </td>
+                              <td className="num">
+                                <Money amount={li.amount.amount} currency={li.amount.currency} />
+                              </td>
+                              <td>{li.confidence}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="pbox-note" style={{ padding: '8px 0 0' }}>
+                    {headline.detail} Unpriced components are never counted as zero.
+                  </p>
+                </>
+              ) : (
+                <p className="pbox-note">Nothing has been priced for this revision yet.</p>
+              )}
             </div>
           </details>
-          <BuilderTable
-            build={build}
-            byId={catalog.byId}
-            mode={ctx.mode}
-            report={analysis.report}
-            reportIsCurrent={analysis.reportIsCurrent}
-            affectedKinds={affected}
-          />
-          {analysis.reportIsCurrent ? (
-            <FindingsList report={analysis.report} build={build} byId={catalog.byId} />
-          ) : build.selections.length && !analysis.evaluation.isError ? (
-            <Loading label={`Evaluating revision ${build.revision}…`} />
-          ) : null}
+
+          <details
+            className="pdetails"
+            onToggle={(event) => {
+              if (event.currentTarget.open) setObjectivesMounted(true);
+            }}
+          >
+            <summary>
+              <Icon name="list" /> Objectives and policy
+            </summary>
+            <div className="pdetails-body">
+              {objectivesMounted ? (
+                <ObjectivesForm
+                  key={`${build.id}-${build.revision}`}
+                  build={build}
+                  onApply={(objectives, policy) =>
+                    apply(
+                      (b) => ({ ...updateObjectives(b, objectives), policy }),
+                      'Updated build objectives',
+                      ['workload', 'cost_policy', 'hosting_platform', 'deployment_target'],
+                    )
+                  }
+                />
+              ) : null}
+            </div>
+          </details>
+
+          <details className="pdetails">
+            <summary>
+              <Icon name="workflow" /> Revision history ({draft.changes.length})
+            </summary>
+            <div className="pdetails-body">
+              <ol className="summary-history">
+                {[...draft.changes].reverse().map((c) => (
+                  <li key={c.revision}>
+                    <span className="mono">r{c.revision}</span>
+                    <span>{c.summary}</span>
+                    <time className="dim" dateTime={c.at}>
+                      {new Date(c.at).toLocaleString()}
+                    </time>
+                    {c.revision !== build.revision &&
+                    draft.revisions.some((r) => r.revision === c.revision) ? (
+                      <button
+                        type="button"
+                        className="pbtn"
+                        aria-label={`Restore revision ${c.revision} as new revision`}
+                        onClick={() => restore(c.revision)}
+                      >
+                        Restore as new revision
+                      </button>
+                    ) : null}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </details>
         </div>
-        <SummaryPanel
-          variant="aside"
-          build={build}
-          byId={catalog.byId}
-          snapshot={catalog.data}
-          coverage={cov}
-          report={analysis.report}
-          reportIsCurrent={analysis.reportIsCurrent}
-          cost={analysis.cost}
-          costIsCurrent={analysis.costIsCurrent}
-          resources={analysis.resources}
-        />
       </div>
-    </>
+
+      <Modal
+        open={jsonOpen}
+        title="Your build configuration"
+        subtitle="Portable JSON manifest · contract BuildSnapshot"
+        onClose={() => setJsonOpen(false)}
+        primaryLabel="Copy JSON"
+        onPrimary={() => {
+          void navigator.clipboard
+            .writeText(jsonPreview)
+            .then(() => toast('Configuration JSON copied'))
+            .catch(() => toast('Copy was blocked by this browser.'));
+        }}
+      >
+        <pre id="jsonPreview">{jsonPreview}</pre>
+      </Modal>
+
+      <Modal
+        open={Boolean(configureSelection && configureItem)}
+        title={configureItem ? `Configure ${configureItem.name}` : 'Configure component'}
+        subtitle="Contract settings for this selection"
+        onClose={() => setConfigure(null)}
+      >
+        {configureSelection && configureItem ? (
+          <SettingsForm
+            kind={configureSelection.kind as ComponentKind}
+            values={configureSelection.settings as Record<string, unknown>}
+            onCancel={() => setConfigure(null)}
+            onApply={(patch) => {
+              apply(
+                (b) => updateSettings(b, configureSelection.id, patch),
+                `Changed ${KIND_LABELS[configureSelection.kind]} settings`,
+                [configureSelection.kind],
+              );
+              setConfigure(null);
+              toast('Settings updated. Rules were re-evaluated.');
+            }}
+          />
+        ) : null}
+      </Modal>
+    </div>
   );
 }

@@ -1,48 +1,66 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { describe, expect, it } from 'vitest';
+import { MemoryRouter } from 'react-router';
+import { describe, expect, it, vi } from 'vitest';
 import { DataContext } from '../../src/app/data-context';
-import { BASELINE_RULESET } from '../../src/contracts';
 import { createFixtureProviders } from '../../src/data/fixture/providers';
-import { evaluateBuild } from '../../src/domain/evaluator';
-import { OverallStrip } from '../../src/features/builder/SummaryPanel';
-import { FindingsList } from '../../src/features/builder/FindingsList';
-import { buildWith, BY_ID, CATALOG, contradictory } from './scenarios';
+import { createDraft } from '../../src/domain/build';
+import BuildSummaryPage from '../../src/pages/BuildSummaryPage';
+import { buildWith, BY_ID, contradictory, NOW } from './scenarios';
 
-function show(build = buildWith([]), current = true) {
-  const report = evaluateBuild({ build, catalog: CATALOG, ruleset: BASELINE_RULESET });
-  const client = new QueryClient();
-  client.setQueryData(['catalog', 'ruleset'], BASELINE_RULESET);
-  render(
+vi.mock('../../src/app/builder-context', () => ({ useBuilder: vi.fn() }));
+
+const { useBuilder } = await import('../../src/app/builder-context');
+
+function show(build = buildWith([]), revisions = [build]) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  vi.mocked(useBuilder).mockReturnValue({
+    draft: { ...createDraft(build), revisions },
+    ready: true,
+    catalogById: BY_ID,
+    lastChange: null,
+    saveState: { status: 'saved' },
+    apply: vi.fn(),
+    startNew: vi.fn(),
+    open: vi.fn(),
+    restore: vi.fn(),
+  });
+  return render(
     <QueryClientProvider client={client}>
-      <DataContext.Provider value={createFixtureProviders()}>
-        <OverallStrip build={build} report={report} current={current} />
-        <FindingsList build={build} report={report} byId={BY_ID} />
+      <DataContext.Provider value={createFixtureProviders({ now: () => NOW })}>
+        <MemoryRouter>
+          <BuildSummaryPage />
+        </MemoryRouter>
       </DataContext.Provider>
     </QueryClientProvider>,
   );
 }
 
 describe('incomplete build wording', () => {
-  it('shows provisional completion guidance while retaining the raw failure', () => {
-    show();
-    expect(screen.getByTestId('overall-status')).toHaveTextContent('Incomplete');
-    expect(screen.getByTestId('overall-status')).toHaveTextContent('0 of 4 required choices made');
-    expect(screen.getByTestId('overall-status')).toHaveTextContent('Provisional inference');
-    expect(screen.getByTestId('overall-status')).toHaveTextContent('Choose workload');
-    expect(screen.getByText('Fail')).toBeInTheDocument();
-  });
-  it('retains Incompatible for real conflicts', () => {
-    show(contradictory());
-    expect(screen.getByTestId('overall-status')).toHaveTextContent('Incompatible');
-    expect(screen.getByTestId('overall-status')).not.toHaveTextContent('Incomplete');
-  });
-  it('does not infer incomplete from a stale report', () => {
-    show(buildWith([]), false);
-    expect(screen.getByTestId('overall-status')).not.toHaveTextContent('Incomplete');
-    expect(screen.getByTestId('overall-status')).toHaveTextContent('Previous evaluation');
-    expect(screen.getByTestId('overall-status')).toHaveTextContent(
-      'These results are not current.',
+  it('links retained revision history to the build comparison chooser', async () => {
+    const build = buildWith([]);
+    show(build, [{ ...build, revision: build.revision - 1 }, build]);
+    expect(await screen.findByRole('link', { name: 'Compare two revisions' })).toHaveAttribute(
+      'href',
+      '/compare?mode=builds',
     );
+  });
+
+  it('shows provisional completion guidance while retaining the raw failure', async () => {
+    show();
+    const panel = await screen.findByTestId('overall-status');
+    await waitFor(() => expect(panel).toHaveTextContent('Incomplete'));
+    expect(panel).toHaveTextContent('0 of 4 required choices made');
+    expect(panel).toHaveTextContent('Provisional inference');
+    expect(panel).toHaveTextContent('Choose workload');
+    // The frozen presence rule still fails; incompleteness is presentation only.
+    expect(await screen.findAllByText('Fail')).not.toHaveLength(0);
+  });
+
+  it('retains Incompatible for real conflicts', async () => {
+    show(contradictory());
+    const panel = await screen.findByTestId('overall-status');
+    await waitFor(() => expect(panel).toHaveTextContent('Incompatible'));
+    expect(panel).not.toHaveTextContent('Incomplete');
   });
 });

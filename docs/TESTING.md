@@ -29,7 +29,7 @@ npm run audit
 six full-page desktop screenshots: `/`, `/builder`, and `/catalog/model`, each
 in light and dark themes. Baselines live in `tests/visual/baselines/`.
 The tests fix the clock, locale, timezone, viewport, reduced motion, and theme;
-wait for route content, network idle, and fonts; and mask only the changing build
+wait for route content, the homepage's resolved fixture cost and evaluation, network idle, and fonts; and mask only the changing build
 SHA. Fresh browser contexts keep saved drafts out of the baselines.
 
 The screenshot environment uses the lockfile-pinned Playwright Chromium and

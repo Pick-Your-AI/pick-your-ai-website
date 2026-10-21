@@ -1,8 +1,12 @@
-// Applies the saved or preferred colour theme before first paint (external file so CSP can stay 'self').
+// Applies the saved colour theme before first paint (external file so CSP can stay 'self').
+// The design's default is the dark palette; light is an explicit opt-in, exactly as in the mock.
 try {
   var t = localStorage.getItem('pyai.theme');
-  var d = t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
-  document.documentElement.classList.toggle('dark', d);
+  var light = t === 'light';
+  var root = document.documentElement;
+  root.classList.toggle('light', light);
+  root.classList.toggle('dark', !light);
+  root.style.colorScheme = light ? 'light' : 'dark';
 } catch (e) {
-  /* storage unavailable */
+  /* storage unavailable: keep the default dark palette */
 }

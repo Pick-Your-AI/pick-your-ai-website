@@ -30,7 +30,7 @@ function compose(id: string, name: string, picks: [ComponentKind, string][]): Bu
 export const STARTERS: Starter[] = [
   {
     id: 'api-support-chat',
-    title: 'Managed-API support chat (demo)',
+    title: 'Provider-API support chat (demo)',
     summary:
       'A customer-support assistant that calls a hosted model API, with a guardrail and monitoring. No infrastructure to run.',
     rationale: [
@@ -44,7 +44,7 @@ export const STARTERS: Starter[] = [
       { kind: 'monitoring_stack', why: 'Tracks latency, errors and usage once traffic starts.' },
     ],
     build: () =>
-      compose('api-support-chat', 'Managed-API support chat (demo)', [
+      compose('api-support-chat', 'Provider-API support chat (demo)', [
         ['workload', 'support-chat'],
         ['deployment_mode', 'api'],
         ['model_provider', 'aurora'],

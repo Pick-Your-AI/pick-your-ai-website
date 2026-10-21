@@ -119,14 +119,16 @@ export const DEMO_ITEMS: CatalogItem[] = [
   }),
   item('deployment_mode', {
     slug: 'api',
-    name: 'Managed API (no self-hosting)',
-    description: 'Call a hosted model API. No GPUs, hosting or inference runtime to manage.',
+    name: 'Provider API (shared capacity)',
+    description:
+      'Call a provider-hosted model API on shared capacity. No GPUs, hosting or inference runtime to manage.',
     spec: { mode: 'api' },
   }),
   item('deployment_mode', {
     slug: 'managed',
-    name: 'Managed platform',
-    description: 'A managed platform hosts the model; you choose the platform and region.',
+    name: 'Managed platform (dedicated capacity)',
+    description:
+      'A provider runs the model on capacity reserved for you; you choose the platform and region.',
     spec: { mode: 'managed', allowed_regions: ['us-east-demo', 'eu-west-demo'] },
   }),
   item('deployment_mode', {
