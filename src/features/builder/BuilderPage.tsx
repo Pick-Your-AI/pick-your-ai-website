@@ -595,6 +595,16 @@ export default function BuilderPage() {
           </div>
         ) : null}
 
+        {analysis.costQuery.isError ? (
+          <div style={{ marginTop: 10 }}>
+            <ErrorState
+              title="Pricing unavailable"
+              error={analysis.costQuery.error}
+              onRetry={() => void analysis.costQuery.refetch()}
+            />
+          </div>
+        ) : null}
+
         {analysis.evaluation.isError ? (
           <div style={{ marginTop: 10 }}>
             <ErrorState

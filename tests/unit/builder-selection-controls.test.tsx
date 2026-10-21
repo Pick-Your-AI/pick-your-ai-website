@@ -7,7 +7,7 @@
  * rejects (fewer than two selections) — outside the previous try block.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
@@ -34,6 +34,7 @@ function show(
   build: BuildSnapshot,
   draft: BuildDraft = createDraft(build),
   saveState: ReturnType<typeof useBuilder>['saveState'] = { status: 'saved' },
+  providers = createFixtureProviders({ now: () => NOW }),
 ) {
   const apply = vi.fn();
   const restore = vi.fn();
@@ -51,7 +52,7 @@ function show(
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   const view = render(
     <QueryClientProvider client={client}>
-      <DataContext.Provider value={createFixtureProviders({ now: () => NOW })}>
+      <DataContext.Provider value={providers}>
         <MemoryRouter>
           <ToastProvider>
             <BuilderPage />
@@ -64,6 +65,28 @@ function show(
 }
 
 describe('builder selection controls', () => {
+  it('shows pricing failures and recovers through the retry control', async () => {
+    const providers = createFixtureProviders({ now: () => NOW });
+    const estimate = providers.pricing.estimate.bind(providers.pricing);
+    let unavailable = true;
+    const pricing = vi.spyOn(providers.pricing, 'estimate').mockImplementation((build) => {
+      if (unavailable) return Promise.reject(new Error('Pricebook request failed.'));
+      return estimate(build);
+    });
+    show(apiChat(), undefined, undefined, providers);
+
+    const message = await screen.findByText('Pricebook request failed.', {}, { timeout: 5000 });
+    const panel = message.closest('[role="alert"]') as HTMLElement;
+    expect(panel).toHaveTextContent('Pricing unavailable');
+    const attempts = pricing.mock.calls.length;
+    unavailable = false;
+    await userEvent.click(within(panel).getByRole('button', { name: 'Try again' }));
+
+    await waitFor(() => expect(pricing.mock.calls.length).toBeGreaterThan(attempts));
+    await waitFor(() => expect(screen.queryByText('Pricing unavailable')).not.toBeInTheDocument());
+    expect(screen.queryByText(/nothing priced yet/i)).not.toBeInTheDocument();
+  });
+
   it.each([
     'Browser storage is unavailable.',
     'This build changed in another tab. Reload it before saving.',

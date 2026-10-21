@@ -102,7 +102,11 @@ function Header() {
     <header className="site-header no-print">
       <div className="container header-inner">
         <Brand />
-        <nav aria-label="Main navigation" className={menuOpen ? 'main-nav open' : 'main-nav'}>
+        <nav
+          id="mainNav"
+          aria-label="Main navigation"
+          className={menuOpen ? 'main-nav open' : 'main-nav'}
+        >
           {NAV.map((n) => (
             <NavLink key={n.to} to={n.to} end={n.end} className={linkClass}>
               {n.label}

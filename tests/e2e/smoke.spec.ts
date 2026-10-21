@@ -53,6 +53,22 @@ async function axe(page: Page) {
   ).toEqual([]);
 }
 
+test('expanded mobile navigation has a valid control relationship and passes axe', async ({
+  page,
+}, info) => {
+  test.skip(!info.project.name.startsWith('mobile'), 'mobile navigation control');
+  await page.goto('/');
+  const toggle = page.getByRole('button', { name: /^(Open|Close) navigation$/ });
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  const navigation = page.getByRole('navigation', { name: 'Main navigation' });
+  await expect(navigation).toHaveAttribute('id', (await toggle.getAttribute('aria-controls'))!);
+  await expect(navigation).toBeVisible();
+  await axe(page);
+  await page.getByRole('button', { name: 'Close navigation' }).click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+});
+
 for (const [path, heading] of PAGES) {
   test(`${path} renders, labels demo data and passes axe`, async ({ page }) => {
     const errors: string[] = [];
