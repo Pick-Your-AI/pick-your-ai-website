@@ -113,6 +113,7 @@ export default function TemplatesPage() {
   const { startNew } = useBuilder();
   const toast = useToast();
   const catalog = useCatalog();
+  const { mode } = useData();
 
   return (
     <div className="app-page">
@@ -135,13 +136,17 @@ export default function TemplatesPage() {
           <div>
             <h2>Find a starting point</h2>
             <p>
-              {STARTERS.length} example architectures · all products and costs are illustrative.
+              {mode === 'fixture'
+                ? `${STARTERS.length} example architectures · all products and costs are illustrative.`
+                : 'No starter builds are available for this catalog.'}
             </p>
           </div>
           <span className="tiny mono">FULLY EDITABLE CONFIGURATIONS</span>
         </div>
 
-        {catalog.isError ? (
+        {mode !== 'fixture' ? (
+          <p>Start a blank build to choose components from the active catalog.</p>
+        ) : catalog.isError ? (
           <div className="notice-error" role="alert">
             <p>
               <strong>Could not load the demo catalog.</strong>

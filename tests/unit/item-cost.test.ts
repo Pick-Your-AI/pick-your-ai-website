@@ -21,6 +21,22 @@ const PRICEBOOK: Pricebook = DEMO_PRICEBOOK;
 /** apiChat projects 2000 requests/day × 600 in / 300 out tokens over the period. */
 const build = apiChat();
 
+describe('itemPrice pricebook lock', () => {
+  it('rejects default rates when the build locks another pricebook', () => {
+    const locked = { ...build, locks: { ...build.locks, pricebook_id: 'pricebook.unavailable' } };
+    const price = itemPrice(item('model', 'aurora-large'), locked, BY_ID, PRICEBOOK);
+    expect(price.amount).toBeNull();
+    expect(price.label).toBe('Unknown');
+    expect(price.note).toContain('locked pricebook');
+  });
+
+  it('uses matching locked rates', () => {
+    const custom = { ...PRICEBOOK, id: 'pricebook.custom' };
+    const locked = { ...build, locks: { ...build.locks, pricebook_id: custom.id } };
+    expect(itemPrice(item('model', 'aurora-large'), locked, BY_ID, custom).amount).not.toBeNull();
+  });
+});
+
 describe('itemPrice aggregates every applicable meter', () => {
   it('sums both token meters of a model that has two valid rates', () => {
     const large = item('model', 'aurora-large');

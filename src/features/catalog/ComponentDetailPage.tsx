@@ -37,8 +37,8 @@ export default function ComponentDetailPage() {
   const itemId = slugToId(itemSlug);
 
   const catalog = useCatalog();
-  const pricebook = usePricebook();
   const { draft, apply } = useBuilder();
+  const pricebook = usePricebook(draft?.build.locks.pricebook_id);
   const toast = useToast();
   const navigate = useNavigate();
   const build = draft?.build ?? null;

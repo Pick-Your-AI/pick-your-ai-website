@@ -9,8 +9,9 @@ import { Link, useNavigate } from 'react-router';
 import { BASELINE_RULESET, KIND_LABELS, kindDef, kindsInTier } from '../contracts';
 import { useBuildAnalysis, useCatalog, usePricebook } from '../app/queries';
 import { useBuilder } from '../app/builder-context';
+import { useData } from '../app/data-context';
 import { STARTERS, type Starter } from '../data/fixture/starters';
-import { itemPrice, totalLabel } from '../lib/item-cost';
+import { itemPrice, costShort } from '../lib/item-cost';
 import { LAYERS } from '../lib/layers';
 import { Icon, type IconName } from '../components/icon';
 
@@ -34,26 +35,7 @@ const TIER_ICON: Record<string, IconName> = {
 function Hero() {
   const navigate = useNavigate();
   const { startNew } = useBuilder();
-  const catalog = useCatalog();
-  const pricebook = usePricebook();
-  const starter = STARTERS[0]!;
-  const build = useMemo(() => starter.build(), [starter]);
-  const analysis = useBuildAnalysis(build);
-
-  const rows = build.selections.map((sel) => {
-    const item = catalog.byId.get(sel.catalog_item_id);
-    const tier = kindDef(sel.kind).tier;
-    return {
-      id: sel.id,
-      tier,
-      icon: TIER_ICON[tier] ?? 'layers',
-      name: item?.name ?? sel.catalog_item_id,
-      kind: KIND_LABELS[sel.kind],
-      price: item ? itemPrice(item, build, catalog.byId, pricebook.data).label : 'Unknown',
-    };
-  });
-  const total = analysis.costIsCurrent ? analysis.cost : undefined;
-  const conflicts = analysis.report?.summary.failed ?? 0;
+  const { mode } = useData();
 
   return (
     <section className="hero" id="home">
@@ -109,63 +91,100 @@ function Hero() {
           </div>
         </div>
 
-        <div aria-label="Example of a complete AI stack" className="hero-art" role="img">
-          <div className="orbit" />
-          <div className="orbit two" />
-          <span className="decor-plus p1">+</span>
-          <span className="decor-plus p2">+</span>
-          <div className="float-chip left">
-            <Icon name="shield" /> Dependency checks, built in
+        {mode === 'fixture' ? <HeroPreview /> : null}
+      </div>
+    </section>
+  );
+}
+
+function HeroPreview() {
+  const catalog = useCatalog();
+  const starter = STARTERS[0]!;
+  const build = useMemo(() => starter.build(), [starter]);
+  const pricebook = usePricebook(build.locks.pricebook_id);
+  const analysis = useBuildAnalysis(build);
+
+  const rows = build.selections.map((sel) => {
+    const item = catalog.byId.get(sel.catalog_item_id);
+    const tier = kindDef(sel.kind).tier;
+    return {
+      id: sel.id,
+      tier,
+      icon: TIER_ICON[tier] ?? 'layers',
+      name: item?.name ?? sel.catalog_item_id,
+      kind: KIND_LABELS[sel.kind],
+      price: item ? itemPrice(item, build, catalog.byId, pricebook.data).label : 'Unknown',
+    };
+  });
+  const total = costShort(analysis.costIsCurrent ? analysis.cost : undefined);
+  const report = analysis.reportIsCurrent ? analysis.report : undefined;
+  const status = !report
+    ? analysis.evaluation.isError
+      ? 'Evaluation unavailable'
+      : 'Not checked'
+    : report.summary.failed
+      ? `${report.summary.failed} detected conflict${report.summary.failed === 1 ? '' : 's'}`
+      : report.summary.unknown
+        ? `${report.summary.unknown} unknown finding${report.summary.unknown === 1 ? '' : 's'}`
+        : '0 detected conflicts';
+  const statusIcon: IconName =
+    !report || report.summary.unknown ? 'info' : report.summary.failed ? 'alert' : 'check-circle';
+
+  return (
+    <div aria-label="Example demo AI stack" className="hero-art" role="group">
+      <div className="orbit" />
+      <div className="orbit two" />
+      <span className="decor-plus p1">+</span>
+      <span className="decor-plus p2">+</span>
+      <div className="float-chip left">
+        <Icon name="shield" /> Dependency checks, built in
+      </div>
+      <div className="preview-panel">
+        <div className="preview-top">
+          <div>
+            <div className="preview-kicker">STACK PREVIEW / DEMO</div>
+            <div className="preview-title">{starter.title.replace(/\s*\(demo\)$/i, '')}</div>
           </div>
-          <div className="preview-panel">
-            <div className="preview-top">
-              <div>
-                <div className="preview-kicker">STACK PREVIEW / DEMO</div>
-                <div className="preview-title">{starter.title.replace(/\s*\(demo\)$/i, '')}</div>
-              </div>
-              <span className="preview-tag">
-                <span className="live-dot" /> DEMO STACK
+          <span className="preview-tag">
+            <span className="live-dot" /> DEMO STACK
+          </span>
+        </div>
+        <div className="preview-body">
+          {rows.map((row) => (
+            <div className="preview-row" key={row.id}>
+              <span className="preview-line">
+                <span className="preview-node" />
               </span>
-            </div>
-            <div className="preview-body">
-              {rows.map((row) => (
-                <div className="preview-row" key={row.id}>
-                  <span className="preview-line">
-                    <span className="preview-node" />
-                  </span>
-                  <span className="preview-icon">
-                    <Icon name={row.icon} />
-                  </span>
-                  <div className="preview-info">
-                    <strong>{row.name}</strong>
-                    <small>
-                      {row.tier} · {row.kind.toUpperCase()}
-                    </small>
-                  </div>
-                  <span className="preview-price">{row.price}</span>
-                </div>
-              ))}
-            </div>
-            <div className="preview-footer">
-              <div>
-                <strong>
-                  {total ? totalLabel(total.total.amount, total.currency) : '—'}
-                  <small>/mo*</small>
-                </strong>
-                <small> Illustrative baseline</small>
+              <span className="preview-icon">
+                <Icon name={row.icon} />
+              </span>
+              <div className="preview-info">
+                <strong>{row.name}</strong>
+                <small>
+                  {row.tier} · {row.kind.toUpperCase()}
+                </small>
               </div>
-              <div className="preview-stamp">
-                <Icon name={conflicts ? 'alert' : 'check-circle'} /> {conflicts} detected conflict
-                {conflicts === 1 ? '' : 's'}
-              </div>
+              <span className="preview-price">{row.price}</span>
             </div>
+          ))}
+        </div>
+        <div className="preview-footer">
+          <div>
+            <strong title={total.note}>
+              {total.text}
+              {total.qualifier ? <small> {total.qualifier}</small> : null}
+            </strong>
+            <small> Illustrative baseline</small>
           </div>
-          <div className="float-chip right">
-            <Icon name="check-circle" /> Checked against the ruleset
+          <div className="preview-stamp">
+            <Icon name={statusIcon} /> {status}
           </div>
         </div>
       </div>
-    </section>
+      <div className="float-chip right">
+        <Icon name={statusIcon} /> {report ? 'Checked against the ruleset' : status}
+      </div>
+    </div>
   );
 }
 
@@ -228,6 +247,8 @@ function StarterCard({ starter, index }: { starter: Starter; index: number }) {
 }
 
 function Templates() {
+  const { mode } = useData();
+  if (mode !== 'fixture') return null;
   return (
     <section className="section templates" id="templates">
       <div className="container">

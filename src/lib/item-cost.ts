@@ -93,6 +93,10 @@ export function itemPrice(
   if (item.billing_class === 'unknown') return { ...UNKNOWN, currency };
   if (!build || !pricebook) return { ...UNKNOWN, currency };
 
+  if (build.locks.pricebook_id && pricebook.id !== build.locks.pricebook_id) {
+    return { ...UNKNOWN, currency, note: 'The locked pricebook is unavailable.' };
+  }
+
   const probe = probeBuild(item, build, catalog, selected);
   const selection = probe.selections[0];
   if (!selection) return { ...UNKNOWN, currency };

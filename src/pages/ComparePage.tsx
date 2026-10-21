@@ -109,8 +109,8 @@ function ComponentCompare() {
   const [params, setParams] = useSearchParams();
   const toast = useToast();
   const catalog = useCatalog();
-  const pricebook = usePricebook();
   const { draft, apply, catalogById } = useBuilder();
+  const pricebook = usePricebook(draft?.build.locks.pricebook_id);
 
   const explicitTier = tierFromParam(params.get('layer'));
   const requestedIds = params.has('ids') ? parseIds(params.get('ids')).slice(0, SLOTS) : null;

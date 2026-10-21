@@ -286,7 +286,7 @@ export default function BuilderPage() {
   const { draft, ready, apply, startNew, restore, saveState, lastChange } = useBuilder();
   const { mode } = useData();
   const catalog = useCatalog();
-  const pricebook = usePricebook();
+  const pricebook = usePricebook(draft?.build.locks.pricebook_id);
   const ruleset = useRuleset();
   const build = draft?.build;
   const analysis = useBuildAnalysis(build);

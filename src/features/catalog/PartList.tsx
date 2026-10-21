@@ -75,7 +75,7 @@ export function PartList({
   const [params, setParams] = useSearchParams();
   const { draft, apply } = useBuilder();
   const catalog = useCatalog();
-  const pricebook = usePricebook();
+  const pricebook = usePricebook(draft?.build.locks.pricebook_id);
   const analysis = useBuildAnalysis(draft?.build);
   const ruleset = useRuleset();
 
