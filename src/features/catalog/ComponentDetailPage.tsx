@@ -75,7 +75,9 @@ export default function ComponentDetailPage() {
   const verification = strongestVerification(item);
   const inStack = Boolean(build?.selections.some((s) => s.catalog_item_id === item.id));
 
-  const verdict = options.data?.find((option) => option.catalog_item_id === item.id);
+  const verdict = options.isPlaceholderData
+    ? undefined
+    : options.data?.find((option) => option.catalog_item_id === item.id);
   const conflicts = verdict?.verdict === 'incompatible' ? Math.max(verdict.rule_ids.length, 1) : 0;
   const unknown = !verdict || verdict.verdict === 'unknown';
 

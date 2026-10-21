@@ -611,7 +611,8 @@ function FitCell({ item }: { item: CatalogItem }) {
   const options = useCompatibleOptions(draft?.build ?? null, item.kind);
   if (!draft) return <span className="cmp-empty">No build to check</span>;
   if (options.isError) return <span className="pchip pchip-unknown">Could not check</span>;
-  if (!options.data) return <span className="cmp-empty">Checking…</span>;
+  if (!options.data || options.isPlaceholderData)
+    return <span className="cmp-empty">Checking…</span>;
   const verdict = (options.data.find((o) => o.catalog_item_id === item.id)?.verdict ??
     'unknown') as Verdict;
   return <CompatChip verdict={verdict} />;
