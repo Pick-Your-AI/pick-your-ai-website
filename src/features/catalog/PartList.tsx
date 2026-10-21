@@ -211,7 +211,19 @@ export function PartList({
   const rows: Row[] = pool.map((item) => ({
     item,
     verdict: verdictFor(compat.data, item.kind, item.id),
-    price: itemPrice(item, build, byId, pricebook.data),
+    price: itemPrice(
+      item,
+      build,
+      byId,
+      pricebook.data,
+      replaceTarget
+        ? replaceTarget.catalog_item_id === item.id
+          ? replaceTarget
+          : null
+        : adding && kindDef(item.kind).cardinality === 'many'
+          ? null
+          : undefined,
+    ),
     tier: kindDef(item.kind).tier,
   }));
 
@@ -593,8 +605,7 @@ export function PartList({
                        * add-another mode a repeat is deliberate, so the button must say what it
                        * does — an enabled action labelled "In stack" contradicts itself.
                        */
-                      const settled =
-                        picked && !(adding && kindDef(item.kind).cardinality === 'many');
+                      const settled = addIsNoop(item);
                       return (
                         <tr
                           key={item.id}
@@ -700,9 +711,11 @@ export function PartList({
                                     ? `${item.name} is already selected; change its settings in the builder`
                                     : settled
                                       ? undefined
-                                      : picked
-                                        ? `${item.name} is already in your stack; this adds a second, separately configured selection`
-                                        : undefined
+                                      : replaceTarget
+                                        ? `${item.name} replaces the chosen slot with default settings`
+                                        : picked
+                                          ? `${item.name} is already in your stack; this adds a second, separately configured selection`
+                                          : undefined
                                 }
                                 onClick={() => add(item)}
                               >

@@ -18,7 +18,7 @@
  */
 import type { BuildSnapshot, CatalogItem, CostEstimate, Pricebook, Selection } from '../contracts';
 import { estimateCost } from '../domain/cost';
-import { addOrReplace } from '../domain/build';
+import { addOrReplace, defaultSettings } from '../domain/build';
 import { addDecimals } from '../domain/decimal';
 
 export interface ItemPrice {
@@ -64,16 +64,26 @@ function probeBuild(
   item: CatalogItem,
   build: BuildSnapshot,
   catalog: ReadonlyMap<string, CatalogItem>,
-  selection?: Selection,
+  selection?: Selection | null,
 ): BuildSnapshot {
   const base: BuildSnapshot = { ...build, id: `probe.${item.id}`, revision: 1, selections: [] };
-  const existing = selection ?? build.selections.find((s) => s.catalog_item_id === item.id);
+  const existing =
+    selection === null
+      ? undefined
+      : (selection ?? build.selections.find((s) => s.catalog_item_id === item.id));
   if (existing) {
     // Reuse the current selection verbatim: instances, region, budget and reserved hours all
     // change the projected quantity, so defaulting them here would misprice the row.
     return { ...base, selections: [{ ...existing, enabled: true }] };
   }
-  return addOrReplace(base, item, catalog);
+  const fresh = addOrReplace(base, item, catalog);
+  return {
+    ...fresh,
+    selections: fresh.selections.map((s) => ({
+      ...s,
+      settings: defaultSettings(build, item, catalog),
+    })),
+  };
 }
 
 /** Sum every line the estimator produced for this one selection. */
@@ -81,13 +91,13 @@ function linesFor(estimate: CostEstimate, selectionId: string) {
   return estimate.line_items.filter((line) => line.selection_id === selectionId);
 }
 
-/** Price of one catalog item under the given build objectives, policy and pricebook. */
+/** Price one item; selected=null previews fresh settings instead of an existing selection. */
 export function itemPrice(
   item: CatalogItem,
   build: BuildSnapshot | null | undefined,
   catalog: ReadonlyMap<string, CatalogItem>,
   pricebook: Pricebook | undefined,
-  selected?: Selection,
+  selected?: Selection | null,
 ): ItemPrice {
   const currency = build?.objectives.currency ?? 'USD';
   if (item.billing_class === 'unknown') return { ...UNKNOWN, currency };

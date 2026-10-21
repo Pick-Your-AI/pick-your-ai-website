@@ -16,8 +16,10 @@ import { DataContext } from '../../src/app/data-context';
 import type { BuildSnapshot, ComponentKind } from '../../src/contracts';
 import { createFixtureProviders } from '../../src/data/fixture/providers';
 import { addOrReplace, createDraft, setEnabled, updateSettings } from '../../src/domain/build';
+import { estimateCost } from '../../src/domain/cost';
+import { DEMO_PRICEBOOK } from '../../src/data/fixture/pricebook';
 import { PartList } from '../../src/features/catalog/PartList';
-import { BY_ID, NOW, buildWith, apiChat, item } from './scenarios';
+import { BY_ID, NOW, buildWith, apiChat, item, selfHosted } from './scenarios';
 
 vi.mock('../../src/app/builder-context', () => ({ useBuilder: vi.fn() }));
 
@@ -195,4 +197,48 @@ it('retains the catalog heading and retries a failed catalog request in place', 
   // Compatibility failed independently while the catalog was unavailable. Retry that too.
   await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
   await waitFor(() => expect(screen.queryByText('Catalog unavailable')).not.toBeInTheDocument());
+});
+
+it('prices an additional compute selection using the settings Add actually creates', async () => {
+  const profile = item('compute_profile', 'nimbus-1x-c24');
+  const original = selfHosted();
+  const selection = original.selections.find((s) => s.catalog_item_id === profile.id)!;
+  const build = updateSettings(original, selection.id, { ...selection.settings, instances: 3 });
+  const { apply } = show(build, '/catalog/compute-profile?add=1&show=all', 'compute_profile');
+  const row = await screen.findByRole('row', { name: new RegExp(profile.name) });
+  expect(within(row).getByText('$792', { exact: true })).toBeInTheDocument();
+  expect(row).not.toHaveTextContent('$2,376');
+  await userEvent.click(within(row).getByRole('button', { name: 'Add' }));
+  const [change] = apply.mock.calls[0] as [(b: BuildSnapshot) => BuildSnapshot];
+  const added = change(build).selections.at(-1)!;
+  const estimate = estimateCost({ ...build, selections: [added] }, BY_ID, DEMO_PRICEBOOK, {
+    now: NOW,
+  });
+  expect(estimate.total.amount).toBe('792.00');
+  expect(added.settings).toMatchObject({ instances: 1 });
+});
+
+it('prices replacement defaults instead of another slot using the same item', async () => {
+  const profile = item('compute_profile', 'nimbus-1x-c24');
+  const original = selfHosted();
+  const selection = original.selections.find((s) => s.catalog_item_id === profile.id)!;
+  let build = updateSettings(original, selection.id, { ...selection.settings, instances: 3 });
+  build = addOrReplace(build, item('compute_profile', 'nimbus-4x-c80'), BY_ID, {
+    additional: true,
+  });
+  const target = build.selections.at(-1)!;
+  const { apply } = show(
+    build,
+    `/catalog/compute-profile?replace=${target.id}&show=all`,
+    'compute_profile',
+  );
+  const row = await screen.findByRole('row', { name: new RegExp(profile.name) });
+  expect(within(row).getByText('$792', { exact: true })).toBeInTheDocument();
+  await userEvent.click(within(row).getByRole('button', { name: 'Add' }));
+  const [change] = apply.mock.calls[0] as [(b: BuildSnapshot) => BuildSnapshot];
+  const replaced = change(build).selections.find((s) => s.id === target.id)!;
+  expect(replaced.settings).toMatchObject({ instances: 1 });
+  expect(change(build).selections.find((s) => s.id === selection.id)?.settings).toMatchObject({
+    instances: 3,
+  });
 });

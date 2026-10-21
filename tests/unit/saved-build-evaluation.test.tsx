@@ -94,3 +94,47 @@ describe('saved-build evaluation', () => {
     );
   });
 });
+
+it.each(['loading', 'pricing failure', 'evaluation failure'])(
+  'keeps summary selections labelled honestly during %s',
+  async (state) => {
+    const build = selfHosted();
+    vi.mocked(useBuilder).mockReturnValue({
+      draft: null,
+      ready: true,
+      catalogById: new Map(),
+      lastChange: null,
+      saveState: { status: 'saved' },
+      apply: vi.fn(),
+      startNew: vi.fn(),
+      open: vi.fn(),
+      restore: vi.fn(),
+    });
+    const providers = createFixtureProviders({ now: () => NOW });
+    await providers.builds.save(createDraft(build), null);
+    if (state === 'loading')
+      vi.spyOn(providers.pricing, 'estimate').mockImplementation(() => new Promise(() => {}));
+    else if (state === 'pricing failure')
+      vi.spyOn(providers.pricing, 'estimate').mockRejectedValue(new Error('pricing unavailable'));
+    else
+      vi.spyOn(providers.compatibility, 'evaluate').mockRejectedValue(
+        new Error('evaluation unavailable'),
+      );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+    const view = render(
+      <QueryClientProvider client={client}>
+        <DataContext.Provider value={providers}>
+          <MemoryRouter>
+            <MyBuildsPage />
+          </MemoryRouter>
+        </DataContext.Provider>
+      </QueryClientProvider>,
+    );
+    const card = await screen.findByRole('article');
+    if (state !== 'loading') await waitFor(() => expect(client.isFetching()).toBe(0));
+    expect(card).toHaveTextContent(`${build.selections.length} selections`);
+    expect(card).not.toHaveTextContent('of 7 layers configured');
+    view.unmount();
+    client.clear();
+  },
+);

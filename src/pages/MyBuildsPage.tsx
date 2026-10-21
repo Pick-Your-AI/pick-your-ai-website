@@ -435,7 +435,7 @@ function SavedCard({
     }
   };
 
-  const layers = detail ? filledLayers(detail.build) : summary.selectionCount;
+  const layers = detail ? filledLayers(detail.build) : null;
   // Coverage-aware: a partial estimate reads as a lower bound, never as the full monthly price.
   const cost = costShort(detail?.cost);
 
@@ -457,7 +457,10 @@ function SavedCard({
           </p>
         ) : (
           <p>
-            Edited {formatDate(summary.updatedAt)} · {layers} of {LAYERS.length} layers configured
+            Edited {formatDate(summary.updatedAt)} ·{' '}
+            {layers === null
+              ? `${summary.selectionCount} selection${summary.selectionCount === 1 ? '' : 's'}`
+              : `${layers} of ${LAYERS.length} layers configured`}
           </p>
         )}
         {!unreadable ? (
