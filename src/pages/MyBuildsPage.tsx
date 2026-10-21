@@ -38,6 +38,14 @@ interface BuildDetail {
    */
   cost: CostEstimate;
   conflicts: number;
+  unknown: number;
+}
+
+function validationStatus(conflicts: number, unknown: number): string {
+  const statuses = [];
+  if (conflicts) statuses.push(`${conflicts} conflict${conflicts === 1 ? '' : 's'}`);
+  if (unknown) statuses.push(`${unknown} unknown`);
+  return statuses.join(' · ') || 'No conflicts';
 }
 
 const errorText = (e: unknown, fallback: string) =>
@@ -91,14 +99,13 @@ export default function MyBuildsPage() {
           if (isUnreadable(summary)) return;
           try {
             const stored = await builds.get(summary.id);
-            const [cost, report] = await Promise.all([
-              pricing.estimate(stored.build),
-              compatibility.evaluate(stored.build),
-            ]);
+            const cost = await pricing.estimate(stored.build);
+            const report = await compatibility.evaluate(stored.build, { costEstimate: cost });
             map.set(summary.id, {
               build: stored.build,
               cost,
               conflicts: report.summary.failed,
+              unknown: report.summary.unknown,
             });
           } catch {
             /* Left out of the map: the card falls back to the summary and stays deletable. */
@@ -191,7 +198,7 @@ export default function MyBuildsPage() {
 
   const workingTotal = analysis.costIsCurrent ? analysis.cost : undefined;
   const workingCost = costShort(workingTotal);
-  const workingConflicts = analysis.reportIsCurrent ? analysis.report?.summary.failed : undefined;
+  const workingSummary = analysis.reportIsCurrent ? analysis.report?.summary : undefined;
   const workingLayers = draft ? filledLayers(draft.build) : 0;
 
   return (
@@ -293,11 +300,9 @@ export default function MyBuildsPage() {
                   {workingCost.qualifier ? ` ${workingCost.qualifier}` : ''}
                 </span>
                 <span>
-                  {workingConflicts === undefined
-                    ? 'Not checked'
-                    : workingConflicts
-                      ? `${workingConflicts} conflict${workingConflicts === 1 ? '' : 's'}`
-                      : 'No demo conflicts'}
+                  {workingSummary
+                    ? validationStatus(workingSummary.failed, workingSummary.unknown)
+                    : 'Not checked'}
                 </span>
                 <span>IN PROGRESS</span>
               </div>
@@ -467,11 +472,7 @@ function SavedCard({
             <div>
               <small>DEMO VALIDATION</small>
               <strong>
-                {detail
-                  ? detail.conflicts
-                    ? `${detail.conflicts} conflict${detail.conflicts === 1 ? '' : 's'}`
-                    : 'No conflicts'
-                  : 'Not checked'}
+                {detail ? validationStatus(detail.conflicts, detail.unknown) : 'Not checked'}
               </strong>
             </div>
           </div>
