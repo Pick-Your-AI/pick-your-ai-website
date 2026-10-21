@@ -445,7 +445,7 @@ function ComponentCompare() {
   ];
 
   const differs = (row: Row): boolean => {
-    if (!row.compare(filled[0]!) || row.key === 'fits' || row.key === 'add') return false;
+    if (row.key === 'fits' || row.key === 'add') return false;
     return new Set(filled.map(row.compare)).size > 1;
   };
 

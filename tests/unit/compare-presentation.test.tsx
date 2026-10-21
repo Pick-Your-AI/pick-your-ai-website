@@ -29,11 +29,26 @@ function UrlProbe() {
   return <output data-testid="url">{location.search}</output>;
 }
 
-function show(path: string) {
+function show(path: string, omitFirstDescription = false) {
   const first = { ...apiChat(), revision: 1 };
   const second = { ...first, revision: 2 };
   const draft = { ...createDraft(second), revisions: [first, second] };
   const providers = createFixtureProviders({ now: () => NOW });
+  if (omitFirstDescription) {
+    const snapshot = providers.catalog.getSnapshot.bind(providers.catalog);
+    vi.spyOn(providers.catalog, 'getSnapshot').mockImplementation(async () => {
+      const catalog = await snapshot();
+      return {
+        ...catalog,
+        items: catalog.items.map((item) => {
+          if (item.id !== 'demo.workload.support-chat') return item;
+          const copy = { ...item };
+          delete copy.description;
+          return copy;
+        }),
+      };
+    });
+  }
   vi.spyOn(providers.builds, 'get').mockImplementation(async (id) =>
     createDraft({ ...second, id }),
   );
@@ -69,6 +84,20 @@ const costRow = async () => {
 };
 
 describe('component comparison', () => {
+  it.each([
+    'demo~workload~support-chat,demo~workload~document-qa',
+    'demo~workload~document-qa,demo~workload~support-chat',
+  ])('marks absent and present descriptions as different in either order: %s', async (ids) => {
+    show(`/compare?ids=${ids}`, true);
+    const table = await screen.findByRole('table');
+    const row = within(table).getByRole('row', { name: /What it is/ });
+    expect(row).toHaveTextContent('No description recorded');
+    expect(row.querySelector('.diffmark')).not.toBeNull();
+    for (const cell of within(row).getAllByRole('cell').slice(0, 2)) {
+      expect(cell).toHaveClass('is-diff');
+    }
+  });
+
   it('keeps the lower-bound marker and the unpriced caveat', async () => {
     // Aurora Mini's output-token rate is expired, so its support-chat price is a lower bound.
     show('/compare?ids=demo~model~aurora-mini,demo~model~aurora-large');
