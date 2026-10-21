@@ -103,7 +103,8 @@ describe('catalog selection actions', () => {
     const build = updateSettings(withTool(), 'sel_tool', { permissions: 'read-only' });
     const { apply } = show(build, '/catalog/tool?show=all&add=1');
     const row = await screen.findByRole('row', { name: /Demo Web Search/ });
-    const button = within(row).getByRole('button', { name: /Add|In stack/ });
+    // The button must name the operation: an enabled "In stack" label contradicts itself.
+    const button = within(row).getByRole('button', { name: 'Add' });
     expect(button).toBeEnabled();
     await userEvent.click(button);
     const [change] = apply.mock.calls[0] as [(b: BuildSnapshot) => BuildSnapshot];

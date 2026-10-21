@@ -77,6 +77,10 @@ test('builder: a many-kind selection offers an add-another path that appends', a
 
   await expect(page).toHaveURL(/\/catalog\/tool\?add=1/);
   await expect(page.getByText(/Adding an additional component/i)).toBeVisible();
+  // The default filter hides incompatible candidates by design (research §4.1), and Ticket Writer
+  // needs guardrails, so continue on the explicit all-buckets view — otherwise the row can vanish
+  // mid-click once the verdicts land and the test races the compatibility query.
+  await page.goto('/catalog/tool?show=all&add=1');
   await page
     .getByRole('row', { name: /Demo Ticket Writer/ })
     .getByRole('button', { name: 'Add' })

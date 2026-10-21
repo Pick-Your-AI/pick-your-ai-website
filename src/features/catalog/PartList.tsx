@@ -587,6 +587,13 @@ export function PartList({
                       const logo = itemLogo(item);
                       const picked = inStack(item);
                       const comparing = selectedIds.includes(item.id);
+                      /*
+                       * A picked row is only "settled" when re-adding it would be a no-op. In
+                       * add-another mode a repeat is deliberate, so the button must say what it
+                       * does — an enabled action labelled "In stack" contradicts itself.
+                       */
+                      const settled =
+                        picked && !(adding && kindDef(item.kind).cardinality === 'many');
                       return (
                         <tr
                           key={item.id}
@@ -677,7 +684,7 @@ export function PartList({
                               <button
                                 type="button"
                                 className={
-                                  picked
+                                  settled
                                     ? 'pbtn pbtn-selected'
                                     : verdict === 'incompatible'
                                       ? 'pbtn pbtn-blocked'
@@ -687,20 +694,24 @@ export function PartList({
                                 title={
                                   addIsNoop(item)
                                     ? `${item.name} is already selected; change its settings in the builder`
-                                    : undefined
+                                    : settled
+                                      ? undefined
+                                      : picked
+                                        ? `${item.name} is already in your stack; this adds a second, separately configured selection`
+                                        : undefined
                                 }
                                 onClick={() => add(item)}
                               >
                                 <Icon
                                   name={
-                                    picked
+                                    settled
                                       ? 'check'
                                       : verdict === 'incompatible'
                                         ? 'x-circle'
                                         : 'plus'
                                   }
                                 />
-                                {picked ? 'In stack' : 'Add'}
+                                {settled ? 'In stack' : 'Add'}
                               </button>
                             </div>
                           </td>
