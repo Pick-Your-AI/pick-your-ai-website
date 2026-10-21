@@ -2,14 +2,16 @@
 
 ## Identity
 
-The site has its own original identity: deep teal (`brand-700 #0f766e`), slate neutrals and a single amber accent (`#f59e0b`). The logo and favicon are hand-made SVG. The illustrations were generated with Codex (see `ASSETS.md`). Nothing is copied from PCPartPicker, whose interaction patterns we take only from `research/pcpartpicker-ux-notes.md` as ADOPT/ADAPT items.
+The local ASCII study uses warm paper, ink and deep teal (`brand-700 #0f766e`), with amber retained in the original SVG mark. The homepage and empty builder use original character-rendered 3D stacks. The references are shitty-prompts.com and polymathic.mov; their code and artwork are not copied. See `ASCII_ART_DIRECTION.md` for the brief and current review status.
 
-## Tokens (`src/styles/index.css`)
+The logo and favicon remain hand-made SVG. Earlier raster assets remain on disk with provenance in `ASSETS.md`. Nothing is copied from PCPartPicker, whose interaction patterns we take only from `research/pcpartpicker-ux-notes.md` as ADOPT/ADAPT items.
 
-- Colours: `brand-50…950`, `accent-400…600`, and Tailwind slate/emerald/red/amber/sky/violet for status.
-- Type: system UI stack plus a monospace stack for ids. Numbers use `.tabular` (tabular numerals).
+## Tokens (`src/styles/index.css`, `src/styles/art-direction.css`)
+
+- Colours: paper `#f8f6ef`, ink `#202922`, teal `#0f766e`; dark paper `#111713`, ink `#e8e9de`, signal `#91d7bd`. Slate tokens follow the paper/ink palette; emerald/red/amber/sky/violet remain available for explicit statuses.
+- Type: Helvetica/system sans for display and body, system monospace for labels and ids. Numbers use `.tabular` (tabular numerals). Display size, scene height and all palette values are CSS variables for live art direction.
 - Dark mode: the `.dark` class on `<html>`, toggled from the header and stored in `pyai.theme`. It defaults to `prefers-color-scheme`.
-- Motion: minimal. All animation and transition is disabled under `prefers-reduced-motion`.
+- Motion: the ASCII hero rotates at a capped 12 frames per second, only while onscreen and visible. It has pause and assemble/explode controls. Reduced motion selects a still frame and disables rotation. Other animation and transition is disabled under `prefers-reduced-motion`.
 
 ## Component library
 

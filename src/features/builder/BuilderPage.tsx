@@ -6,12 +6,14 @@ import { useBuilder } from '../../app/builder-context';
 import { useBuildAnalysis, useCatalog } from '../../app/queries';
 import { ErrorState, Loading } from '../../components/feedback';
 import { PageHeader } from '../../components/layout';
-import emptyArt from '../../assets/images/builder-empty-480.webp';
+import { renderStack } from '../../lib/ascii-stack';
 import { BuilderTable } from './BuilderTable';
 import { BuildToolbar } from './BuildToolbar';
 import { FindingsList } from './FindingsList';
 import { ObjectivesForm } from './ObjectivesForm';
 import { OverallStrip, SummaryPanel } from './SummaryPanel';
+
+const EMPTY_STACK_ART = renderStack({ columns: 48, rows: 32, rotation: 0.62, spread: 0.5 });
 
 /** Announces compatibility changes to screen readers after each revision is evaluated. */
 function useAnnouncement(
@@ -121,7 +123,9 @@ export default function BuilderPage() {
           ) : null}
           {build.selections.length === 0 ? (
             <div className="card flex flex-col items-center gap-4 p-6 text-center sm:flex-row sm:text-left">
-              <img src={emptyArt} alt="" width={160} height={145} className="h-auto w-40" />
+              <pre className="builder-empty-art" aria-hidden="true">
+                {EMPTY_STACK_ART}
+              </pre>
               <div>
                 <p className="text-lg font-semibold">Start your stack</p>
                 <p className="muted mt-1 text-sm">

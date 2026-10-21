@@ -19,7 +19,7 @@ function Logo() {
   return (
     <Link
       to="/"
-      className="flex items-center gap-2 rounded font-semibold tracking-tight"
+      className="site-wordmark flex items-center gap-2 font-semibold tracking-tight"
       aria-label="PickYour.AI home"
     >
       <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true">
@@ -34,7 +34,7 @@ function Logo() {
         <circle cx="23" cy="22" r="2.5" fill="#fbbf24" />
       </svg>
       <span className="text-lg">
-        PickYour<span className="text-brand-700 dark:text-brand-400">.AI</span>
+        pickyour<span className="text-brand-700 dark:text-brand-400">.ai</span>
       </span>
     </Link>
   );
@@ -72,16 +72,11 @@ export function DemoBanner() {
   const { mode } = useData();
   if (mode !== 'fixture') return null;
   return (
-    <div
-      role="note"
-      aria-label="Demo mode"
-      className="border-b border-violet-300 bg-violet-50 px-4 py-2 text-center text-sm text-violet-950 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-100"
-    >
-      <strong className="font-semibold">Demo mode:</strong> every component, price and compatibility
-      result on this site is <strong>synthetic demonstration data</strong> — not real products,
-      quotes or measurements.{' '}
+    <div role="note" aria-label="Demo mode" className="demo-banner">
+      <span className="demo-marker">PREVIEW</span> Components, prices and results use{' '}
+      <strong>synthetic demonstration data</strong>.{' '}
       <Link to="/methodology#data" className="underline underline-offset-2">
-        Why?
+        About the data ↗
       </Link>
     </div>
   );
@@ -112,8 +107,8 @@ function Header() {
         : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
     }`;
   return (
-    <header className="no-print border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-      <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-2">
+    <header className="app-header no-print border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      <div className="header-inner mx-auto flex max-w-7xl items-center gap-4 px-4 py-2">
         <Logo />
         <nav aria-label="Primary" className="ml-4 hidden flex-1 items-center gap-1 lg:flex">
           {NAV.map((n) => (
@@ -165,7 +160,7 @@ function Header() {
 
 function Footer() {
   return (
-    <footer className="no-print mt-16 border-t border-slate-200 bg-white px-4 py-8 text-sm dark:border-slate-800 dark:bg-slate-900">
+    <footer className="app-footer no-print mt-16 border-t border-slate-200 bg-white px-4 py-8 text-sm dark:border-slate-800 dark:bg-slate-900">
       <div className="mx-auto grid max-w-7xl gap-6 md:grid-cols-3">
         <div>
           <p className="font-semibold">PickYour.AI</p>
@@ -277,7 +272,7 @@ export function PageHeader({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div className="workspace-page-header border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
       <div className="mx-auto max-w-7xl px-4 py-6">
         {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
         <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">{title}</h1>
