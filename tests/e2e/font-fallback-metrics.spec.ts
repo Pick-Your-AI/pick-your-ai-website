@@ -80,6 +80,10 @@ test('fallback faces match the webfonts closely enough to swap without reflow', 
       }[] = [];
 
       for (const pair of pairs) {
+        // fonts.ready only waits for faces already in use. Load the measured face explicitly:
+        // an optional mono font may not have been requested by the home page yet.
+        await document.fonts.load(`400 100px ${pair.web}`, samples.join(' '));
+        await document.fonts.load(`400 100px ${pair.fallback}`, samples.join(' '));
         let worstWidthError = 0;
         let fallbackWorst = 0;
         let genericWorst = 0;

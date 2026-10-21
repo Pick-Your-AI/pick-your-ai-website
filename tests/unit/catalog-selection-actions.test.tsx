@@ -7,7 +7,7 @@
  * path the builder links to.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
@@ -21,7 +21,12 @@ import { BY_ID, NOW, buildWith, apiChat, item } from './scenarios';
 
 vi.mock('../../src/app/builder-context', () => ({ useBuilder: vi.fn() }));
 
-function show(build: BuildSnapshot, path: string, kind: ComponentKind = 'tool') {
+function show(
+  build: BuildSnapshot,
+  path: string,
+  kind: ComponentKind = 'tool',
+  configure?: (providers: ReturnType<typeof createFixtureProviders>) => void,
+) {
   const apply = vi.fn();
   vi.mocked(useBuilder).mockReturnValue({
     draft: createDraft(build),
@@ -36,6 +41,7 @@ function show(build: BuildSnapshot, path: string, kind: ComponentKind = 'tool') 
   });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   const providers = createFixtureProviders({ now: () => NOW });
+  configure?.(providers);
   const compatibleOptions = vi.spyOn(providers.compatibility, 'compatibleOptions');
   const view = render(
     <QueryClientProvider client={client}>
@@ -169,4 +175,24 @@ describe('catalog selection actions', () => {
     expect(tools).toHaveLength(1);
     expect(tools[0]!.catalog_item_id).toBe('demo.tool.ticket-writer');
   });
+});
+
+it('retains the catalog heading and retries a failed catalog request in place', async () => {
+  let failed = true;
+  show(apiChat(), '/catalog/model', 'model', (providers) => {
+    const original = providers.catalog.getSnapshot.bind(providers.catalog);
+    vi.spyOn(providers.catalog, 'getSnapshot').mockImplementation((id) =>
+      failed ? Promise.reject(new Error('Catalog unavailable')) : original(id),
+    );
+  });
+  const catalogAlert = await screen.findByRole('alert');
+  expect(catalogAlert).toHaveTextContent('Catalog unavailable');
+  expect(screen.getByRole('heading', { level: 1, name: 'Choose an AI model' })).toBeInTheDocument();
+  failed = false;
+  await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  expect(await screen.findByRole('table')).toBeInTheDocument();
+  await waitFor(() => expect(catalogAlert).not.toBeInTheDocument());
+  // Compatibility failed independently while the catalog was unavailable. Retry that too.
+  await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  await waitFor(() => expect(screen.queryByText('Catalog unavailable')).not.toBeInTheDocument());
 });

@@ -139,16 +139,6 @@ export function PartList({
   const ctx = useMemo(() => (build ? buildContext(build, byId) : undefined), [build, byId]);
   const cov = useMemo(() => (build && ctx ? coverage(build, ctx) : undefined), [build, ctx]);
 
-  if (catalog.isError)
-    return (
-      <div className="pnotice pnotice-fail">
-        <Icon name="x-circle" />
-        <span>
-          <strong>Could not load the catalog.</strong>{' '}
-          {catalog.error instanceof Error ? catalog.error.message : 'Unknown error'}
-        </span>
-      </div>
-    );
   /*
    * Paint the page identity before the catalog resolves. The parts table needs data, but the
    * heading, breadcrumb and actions do not — and holding all of it back delayed first paint by the
@@ -196,6 +186,14 @@ export function PartList({
       }
     />
   );
+
+  if (catalog.isError)
+    return (
+      <>
+        {head}
+        <ErrorState error={catalog.error} onRetry={() => void catalog.refetch()} />
+      </>
+    );
 
   if (!catalog.data || !build || !ctx || !cov)
     return (
