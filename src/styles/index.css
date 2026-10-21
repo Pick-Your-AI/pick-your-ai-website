@@ -205,8 +205,17 @@ html.light .control-input {
     display: none !important;
   }
   body {
-    background: #fff;
-    color: #000;
+    background: #fff !important;
+  }
+  body,
+  body * {
+    color: #000 !important;
+    border-color: #777 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+  body * {
+    background: transparent !important;
   }
 }
 
@@ -1007,4 +1016,16 @@ html.light .detail-buy .status-bar.issue {
 .preview-tag {
   flex: none;
   margin-left: 10px;
+}
+
+/* No compatibility verdict exists until the current evaluation arrives. */
+.compat-panel.neutral {
+  background: var(--surface);
+  border-color: var(--line2);
+}
+.compat-panel.neutral .compat-title {
+  color: var(--text);
+}
+.compat-panel.neutral p {
+  color: var(--muted);
 }

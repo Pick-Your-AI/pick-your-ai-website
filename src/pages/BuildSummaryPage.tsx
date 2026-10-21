@@ -141,19 +141,21 @@ export default function BuildSummaryPage() {
         ) : null}
 
         <div
-          className={`compat-panel${outcome === 'fail' && !incomplete ? ' danger' : outcome === 'unknown' || incomplete ? ' warning' : ''}`}
+          className={`compat-panel${!report ? ' neutral' : outcome === 'fail' && !incomplete ? ' danger' : outcome === 'unknown' || incomplete ? ' warning' : ''}`}
           data-testid="overall-status"
         >
           <div className="compat-title">
             <Icon
               name={
-                incomplete
-                  ? 'alert'
-                  : outcome === 'fail'
-                    ? 'x-circle'
-                    : outcome === 'unknown'
-                      ? 'alert'
-                      : 'check-circle'
+                !report
+                  ? 'info'
+                  : incomplete
+                    ? 'alert'
+                    : outcome === 'fail'
+                      ? 'x-circle'
+                      : outcome === 'unknown'
+                        ? 'alert'
+                        : 'check-circle'
               }
             />
             <strong>
