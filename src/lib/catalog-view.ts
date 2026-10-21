@@ -188,5 +188,5 @@ export function rowSubtitle(item: CatalogItem): string {
     if (text.includes(' ') || text.length > 6) return text;
   }
 
-  return item.license?.spdx_id?.replace('LicenseRef-', '') ?? '';
+  return item.license?.spdx_id ?? '';
 }

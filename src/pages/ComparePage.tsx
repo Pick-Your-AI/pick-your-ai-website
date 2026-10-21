@@ -83,7 +83,7 @@ function deploymentPath(item: CatalogItem): string {
 
 function licenceLine(item: CatalogItem): string {
   if (!item.license) return 'No licence recorded';
-  const spdx = item.license.spdx_id?.replace('LicenseRef-', '') ?? 'Licensed';
+  const spdx = item.license.spdx_id ?? 'Licensed';
   const parts = [spdx];
   if (item.license.self_hosting_allowed === false) parts.push('no self-hosting');
   if (item.license.commercial_use_allowed === false) parts.push('no commercial use');

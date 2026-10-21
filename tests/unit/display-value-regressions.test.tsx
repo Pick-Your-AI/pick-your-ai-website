@@ -31,6 +31,13 @@ describe('contract display values', () => {
       'API, On-premises',
     );
   });
+  it('preserves the full custom licence identifier in catalog subtitles', () => {
+    const component = structuredClone(item('workload', 'support-chat'));
+    component.spec = {} as typeof component.spec;
+    component.license = { spdx_id: 'LicenseRef-MIT' };
+    expect(rowSubtitle(component)).toBe('LicenseRef-MIT');
+  });
+
   it('labels unresolved compute accelerators generically', () => {
     const profile = structuredClone(item('compute_profile', 'nimbus-1x-c24'));
     profile.spec = {

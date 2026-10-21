@@ -12,6 +12,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
+import { assertContract } from '../../src/contracts/validation';
 import { DataContext } from '../../src/app/data-context';
 import { ToastProvider } from '../../src/components/feedback';
 import { createFixtureProviders } from '../../src/data/fixture/providers';
@@ -29,7 +30,7 @@ function UrlProbe() {
   return <output data-testid="url">{location.search}</output>;
 }
 
-function show(path: string, omitFirstDescription = false) {
+function show(path: string, omitFirstDescription = false, customLicenseComparison = false) {
   const first = { ...apiChat(), revision: 1 };
   const second = { ...first, revision: 2 };
   const draft = { ...createDraft(second), revisions: [first, second] };
@@ -47,6 +48,26 @@ function show(path: string, omitFirstDescription = false) {
           return copy;
         }),
       };
+    });
+  }
+  if (customLicenseComparison) {
+    const snapshot = providers.catalog.getSnapshot.bind(providers.catalog);
+    vi.spyOn(providers.catalog, 'getSnapshot').mockImplementation(async () => {
+      const catalog = await snapshot();
+      return assertContract('CatalogSnapshot', {
+        ...catalog,
+        items: catalog.items.map((item) =>
+          ['demo.workload.support-chat', 'demo.workload.document-qa'].includes(item.id)
+            ? {
+                ...item,
+                billing_class: 'free',
+                license: {
+                  spdx_id: item.id === 'demo.workload.support-chat' ? 'MIT' : 'LicenseRef-MIT',
+                },
+              }
+            : item,
+        ),
+      });
     });
   }
   vi.spyOn(providers.builds, 'get').mockImplementation(async (id) =>
@@ -96,6 +117,15 @@ describe('component comparison', () => {
     for (const cell of within(row).getAllByRole('cell').slice(0, 2)) {
       expect(cell).toHaveClass('is-diff');
     }
+  });
+
+  it('distinguishes a custom license reference from the matching standard identifier', async () => {
+    show('/compare?ids=demo~workload~support-chat,demo~workload~document-qa', false, true);
+    const table = await screen.findByRole('table');
+    const row = within(table).getByRole('row', { name: /Licence/ });
+    expect(within(row).getByText('MIT', { exact: true })).toBeInTheDocument();
+    expect(within(row).getByText('LicenseRef-MIT', { exact: true })).toBeInTheDocument();
+    expect(row.querySelector('.diffmark')).not.toBeNull();
   });
 
   it('keeps the lower-bound marker and the unpriced caveat', async () => {
