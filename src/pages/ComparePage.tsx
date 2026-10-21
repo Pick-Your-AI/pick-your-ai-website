@@ -183,7 +183,11 @@ function ComponentCompare() {
     setParams(search, { replace: true });
   };
 
+  const isSelected = (item: CatalogItem) =>
+    Boolean(draft?.build.selections.some((selection) => selection.catalog_item_id === item.id));
+
   const applyItem = (item: CatalogItem) => {
+    if (!draft || isSelected(item)) return;
     apply((build) => addOrReplace(build, item, catalogById), `Added ${item.name} from compare`, [
       item.kind,
     ]);
@@ -388,8 +392,14 @@ function ComponentCompare() {
         <button
           className="pbtn pbtn-add"
           type="button"
-          disabled={!draft}
-          title={draft ? undefined : 'Open a build before adding components'}
+          disabled={!draft || isSelected(item)}
+          title={
+            isSelected(item)
+              ? 'This component is already selected'
+              : draft
+                ? undefined
+                : 'Open a build before adding components'
+          }
           onClick={() => applyItem(item)}
         >
           <Icon name="plus" /> Use this part

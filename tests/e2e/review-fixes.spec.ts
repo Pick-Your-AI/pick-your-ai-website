@@ -219,3 +219,55 @@ test('templates: an incomplete starter estimate reads as a lower bound', async (
   await expect(card).toContainText('≥ $188.25');
   await expect(card).toContainText('lower bound');
 });
+
+test('selected model keeps its settings when revisited in compare and detail', async ({ page }) => {
+  await page.goto('/catalog/model/demo~model~aurora-large');
+  await page.getByRole('button', { name: /Add to my stack/ }).click();
+  await expect(page.getByRole('button', { name: /In your build/ })).toBeDisabled();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const id = localStorage.getItem('pyai.currentBuildId');
+        return id ? localStorage.getItem(`pyai.build.${id}`) : null;
+      }),
+    )
+    .not.toBeNull();
+  const original = await page.evaluate(() => {
+    const id = localStorage.getItem('pyai.currentBuildId')!;
+    const key = `pyai.build.${id}`;
+    const stored = JSON.parse(localStorage.getItem(key)!);
+    stored.build.selections.find(
+      (s: { catalog_item_id: string }) => s.catalog_item_id === 'demo.model.aurora-large',
+    ).settings.temperature = 0.37;
+    localStorage.setItem(key, JSON.stringify(stored));
+    return stored.build;
+  });
+  await page.goto('/compare?ids=demo~model~aurora-large');
+  await expect(page.getByRole('button', { name: 'Use this part' })).toBeDisabled();
+  await page.goto('/catalog/model/demo~model~aurora-large');
+  await expect(page.getByRole('button', { name: /In your build/ })).toBeDisabled();
+  const saved = await page.evaluate(() => {
+    const id = localStorage.getItem('pyai.currentBuildId')!;
+    return JSON.parse(localStorage.getItem(`pyai.build.${id}`)!).build;
+  });
+  expect(saved).toEqual(original);
+});
+
+test('builder announces the storage failure and its explanation', async ({ page }) => {
+  await page.addInitScript(() => {
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key.startsWith('pyai.build.'))
+        throw new DOMException('Storage unavailable', 'QuotaExceededError');
+      setItem.call(this, key, value);
+    };
+  });
+  await page.goto('/builder');
+  await page.getByRole('textbox', { name: 'Build name' }).fill('Unsaved build');
+  await page.getByRole('textbox', { name: 'Build name' }).press('Tab');
+  const status = page.getByRole('status').filter({ hasText: 'Not saved:' });
+  await expect(status).toBeVisible();
+  await expect(status).toHaveAttribute('aria-live', 'polite');
+  await expect(status).toHaveAttribute('aria-atomic', 'true');
+  await expect(status).toContainText(/storage|save|persist/i);
+});

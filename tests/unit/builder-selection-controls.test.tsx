@@ -30,7 +30,11 @@ import { BY_ID, NOW, apiChat, item } from './scenarios';
 
 vi.mock('../../src/app/builder-context', () => ({ useBuilder: vi.fn() }));
 
-function show(build: BuildSnapshot, draft: BuildDraft = createDraft(build)) {
+function show(
+  build: BuildSnapshot,
+  draft: BuildDraft = createDraft(build),
+  saveState: ReturnType<typeof useBuilder>['saveState'] = { status: 'saved' },
+) {
   const apply = vi.fn();
   const restore = vi.fn();
   vi.mocked(useBuilder).mockReturnValue({
@@ -38,7 +42,7 @@ function show(build: BuildSnapshot, draft: BuildDraft = createDraft(build)) {
     ready: true,
     catalogById: BY_ID,
     lastChange: null,
-    saveState: { status: 'saved' },
+    saveState,
     apply,
     startNew: vi.fn(),
     open: vi.fn(),
@@ -60,6 +64,19 @@ function show(build: BuildSnapshot, draft: BuildDraft = createDraft(build)) {
 }
 
 describe('builder selection controls', () => {
+  it.each([
+    'Browser storage is unavailable.',
+    'This build changed in another tab. Reload it before saving.',
+  ])('announces and displays the save failure: %s', async (message) => {
+    const build = apiChat();
+    show(build, createDraft(build), { status: 'error', message });
+    const status = await screen.findByText(`Not saved: ${message}`);
+    expect(status).toHaveAttribute('role', 'status');
+    expect(status).toHaveAttribute('aria-live', 'polite');
+    expect(status).toHaveAttribute('aria-atomic', 'true');
+    expect(status).toBeVisible();
+  });
+
   it('keeps a disabled selection visible and re-enableable', async () => {
     const build = setEnabled(apiChat(), 'sel_model', false);
     const { apply } = show(build);

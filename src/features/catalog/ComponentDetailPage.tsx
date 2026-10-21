@@ -88,6 +88,7 @@ export default function ComponentDetailPage() {
     .join(',')}`;
 
   const add = () => {
+    if (inStack) return;
     if (!build) {
       toast('Your stack is still loading.');
       return;
@@ -249,7 +250,13 @@ export default function ComponentDetailPage() {
                 Not a vendor quote. Runtime, traffic, usage, and region can change the real cost
                 significantly.
               </p>
-              <button className="btn btn-primary" type="button" onClick={add} disabled={!build}>
+              <button
+                className="btn btn-primary"
+                type="button"
+                onClick={add}
+                disabled={!build || inStack}
+                title={inStack ? 'This component is already selected' : undefined}
+              >
                 {inStack ? '✓ In your build' : 'Add to my stack →'}
               </button>
               <Link className="btn btn-outline" to={compareHref}>

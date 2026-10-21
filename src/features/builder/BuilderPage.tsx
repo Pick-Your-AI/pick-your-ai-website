@@ -583,6 +583,15 @@ export default function BuilderPage() {
           ]}
         />
 
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className={saveState?.status === 'error' ? 'pnotice pbox-save-error' : undefined}
+        >
+          {saveState?.status === 'error' ? `Not saved: ${saveState.message}` : ''}
+        </div>
+
         <p className="sr-only" aria-live="polite" role="status">
           {announcement}
         </p>
