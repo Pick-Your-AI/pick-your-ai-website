@@ -143,7 +143,6 @@ const VALUE_LABELS: Record<string, string> = {
   on_prem: 'On-premises',
   hybrid: 'Hybrid',
   local: 'Local',
-  both: 'API or local',
   gpu: 'GPU',
   cpu: 'CPU',
   generative: 'Generative',

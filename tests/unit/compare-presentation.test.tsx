@@ -30,8 +30,15 @@ function UrlProbe() {
 }
 
 function show(path: string) {
+  const first = { ...apiChat(), revision: 1 };
+  const second = { ...first, revision: 2 };
+  const draft = { ...createDraft(second), revisions: [first, second] };
+  const providers = createFixtureProviders({ now: () => NOW });
+  vi.spyOn(providers.builds, 'get').mockImplementation(async (id) =>
+    createDraft({ ...second, id }),
+  );
   vi.mocked(useBuilder).mockReturnValue({
-    draft: createDraft(apiChat()),
+    draft,
     ready: true,
     catalogById: BY_ID,
     lastChange: null,
@@ -44,7 +51,7 @@ function show(path: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return render(
     <QueryClientProvider client={client}>
-      <DataContext.Provider value={createFixtureProviders({ now: () => NOW })}>
+      <DataContext.Provider value={providers}>
         <MemoryRouter initialEntries={[path]}>
           <ToastProvider>
             <ComparePage />
@@ -139,5 +146,30 @@ describe('component comparison', () => {
     expect(screen.getAllByText('Empty slot')).toHaveLength(3);
     // The old behaviour deleted `ids`, so the defaults were seeded again after the clear.
     expect(screen.queryByRole('link', { name: 'Demo Aurora Large' })).toBeNull();
+  });
+});
+
+describe('evaluation coverage and build comparison structure', () => {
+  it('shows offline and online evaluation coverage in the comparison', async () => {
+    show('/compare?ids=demo~evaluation_suite~quality-gate');
+    const table = await screen.findByRole('table');
+    expect(within(table).getByRole('row', { name: /^Mode / })).toHaveTextContent('Both');
+    expect(table).not.toHaveTextContent('API or local');
+  });
+
+  it.each([
+    '/compare?revisions=1,2',
+    '/compare?builds=build.test.a,build.test.b',
+    '/compare?revisions=1',
+    '/compare?builds=build.test.a',
+  ])('keeps one page heading and wrapper for %s', async (path) => {
+    const { container } = show(path);
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole('heading', { level: 1, name: 'Compare builds' })).toBeInTheDocument();
+    expect(container.querySelector('.app-page.parts-page > .container')).not.toBeNull();
+    if (path.includes(',2') || path.includes(',build.')) {
+      await screen.findByRole('heading', { name: 'Estimated cost' });
+      expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    }
   });
 });

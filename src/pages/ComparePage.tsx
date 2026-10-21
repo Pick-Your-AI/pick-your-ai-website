@@ -99,10 +99,45 @@ export default function ComparePage() {
   const revisions = list(params.get('revisions'))
     .map((r) => Number(r))
     .filter((n) => Number.isInteger(n) && n > 0);
-  if (builds.length) return <SavedBuildsCompare ids={builds} />;
-  if (revisions.length) return <RevisionCompare revisions={revisions} />;
+  if (builds.length)
+    return (
+      <BuildComparePage>
+        <SavedBuildsCompare ids={builds} />
+      </BuildComparePage>
+    );
+  if (revisions.length)
+    return (
+      <BuildComparePage>
+        <RevisionCompare revisions={revisions} />
+      </BuildComparePage>
+    );
   if (params.get('mode') === 'builds') return <CompareStart />;
   return <ComponentCompare />;
+}
+
+function BuildComparePage({ children }: { children: ReactNode }) {
+  return (
+    <div className="app-page parts-page">
+      <div className="container">
+        <PartsHead
+          crumbs={
+            <>
+              <Link to="/">PickYour.AI</Link> <span>/</span> <Link to="/compare">Compare</Link>{' '}
+              <span>/</span> Builds
+            </>
+          }
+          title="Compare builds"
+          description="Compare selections, objectives, compatibility outcomes and estimated cost across two builds or revisions."
+          actions={
+            <Link className="pbtn" to="/compare?mode=builds">
+              Choose what to compare
+            </Link>
+          }
+        />
+        {children}
+      </div>
+    </div>
+  );
 }
 
 function ComponentCompare() {
