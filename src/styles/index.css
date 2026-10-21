@@ -997,6 +997,10 @@ html.light .detail-buy .status-bar {
 html.light .detail-buy .status-bar.issue {
   color: #922f2a;
 }
+.detail-buy .status-bar.neutral,
+html.light .detail-buy .status-bar.neutral {
+  color: var(--text);
+}
 
 /* The sort select needs room for the real option labels ("Recommended first"). */
 .filter-select {

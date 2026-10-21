@@ -264,7 +264,7 @@ export default function ComponentDetailPage() {
               <Link className="btn btn-outline" to={compareHref}>
                 Compare alternatives ↗
               </Link>
-              <div className={conflicts ? 'status-bar issue' : 'status-bar'}>
+              <div className={`status-bar${conflicts ? ' issue' : unknown ? ' neutral' : ''}`}>
                 <Icon name={conflicts ? 'x-circle' : unknown ? 'alert' : 'check-circle'} />
                 {conflicts
                   ? `${conflicts} demo conflict${conflicts === 1 ? '' : 's'} to review`
