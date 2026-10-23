@@ -93,3 +93,7 @@ shows the worst outcome and is styled as a warning whenever anything is unknown 
 - Target size: 24×24 minimum (2.5.8).
 - Mobile: the header collapses to a menu at 760 px, the builder's step list becomes a horizontal strip and its columns stack, directory rows become two-column cards. Verified at 390 px and 1440 px; widths of 320 px and up are supported.
 - Verification: axe (WCAG 2.0/2.1/2.2 A and AA tags) runs on every route on desktop and mobile in CI (`tests/e2e/smoke.spec.ts`).
+
+## ASCII review study
+
+The draft proposal is available at `/ascii-study`. Its paper/ink layout and motion controls are scoped under `.ascii-study` in `src/styles/art-direction.css`; the approved homepage, shell and parts registers retain their existing design. The study follows the shared light/dark toggle. See `ASCII_ART_DIRECTION.md` for historical evidence and review status.
