@@ -659,6 +659,7 @@ html.light .template-node small {
 .breadcrumb span {
   color: #93aab5;
 }
+.demo-banner a,
 .builder-meta a,
 .foot-disclaimer a {
   text-decoration: underline;
