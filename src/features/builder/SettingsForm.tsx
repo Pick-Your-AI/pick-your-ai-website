@@ -68,9 +68,7 @@ export function SettingsForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   if (!fields.length) {
-    return (
-      <p className="muted text-sm">This component has no configurable settings in contract v1.</p>
-    );
+    return <p className="muted">This component has no configurable settings in contract v1.</p>;
   }
 
   const submit = (e: FormEvent) => {
@@ -89,12 +87,7 @@ export function SettingsForm({
   };
 
   return (
-    <form
-      onSubmit={submit}
-      noValidate
-      aria-label="Component settings"
-      className="grid gap-3 sm:grid-cols-2"
-    >
+    <form onSubmit={submit} noValidate aria-label="Component settings" className="settings-grid">
       {fields.map((f) => {
         const id = `${formId}-${f.key}`;
         const errId = `${id}-err`;
@@ -105,7 +98,7 @@ export function SettingsForm({
         } as const;
         return (
           <div key={f.key}>
-            <label htmlFor={id} className="label">
+            <label htmlFor={id} className="field-label">
               {f.label}
               {f.required ? <span aria-hidden="true"> *</span> : null}
               {f.required ? <span className="sr-only"> (required)</span> : null}
@@ -113,7 +106,7 @@ export function SettingsForm({
             {f.type === 'enum' || f.type === 'boolean' ? (
               <select
                 {...common}
-                className="input"
+                className="control-input"
                 value={draft[f.key] ?? ''}
                 onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
               >
@@ -127,7 +120,7 @@ export function SettingsForm({
             ) : (
               <input
                 {...common}
-                className="input"
+                className="control-input"
                 inputMode={f.type === 'integer' || f.type === 'number' ? 'decimal' : undefined}
                 value={draft[f.key] ?? ''}
                 placeholder={
@@ -139,25 +132,25 @@ export function SettingsForm({
               />
             )}
             {f.type === 'string-array' || f.type === 'enum-array' ? (
-              <p className="hint">Comma-separated.</p>
+              <p className="hint-text">Comma-separated.</p>
             ) : null}
             {errors[f.key] ? (
-              <p id={errId} className="mt-1 text-xs font-medium text-red-800 dark:text-red-300">
+              <p id={errId} className="field-error">
                 {errors[f.key]}
               </p>
             ) : null}
           </div>
         );
       })}
-      <div className="flex gap-2 sm:col-span-2">
-        <button type="submit" className="btn-primary">
+      <div className="settings-actions">
+        <button type="submit" className="btn btn-primary">
           Apply settings
         </button>
-        <button type="button" className="btn-secondary" onClick={onCancel}>
+        <button type="button" className="btn btn-outline" onClick={onCancel}>
           Cancel
         </button>
       </div>
-      <p className="hint sm:col-span-2">
+      <p className="hint-text">
         Applying creates a new build revision and re-runs every affected check.
       </p>
     </form>

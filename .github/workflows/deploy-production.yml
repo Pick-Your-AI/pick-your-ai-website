@@ -3,6 +3,8 @@ name: Deploy production
 # Push to main → full CI (reused via workflow_call) → staged upload to GoDaddy → validate →
 # activate → verify https://pickyour.ai/version.json through Cloudflare → restore on failure.
 # workflow_dispatch: redeploy the current main commit, or roll back with rollback_to=<sha>.
+# Manual runs and re-runs touch production only when the triggering user is listed in the
+# DEPLOY_DISPATCHERS repository variable (comma-separated logins, admin-only to edit).
 # Runbook: docs/operations/deployment-runbook.md
 
 on:
@@ -27,7 +29,7 @@ jobs:
   deploy:
     name: deploy
     needs: ci
-    if: needs.ci.result == 'success' && github.ref == 'refs/heads/main'
+    if: needs.ci.result == 'success' && github.ref == 'refs/heads/main' && ((github.event_name == 'push' && github.triggering_actor == github.actor) || contains(format(',{0},', vars.DEPLOY_DISPATCHERS), format(',{0},', github.triggering_actor)))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment:
@@ -114,7 +116,7 @@ jobs:
 
   rollback:
     name: rollback
-    if: github.event_name == 'workflow_dispatch' && inputs.rollback_to != '' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && inputs.rollback_to != '' && github.ref == 'refs/heads/main' && ((github.event_name == 'push' && github.triggering_actor == github.actor) || contains(format(',{0},', vars.DEPLOY_DISPATCHERS), format(',{0},', github.triggering_actor)))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:

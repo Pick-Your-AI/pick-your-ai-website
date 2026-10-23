@@ -1,6 +1,8 @@
+import { specFields } from './schema-fields';
 import type { CatalogItem, ComponentKind } from '../contracts';
-import { kindSlug } from '../contracts';
+import { KIND_LABELS, kindSlug } from '../contracts';
 import { formatValue } from './schema-fields';
+import { layerOf } from './layers';
 
 /*
  * Catalog ids contain dots (e.g. demo.model.open-8b). The production server does not SPA-rewrite
@@ -70,9 +72,13 @@ export function specValue(item: CatalogItem, key: string): unknown {
 export function itemSummary(item: CatalogItem, max = 3): string {
   return KEY_FIELDS[item.kind]
     .slice(0, max)
-    .map((k) => specValue(item, k))
-    .filter((v) => v !== undefined)
-    .map((v) => formatValue(v))
+    .filter((k) => specValue(item, k) !== undefined)
+    .map((k) =>
+      formatValue(
+        specValue(item, k),
+        specFields(item.kind).find((f) => f.key === k),
+      ),
+    )
     .join(' · ');
 }
 
@@ -82,3 +88,105 @@ export const BILLING_LABELS: Record<CatalogItem['billing_class'], string> = {
   metered: 'Metered (usage-priced)',
   unknown: 'Unknown billing — not zero cost',
 };
+
+/**
+ * Short, informative subtitle for a catalog row: one real spec value with a compact label, e.g.
+ * "8,192 ctx", "24 GB VRAM", "3 regions". Used under a product name in the parts tables.
+ *
+ * Rules that keep it honest:
+ *  - only values the catalog actually records are shown (nothing is inferred);
+ *  - numeric specs win, because they are the most comparable thing on a parts list;
+ *  - single generic words ("USD", "Deploy", "GPU") are skipped rather than padded with filler;
+ *  - when nothing qualifies, the licence is used, and if that is absent the caller gets ''.
+ */
+const SPEC_SHORT: Record<string, string> = {
+  context_window_tokens: 'ctx',
+  max_allowed_tokens: 'max tokens',
+  vram_gb: 'GB VRAM',
+  requests_per_day: 'req/day',
+  accelerator_count: 'accelerators',
+  cpu_cores: 'cores',
+  ram_gb: 'GB RAM',
+  embedding_dimensions: 'dims',
+  max_dimensions: 'max dims',
+  example_count: 'examples',
+  retention_days: 'days',
+  max_gpu_hours: 'GPU-h',
+  rate_limit_per_minute: 'req/min',
+  alert_threshold_pct: 'alert',
+  concurrency: 'concurrent',
+  avg_input_tokens: 'in tokens',
+  avg_output_tokens: 'out tokens',
+  latency_budget_ms: 'ms budget',
+};
+
+/** Words that carry no distinguishing information in a list of same-kind products. */
+const LOW_SIGNAL = new Set([
+  'usd',
+  'eur',
+  'gbp',
+  'demo',
+  'deploy',
+  'block',
+  'gpu',
+  'cpu',
+  'agents',
+  'models',
+  'infrastructure',
+  'knowledge',
+  'deploy',
+  'api',
+  'yes',
+  'no',
+  'none',
+]);
+
+const isNumeric = (v: unknown) => typeof v === 'number' && Number.isFinite(v);
+
+export function rowSubtitle(item: CatalogItem): string {
+  const spec = item.spec as Record<string, unknown>;
+  const candidates = KEY_FIELDS[item.kind] ?? [];
+
+  // Pass 1: a number with a compact label is the most useful thing to show.
+  for (const key of candidates) {
+    const v = spec[key];
+    if (!isNumeric(v)) continue;
+    const short = SPEC_SHORT[key];
+    const value = (v as number).toLocaleString('en-US');
+    return short ? `${value} ${short}` : value;
+  }
+
+  // The subtitle must add information, not restate the kind or layer the row already shows.
+  const context = `${KIND_LABELS[item.kind]} ${layerOf(item.tier).name}`.toLowerCase();
+  const restates = (text: string) => {
+    const t = text.trim().toLowerCase();
+    return !t || LOW_SIGNAL.has(t) || context.includes(t);
+  };
+  // formatValue knows the acronym/enum wording ("api" -> "API"), so reuse it rather than guessing.
+  const word = (raw: string, key: string) =>
+    formatValue(
+      raw,
+      specFields(item.kind).find((f) => f.key === key),
+    );
+
+  // Pass 2: a short list of values ("text, structured") beats a single generic word.
+  for (const key of candidates) {
+    const v = spec[key];
+    if (!Array.isArray(v) || !v.length) continue;
+    const words = v.map((x) => word(String(x), key));
+    const joined = words.slice(0, 2).join(', ');
+    if (restates(words[0]!)) continue;
+    return joined;
+  }
+
+  // Pass 3: a multi-word enum still tells you something ("Hybrid (API + self-hosted)").
+  for (const key of candidates) {
+    const v = spec[key];
+    if (typeof v !== 'string' || !v.trim()) continue;
+    const text = word(v, key);
+    if (restates(text)) continue;
+    if (text.includes(' ') || text.length > 6) return text;
+  }
+
+  return item.license?.spdx_id ?? '';
+}

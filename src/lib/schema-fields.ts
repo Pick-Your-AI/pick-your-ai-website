@@ -66,7 +66,7 @@ const LABEL_OVERRIDES: Record<string, string> = {
 };
 
 export function humanize(key: string): string {
-  if (LABEL_OVERRIDES[key]) return LABEL_OVERRIDES[key]!;
+  if (Object.hasOwn(LABEL_OVERRIDES, key)) return LABEL_OVERRIDES[key]!;
   const s = key.replace(/_/g, ' ');
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
@@ -116,13 +116,70 @@ export function settingsFields(kind: ComponentKind): FieldDef[] {
   return fieldsFrom(selectionSchema as unknown as DefsSchema, `settings_${kind}`);
 }
 
-export function formatValue(value: unknown, field?: Pick<FieldDef, 'key'>): string {
+/** Enum values are identifiers in the contract; tables read better with sentence-case words. */
+const VALUE_LABELS: Record<string, string> = {
+  api: 'API',
+  api_endpoint: 'API endpoint',
+  api_only: 'API only',
+  mcp: 'MCP',
+  sql: 'SQL',
+  tls: 'TLS',
+  sso: 'SSO',
+  gdpr: 'GDPR',
+  vpc: 'VPC',
+  kms: 'KMS',
+  oidc: 'OIDC',
+  saml: 'SAML',
+  https: 'HTTPS',
+  json: 'JSON',
+  csv: 'CSV',
+  parquet: 'Parquet',
+  s3: 'S3',
+  gcs: 'GCS',
+  azure_blob: 'Azure Blob',
+  oss: 'Open source',
+  rag: 'RAG',
+  onprem: 'On-premises',
+  on_prem: 'On-premises',
+  hybrid: 'Hybrid',
+  local: 'Local',
+  gpu: 'GPU',
+  cpu: 'CPU',
+  generative: 'Generative',
+  embedding: 'Embedding',
+  restricted: 'Restricted',
+  confidential: 'Confidential',
+  internal: 'Internal',
+  public: 'Public',
+  text: 'Text',
+  structured: 'Structured',
+  image: 'Image',
+  audio: 'Audio',
+  video: 'Video',
+  chat: 'Chat',
+  agentic: 'Agentic',
+  asr: 'Speech-to-text',
+  tts: 'Text-to-speech',
+};
+
+const wordize = (raw: string): string => {
+  const key = raw.trim();
+  if (Object.hasOwn(VALUE_LABELS, key)) return VALUE_LABELS[key]!;
+  const spaced = key.replace(/_/g, ' ');
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+};
+
+export function formatValue(
+  value: unknown,
+  field?: Pick<FieldDef, 'key'> & Partial<Pick<FieldDef, 'type'>>,
+): string {
   if (value === undefined || value === null) return 'Not specified';
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value === 'number') {
     return field?.key.endsWith('_pct') ? `${value}%` : value.toLocaleString('en-US');
   }
-  if (Array.isArray(value))
-    return value.length ? value.map((v) => String(v).replace(/_/g, ' ')).join(', ') : 'None';
-  return String(value).replace(/_/g, ' ');
+  const format = (v: unknown) =>
+    field?.type === 'enum' || field?.type === 'enum-array' ? wordize(String(v)) : String(v);
+  if (Array.isArray(value)) return value.length ? value.map(format).join(', ') : 'None';
+  return format(value);
 }

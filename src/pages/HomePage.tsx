@@ -1,208 +1,508 @@
+/*
+ * Discover (home). Structure, copy and class names are ported from the approved design mock
+ * (`docs/design/pickyourai-complete.html`, `#homeScreen`); the numbers and component names come from the
+ * contract-driven demo catalog and the real preview estimator, never from the mock's placeholder
+ * dataset. Everything shown is synthetic demo data and is labelled as such.
+ */
+import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { KIND_LABELS, TIER_LABELS, TIER_SUMMARIES, TIERS, kindsInTier } from '../contracts';
+import { BASELINE_RULESET, KIND_LABELS, kindDef, kindsInTier } from '../contracts';
+import { useBuildAnalysis, useCatalog, usePricebook } from '../app/queries';
 import { useBuilder } from '../app/builder-context';
 import { useData } from '../app/data-context';
 import { STARTERS, type Starter } from '../data/fixture/starters';
-import { SyntheticBadge } from '../components/status';
-import { AsciiStack } from '../components/AsciiStack';
+import { itemPrice, costShort } from '../lib/item-cost';
+import { LAYERS } from '../lib/layers';
+import { Icon, type IconName } from '../components/icon';
+
+const STARTER_STYLE: Record<string, { icon: IconName; tone: string }> = {
+  'api-support-chat': { icon: 'message', tone: '' },
+  'self-hosted-one-gpu': { icon: 'cpu', tone: 'gold' },
+  'document-qa-rag': { icon: 'database', tone: 'blue' },
+  'ticket-triage-agent': { icon: 'workflow', tone: 'purple' },
+};
+
+const TIER_ICON: Record<string, IconName> = {
+  T0: 'list',
+  T1: 'brain',
+  T2: 'server',
+  T3: 'database',
+  T4: 'workflow',
+  T5: 'wand',
+  T6: 'chart',
+};
 
 function Hero() {
+  const navigate = useNavigate();
+  const { startNew } = useBuilder();
+  const { mode } = useData();
+
   return (
-    <section aria-labelledby="home-title" className="home-hero">
-      <div className="hero-copy">
-        <p className="editorial-label">
-          <span className="signal-dot" /> THE AI SYSTEM BUILDER / PREVIEW
-        </p>
-        <h1 id="home-title">
-          <span>Pick your </span>
-          <span>
-            AI stack<span className="hero-period">.</span>
-          </span>
-        </h1>
-        <p className="hero-subtitle">Make the pieces fit.</p>
-        <p className="hero-intro">
-          Models, infrastructure, knowledge, agents.
-          <br />
-          Build your system part by part. See what works together, what is missing, and what is
-          still unknown.
-        </p>
-        <div className="hero-actions">
-          <Link to="/builder" className="btn-primary hero-start">
-            Start a stack <span aria-hidden="true">↗</span>
-          </Link>
-          <Link to="/catalog" className="hero-browse">
-            Explore the catalog <span aria-hidden="true">→</span>
-          </Link>
+    <section className="hero" id="home">
+      <div className="container hero-inner">
+        <div className="hero-copy">
+          <div className="hero-pill">
+            <span className="live-dot" /> THE COMPATIBILITY-AWARE AI STACK BUILDER
+          </div>
+          <h1>
+            Great AI starts
+            <br />
+            with the <em>right stack.</em>
+          </h1>
+          <p className="hero-desc">
+            Stop piecing together tools from a dozen tabs. Choose your models, infrastructure,
+            retrieval and operations components in one place, with rule-based compatibility checks
+            as you build.
+          </p>
+          <div className="hero-ctas">
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={() => {
+                /*
+                 * Start a BLANK build, not the hero's example stack. Seeding the builder from
+                 * STARTERS[0] would present a preselected recommendation as the default starting
+                 * point, which is the same thing the builder's own first-visit rule forbids: an
+                 * unconfigured stack must read as Incomplete rather than arriving pre-filled with
+                 * someone else's choices. Choosing a starter stays an explicit action on /templates.
+                 */
+                startNew();
+                void navigate('/builder');
+              }}
+            >
+              Build your AI stack <Icon name="arrow-right" />
+            </button>
+            <Link className="btn btn-outline" to="/templates">
+              Explore starter builds <Icon name="arrow-up-right" />
+            </Link>
+          </div>
+          <div className="hero-trust">
+            <span>
+              <Icon name="check-circle" /> Rule-based compatibility
+            </span>
+            <i />
+            <span>
+              <Icon name="check-circle" /> Side-by-side comparison
+            </span>
+            <i />
+            <span>
+              <Icon name="check-circle" /> Transparent cost coverage
+            </span>
+          </div>
         </div>
-        <p className="hero-footnote">Synthetic preview. Your builds stay in this browser.</p>
-      </div>
-      <AsciiStack />
-      <div className="hero-strip">
-        <span>
-          <span className="signal-dot" /> BUILT FROM PARTS. CHECKED AS A SYSTEM.
-        </span>
-        <Link to="#how-it-works">
-          Meet the seven tiers <span aria-hidden="true">↓</span>
-        </Link>
+
+        {mode === 'fixture' ? <HeroPreview /> : null}
       </div>
     </section>
   );
 }
 
-function HowItWorks() {
+function HeroPreview() {
+  const catalog = useCatalog();
+  const starter = STARTERS[0]!;
+  const build = useMemo(() => starter.build(), [starter]);
+  const pricebook = usePricebook(build.locks.pricebook_id);
+  const analysis = useBuildAnalysis(build);
+
+  const rows = build.selections.map((sel) => {
+    const item = catalog.byId.get(sel.catalog_item_id);
+    const tier = kindDef(sel.kind).tier;
+    return {
+      id: sel.id,
+      tier,
+      icon: TIER_ICON[tier] ?? 'layers',
+      name: item?.name ?? sel.catalog_item_id,
+      kind: KIND_LABELS[sel.kind],
+      price: item ? itemPrice(item, build, catalog.byId, pricebook.data).label : 'Unknown',
+    };
+  });
+  const total = costShort(analysis.costIsCurrent ? analysis.cost : undefined);
+  const report = analysis.reportIsCurrent ? analysis.report : undefined;
+  const status = !report
+    ? analysis.evaluation.isError
+      ? 'Evaluation unavailable'
+      : 'Not checked'
+    : report.summary.failed
+      ? `${report.summary.failed} detected conflict${report.summary.failed === 1 ? '' : 's'}`
+      : report.summary.unknown
+        ? `${report.summary.unknown} unknown finding${report.summary.unknown === 1 ? '' : 's'}`
+        : '0 detected conflicts';
+  const statusIcon: IconName =
+    !report || report.summary.unknown ? 'info' : report.summary.failed ? 'alert' : 'check-circle';
+
   return (
-    <section
-      id="how-it-works"
-      aria-labelledby="how-title"
-      className="home-section architecture-section"
-    >
-      <div className="section-intro">
-        <p className="editorial-label">01 / THE ARCHITECTURE</p>
-        <h2 id="how-title">
-          Every part has
-          <br />a part to play.
-        </h2>
-        <p>
-          Start with what you need your system to do. Add the parts it needs. Every change re-checks
-          the connections in both directions.
-        </p>
-        <Link to="/methodology" className="editorial-link">
-          How compatibility is checked <span aria-hidden="true">↗</span>
-        </Link>
+    <div aria-label="Example demo AI stack" className="hero-art" role="group">
+      <div className="orbit" />
+      <div className="orbit two" />
+      <span className="decor-plus p1">+</span>
+      <span className="decor-plus p2">+</span>
+      <div className="float-chip left">
+        <Icon name="shield" /> Dependency checks, built in
       </div>
-      <ol className="tier-index">
-        {TIERS.map((tier) => (
-          <li key={tier}>
-            <Link to={`/catalog#cat-${tier}`}>
-              <span className="tier-code">{tier}</span>
-              <span className="tier-copy">
-                <strong>{TIER_LABELS[tier]}</strong>
-                <span>{TIER_SUMMARIES[tier]}</span>
+      <div className="preview-panel">
+        <div className="preview-top">
+          <div>
+            <div className="preview-kicker">STACK PREVIEW / DEMO</div>
+            <div className="preview-title">{starter.title.replace(/\s*\(demo\)$/i, '')}</div>
+          </div>
+          <span className="preview-tag">
+            <span className="live-dot" /> DEMO STACK
+          </span>
+        </div>
+        <div className="preview-body">
+          {rows.map((row) => (
+            <div className="preview-row" key={row.id}>
+              <span className="preview-line">
+                <span className="preview-node" />
               </span>
-              <span className="tier-meta">
-                {['T3', 'T4', 'T5'].includes(tier)
-                  ? 'OPTIONAL'
-                  : `${kindsInTier(tier).length} KINDS`}
+              <span className="preview-icon">
+                <Icon name={row.icon} />
               </span>
-              <span className="tier-arrow" aria-hidden="true">
-                ↗
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ol>
+              <div className="preview-info">
+                <strong>{row.name}</strong>
+                <small>
+                  {row.tier} · {row.kind.toUpperCase()}
+                </small>
+              </div>
+              <span className="preview-price">{row.price}</span>
+            </div>
+          ))}
+        </div>
+        <div className="preview-footer">
+          <div>
+            <strong title={total.note}>
+              {total.text}
+              {total.qualifier ? <small> {total.qualifier}</small> : null}
+            </strong>
+            <small> Illustrative baseline</small>
+          </div>
+          <div className="preview-stamp">
+            <Icon name={statusIcon} /> {status}
+          </div>
+        </div>
+      </div>
+      <div className="float-chip right">
+        <Icon name={statusIcon} /> {report ? 'Checked against the ruleset' : status}
+      </div>
+    </div>
+  );
+}
+
+function StatsBand() {
+  return (
+    <section className="stats-band">
+      <div className="container stats-inner">
+        <div className="stat-intro">
+          <strong>Every layer of your AI system.</strong>
+          <br />
+          One builder. One source of clarity.
+        </div>
+        <div className="stat">
+          <b>{LAYERS.length} layers</b>
+          <span>ACROSS THE WHOLE STACK</span>
+        </div>
+        <div className="stat">
+          <b>Live checks</b>
+          <span>AS YOUR CHOICES CHANGE</span>
+        </div>
+        <div className="stat">
+          <b>No guessing</b>
+          <span>VISIBLE GAPS &amp; CONFLICTS</span>
+        </div>
+      </div>
     </section>
   );
 }
 
 function StarterCard({ starter, index }: { starter: Starter; index: number }) {
-  const { startNew } = useBuilder();
   const navigate = useNavigate();
+  const { startNew } = useBuilder();
+  const style = STARTER_STYLE[starter.id] ?? { icon: 'layers' as IconName, tone: '' };
+  const layers = new Set(starter.build().selections.map((s) => kindDef(s.kind).tier)).size;
   return (
-    <li className="starter-card">
-      <div className="starter-meta">
-        <span>BUILD / 0{index + 1}</span>
-        <SyntheticBadge />
+    <button
+      className="template-card"
+      type="button"
+      onClick={() => {
+        startNew(starter.build(), starter.title);
+        void navigate('/builder');
+      }}
+    >
+      <div className="template-top">
+        <span className={style.tone ? `template-icon ${style.tone}` : 'template-icon'}>
+          <Icon name={style.icon} />
+        </span>
+        <span className="template-type">STARTER / {String(index + 1).padStart(2, '0')}</span>
       </div>
-      <h3>{starter.title}</h3>
-      <p className="starter-summary">{starter.summary}</p>
-      <details className="starter-rationale">
-        <summary>Why these parts?</summary>
-        <dl>
-          {starter.rationale.map((reason) => (
-            <div key={reason.kind}>
-              <dt>{KIND_LABELS[reason.kind]}</dt>
-              <dd>{reason.why}</dd>
-            </div>
-          ))}
-        </dl>
-      </details>
-      <button
-        type="button"
-        className="starter-open"
-        onClick={() => {
-          startNew(starter.build(), starter.title);
-          void navigate('/builder');
-        }}
-      >
-        Open in builder <span aria-hidden="true">↗</span>
-        <span className="sr-only">: {starter.title}</span>
-      </button>
-    </li>
+      <h3>{starter.title.replace(/\s*\(demo\)$/i, '')}</h3>
+      <p>{starter.summary}</p>
+      <div className="template-bottom">
+        <span>
+          {layers} of {LAYERS.length} layers prefilled
+        </span>
+        <Icon name="arrow-up-right" />
+      </div>
+    </button>
   );
 }
 
-function Starters() {
+function Templates() {
   const { mode } = useData();
   if (mode !== 'fixture') return null;
   return (
-    <section aria-labelledby="starters-title" className="home-section starters-section">
-      <div className="section-heading-row">
-        <div>
-          <p className="editorial-label">02 / START SOMEWHERE</p>
-          <h2 id="starters-title">A head start.</h2>
+    <section className="section templates" id="templates">
+      <div className="container">
+        <div className="section-head">
+          <div>
+            <div className="eyebrow">A BETTER STARTING POINT</div>
+            <h2>What are you building?</h2>
+            <p className="section-subtitle">
+              Skip the blank canvas. Open a preconfigured stack, then swap components to match your
+              needs. These are synthetic demonstration templates, not endorsements.
+            </p>
+          </div>
+          <Link className="subtle-link" to="/builder">
+            Or start from scratch <Icon name="arrow-right" />
+          </Link>
         </div>
-        <p>
-          Four demo stacks to take apart and make your own.
-          <br />
-          Synthetic examples, not recommendations. Opening one keeps your other builds.
-        </p>
+        <div className="template-grid">
+          {STARTERS.map((s, i) => (
+            <StarterCard key={s.id} starter={s} index={i} />
+          ))}
+        </div>
       </div>
-      <ul className="starter-grid">
-        {STARTERS.map((starter, index) => (
-          <StarterCard key={starter.id} starter={starter} index={index} />
-        ))}
-      </ul>
     </section>
   );
 }
 
-const PRINCIPLES = [
-  {
-    symbol: '[ ? ]',
-    title: 'Unknown stays unknown.',
-    body: 'Missing evidence gets a question mark. It is never quietly counted as compatible.',
-  },
-  {
-    symbol: '[ ≈ ]',
-    title: 'See the whole estimate.',
-    body: 'Costs show their coverage. A missing price is an unknown, not a zero.',
-  },
-  {
-    symbol: '[ ↗ ]',
-    title: 'Follow the evidence.',
-    body: 'Published research rules explain each result, so you can see what was checked and why.',
-  },
-];
+function CatalogRows() {
+  const catalog = useCatalog();
+  return (
+    <section className="section catalog-section" id="catalog">
+      <div className="container">
+        <div className="catalog-header">
+          <div>
+            <div className="eyebrow">EXPLORE THE ECOSYSTEM</div>
+            <h2>Everything has a place.</h2>
+            <p className="section-subtitle">
+              Browse by the role each component plays, rather than scrolling an endless directory of
+              AI tools.
+            </p>
+          </div>
+          <span className="mono dim" style={{ fontSize: 10 }}>
+            07 LAYERS / DEMO CATALOG
+          </span>
+        </div>
+        <div className="catalog-rows">
+          {LAYERS.map((layer) => {
+            const kinds = kindsInTier(layer.tier).map((k) => k.kind);
+            const count = (catalog.data?.items ?? []).filter((i) => kinds.includes(i.kind)).length;
+            return (
+              <div className="catalog-row" key={layer.tier}>
+                <span className="catalog-ico">
+                  <Icon name={layer.ico} />
+                </span>
+                <div className="catalog-info">
+                  <h3>{layer.name}</h3>
+                  <p>{layer.catalog}</p>
+                </div>
+                <div className="catalog-metric">
+                  DEMO CATALOG
+                  <strong>
+                    {count} item{count === 1 ? '' : 's'}
+                  </strong>
+                </div>
+                <div className="catalog-metric second">
+                  ROLE
+                  <strong>{layer.depend}</strong>
+                </div>
+                <div className="catalog-link">
+                  <Link to={`/catalog?layer=${layer.tier}`} aria-label={`Browse ${layer.name}`}>
+                    Browse <Icon name="arrow-right" />
+                  </Link>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** A real published rule, presented with the mock's "compatibility explainer" board. */
+function RuleBoard() {
+  const navigate = useNavigate();
+  const rule =
+    BASELINE_RULESET.rules.find((r) => r.id === 'rule.api.model.access') ??
+    BASELINE_RULESET.rules[0]!;
+  const [firstKind, secondKind] = rule.affected_kinds;
+  const tiles = [firstKind, secondKind].filter(Boolean) as (typeof rule.affected_kinds)[number][];
+  return (
+    <div className="rule-board">
+      <div className="rule-head">
+        <strong>Compatibility explainer</strong>
+        <span>PUBLISHED RULE</span>
+      </div>
+      <div className="rule-main">
+        <div className="rule-case">
+          {tiles.map((kind, i) => (
+            <div key={kind} style={{ display: 'contents' }}>
+              {i === 1 ? <div className="rule-cross">×</div> : null}
+              <div className="rule-product">
+                <span className={`component-logo ${i === 0 ? 'mint' : 'purple'}`}>
+                  {KIND_LABELS[kind]
+                    .split(' ')
+                    .map((w) => w[0])
+                    .join('')
+                    .slice(0, 3)
+                    .toUpperCase()}
+                </span>
+                <div>
+                  <strong>{KIND_LABELS[kind]}</strong>
+                  <small>{kindDef(kind).tier} · COMPONENT KIND</small>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="rule-alert">
+          <strong>
+            <Icon name="alert" /> {rule.message}
+          </strong>
+          <p>
+            {rule.on_unknown === 'block'
+              ? 'When this rule cannot be decided, the build is blocked rather than assumed compatible.'
+              : 'When this rule cannot be decided, the result is Unknown — never a pass.'}
+          </p>
+        </div>
+        <div className="rule-fix">
+          <span>
+            Suggested fix: <strong>{rule.remediation}</strong>
+          </span>
+          <button
+            className="btn btn-small btn-outline"
+            type="button"
+            onClick={() => void navigate('/builder')}
+          >
+            Try it in the builder <Icon name="arrow-right" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Confidence() {
+  return (
+    <section className="section confidence-section" id="compatibility">
+      <div className="container confidence-layout">
+        <div className="confidence-copy">
+          <div className="eyebrow">MORE THAN A CHECKMARK</div>
+          <h2>
+            Know what works. <span className="text-accent">Know what doesn&apos;t.</span>
+          </h2>
+          <p>
+            A stack that looks good on paper can fall apart at deployment. PickYour.AI is designed
+            to surface dependencies, contradictions and unknowns before you commit.
+          </p>
+          <div className="confidence-points">
+            <div className="confidence-point">
+              <Icon name="check-circle" /> Understand why a combination is supported.
+            </div>
+            <div className="confidence-point">
+              <Icon name="alert" /> See missing requirements, not just red warning lights.
+            </div>
+            <div className="confidence-point">
+              <Icon name="info" /> Unverified isn&apos;t quietly treated as compatible.
+            </div>
+          </div>
+        </div>
+        <RuleBoard />
+      </div>
+    </section>
+  );
+}
+
+function Steps() {
+  return (
+    <section className="section steps-section" id="how-it-works">
+      <div className="container">
+        <div className="eyebrow">BUILT FOR DECISION-MAKING</div>
+        <h2>From idea to architecture in minutes.</h2>
+        <div className="how-grid">
+          <div className="how-item">
+            <span className="how-number">01 / DEFINE</span>
+            <span className="how-icon">
+              <Icon name="list" />
+            </span>
+            <h3>Pick a starting point</h3>
+            <p>
+              Start fresh or load a reference stack for a support assistant, document search, agent
+              workflow, or self-hosted model.
+            </p>
+          </div>
+          <div className="how-item">
+            <span className="how-number">02 / CONFIGURE</span>
+            <span className="how-icon">
+              <Icon name="layers" />
+            </span>
+            <h3>Swap and compare</h3>
+            <p>
+              Choose tools for each layer. Filter choices, compare their properties, and watch
+              compatibility feedback update.
+            </p>
+          </div>
+          <div className="how-item">
+            <span className="how-number">03 / EXPORT</span>
+            <span className="how-icon">
+              <Icon name="code" />
+            </span>
+            <h3>Leave with a real plan</h3>
+            <p>
+              Export your component choices as contract-shaped JSON or share a link to the exact
+              demonstration build you configured.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function EndCta() {
+  const navigate = useNavigate();
+  return (
+    <section className="end-cta">
+      <div className="container">
+        <div className="cta-box">
+          <div>
+            <h2>Your next great build starts here.</h2>
+            <p>Less tab-hopping. More building with confidence.</p>
+          </div>
+          <button
+            className="btn btn-primary"
+            type="button"
+            onClick={() => void navigate('/builder')}
+          >
+            Open the stack builder <Icon name="arrow-right" />
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export default function HomePage() {
   return (
-    <div className="editorial-home">
+    <div className="app-page">
       <Hero />
-      <HowItWorks />
-      <Starters />
-      <section aria-labelledby="honest-title" className="home-section honest-section">
-        <div className="section-heading-row">
-          <div>
-            <p className="editorial-label">03 / NO GUESSWORK DISGUISED AS CERTAINTY</p>
-            <h2 id="honest-title">Know where you stand.</h2>
-          </div>
-          <Link to="/methodology" className="editorial-link">
-            Read the methodology <span aria-hidden="true">↗</span>
-          </Link>
-        </div>
-        <ul className="principles-grid">
-          {PRINCIPLES.map((principle) => (
-            <li key={principle.title}>
-              <span className="principle-symbol" aria-hidden="true">
-                {principle.symbol}
-              </span>
-              <h3>{principle.title}</h3>
-              <p>{principle.body}</p>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <StatsBand />
+      <Templates />
+      <CatalogRows />
+      <Confidence />
+      <Steps />
+      <EndCta />
     </div>
   );
 }

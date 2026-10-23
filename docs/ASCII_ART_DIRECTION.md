@@ -2,6 +2,20 @@
 
 Tracking: https://github.com/Pick-Your-AI/pickyour.ai/issues/32
 
+## Integration for re-review (2026-10-23)
+
+The branch now incorporates current main. Open `/ascii-study` after `npm run dev` to review the proposal. The approved homepage, application shell and builder remain on main's design; study CSS is scoped to its page and uses the shared theme toggle. Tier links use the current catalog layer query and Start a stack creates a blank build. The screenshots and verification below describe the original study, not the integrated revision. The original builder still-frame proposal remains visible in the archived screenshot; it is not applied to the current builder. Design approval is still pending.
+
+### Integrated revision validation
+
+- Formatting, lint, TypeScript, contract verification and production dependency audit: pass.
+- Unit suite: 478 tests passed; deployment-admission tests: 115 passed.
+- Static build and `scripts/check-dist.mjs`: pass.
+- Playwright: 134 passed, 16 existing project-specific skips. Includes study animation,
+  reduced motion, light/dark axe checks, narrow widths, explicit blank-build creation,
+  starter selection and CSS isolation after client-side navigation.
+- Desktop light and mobile dark screenshots inspected. This verifies rendering, not design approval.
+
 ## Brief
 
 Refresh the existing frontend with an original 3D ASCII aesthetic inspired by

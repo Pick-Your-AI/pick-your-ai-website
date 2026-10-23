@@ -1,4 +1,12 @@
-import { useQuery } from '@tanstack/react-query';
+/*
+ * Component detail (mock `#detailScreen` + `renderDetail()`).
+ *
+ * The mock shows a "provider / developer". The contract has no such field, so the at-a-glance table
+ * reports what the record actually carries: kind, tier, licence, billing class, status, version,
+ * provenance freshness and the illustrative price. Nothing is invented and every price comes from
+ * the preview estimator.
+ */
+import { Fragment, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import {
   KIND_LABELS,
@@ -8,312 +16,282 @@ import {
   kindFromSlug,
   labelInSentence,
 } from '../../contracts';
+import type { CatalogItem } from '../../contracts';
 import { addOrReplace } from '../../domain/build';
-import { neighbours } from '../../domain/invalidation';
+import { evidenceDateLabel, itemFreshness } from '../../domain/freshness';
 import { useBuilder } from '../../app/builder-context';
-import { useData } from '../../app/data-context';
-import { useCatalog, useGraph, usePricebook, useRuleset } from '../../app/queries';
-import { ErrorState, Loading, Notice } from '../../components/feedback';
-import { PageHeader } from '../../components/layout';
-import { SyntheticBadge } from '../../components/status';
-import { BILLING_LABELS, idToSlug, itemPath, kindPath, slugToId } from '../../lib/catalog-view';
-import { formatValue, humanize, specFields } from '../../lib/schema-fields';
-import { formatMoney } from '../builder/analysis';
+import { useCatalog, useCompatibleOptions, usePricebook } from '../../app/queries';
+import { ErrorState, Loading, useToast } from '../../components/feedback';
+import { Icon } from '../../components/icon';
+import { BILLING_LABELS, idToSlug, itemPath, slugToId } from '../../lib/catalog-view';
+import { itemPrice } from '../../lib/item-cost';
+import { itemLogo } from '../../lib/layers';
+import { type FieldDef, formatValue, specFields } from '../../lib/schema-fields';
 import NotFoundPage from '../../pages/NotFoundPage';
+import { accessSummary, licenseLine, strongestVerification, verificationLabel } from './shared';
 
 export default function ComponentDetailPage() {
   const { kindSlug = '', itemSlug = '' } = useParams();
-  const kindRaw = kindFromSlug(kindSlug);
-  const id = slugToId(itemSlug);
+  const rawKind = kindFromSlug(kindSlug);
+  const kind = isComponentKind(rawKind) ? rawKind : null;
+  const itemId = slugToId(itemSlug);
+
   const catalog = useCatalog();
-  const graph = useGraph();
-  const ruleset = useRuleset();
-  const pricebook = usePricebook();
-  const { evidence } = useData();
   const { draft, apply } = useBuilder();
+  const pricebook = usePricebook(draft?.build.locks.pricebook_id);
+  const toast = useToast();
   const navigate = useNavigate();
-  const item = catalog.byId.get(id);
-  const ev = useQuery({
-    queryKey: ['evidence', id, item?.version],
-    queryFn: () => evidence.forItem(item!),
-    enabled: Boolean(item),
-  });
+  const build = draft?.build ?? null;
+  const options = useCompatibleOptions(kind ? build : null, kind ?? 'workload');
 
   if (catalog.isPending)
     return (
-      <div className="mx-auto max-w-7xl px-4">
-        <Loading />
+      <div className="app-page">
+        <div className="container detail-container">
+          <Loading label="Loading component…" />
+        </div>
       </div>
     );
+
   if (catalog.isError)
     return (
-      <div className="mx-auto max-w-7xl px-4 py-6">
-        <ErrorState error={catalog.error} onRetry={() => void catalog.refetch()} />
+      <div className="app-page">
+        <div className="container detail-container">
+          <ErrorState error={catalog.error} onRetry={() => void catalog.refetch()} />
+        </div>
       </div>
     );
-  if (!item || !isComponentKind(kindRaw) || item.kind !== kindRaw) return <NotFoundPage />;
 
-  const def = kindDef(item.kind);
+  const item = catalog.byId.get(itemId);
+  if (!kind || !item || item.kind !== kind) return <NotFoundPage />;
+
   const label = KIND_LABELS[item.kind];
-  const fields = specFields(item.kind);
+  const def = kindDef(item.kind);
+  const logo = itemLogo(item);
   const spec = item.spec as Record<string, unknown>;
-  const current = draft?.build.selections.find((s) => s.kind === item.kind && s.role === 'primary');
-  const isSelected = draft?.build.selections.some((s) => s.catalog_item_id === item.id);
-  const rels = graph.data ? neighbours(graph.data, item.kind) : null;
-  const rules = (ruleset.data?.rules ?? []).filter((r) =>
-    (r.affected_kinds as string[]).includes(item.kind),
-  );
-  const rates = (pricebook.data?.rates ?? []).filter((r) => r.catalog_item_id === item.id);
-  const now = new Date().toISOString();
+  const fields = specFields(item.kind);
+  const price = itemPrice(item, build, catalog.byId, pricebook.data);
+  const freshness = itemFreshness(item);
+  const verification = strongestVerification(item);
+  const inStack = Boolean(build?.selections.some((s) => s.catalog_item_id === item.id));
+
+  const verdict = options.isPlaceholderData
+    ? undefined
+    : options.data?.find((option) => option.catalog_item_id === item.id);
+  const conflicts = verdict?.verdict === 'incompatible' ? Math.max(verdict.rule_ids.length, 1) : 0;
+  const unknown = !verdict || verdict.verdict === 'unknown';
+
   const siblings = (catalog.data?.items ?? []).filter(
-    (i) => i.kind === item.kind && i.id !== item.id,
+    (other) => other.kind === item.kind && other.id !== item.id,
   );
+  const related = siblings.slice(0, 3);
+  const compareHref = `/compare?ids=${[item, ...siblings.slice(0, 2)]
+    .map((entry) => idToSlug(entry.id))
+    .join(',')}`;
 
   const add = () => {
-    if (!draft) return;
-    apply(
-      (b) => addOrReplace(b, item, catalog.byId),
-      `${current ? 'Replaced' : 'Added'} ${label}: ${item.name}`,
-      [item.kind],
-    );
-    navigate('/builder');
+    if (inStack) return;
+    if (!build) {
+      toast('Your stack is still loading.');
+      return;
+    }
+    apply((b) => addOrReplace(b, item, catalog.byId), `Added ${label}: ${item.name}`, [item.kind]);
+    toast(`${item.name} added to your stack.`);
   };
 
+  const renderSpecValue = (field: FieldDef, value: unknown): ReactNode => {
+    if (field.isRef) {
+      const refIds = Array.isArray(value)
+        ? value.map(String)
+        : typeof value === 'string'
+          ? [value]
+          : [];
+      if (refIds.length)
+        return refIds.map((refId, index) => {
+          const ref: CatalogItem | undefined = catalog.byId.get(refId);
+          return (
+            <Fragment key={refId}>
+              {index > 0 ? ', ' : ''}
+              {ref ? (
+                <Link className="text-link" to={itemPath(ref)}>
+                  {ref.name}
+                </Link>
+              ) : (
+                `${refId} (not in catalog)`
+              )}
+            </Fragment>
+          );
+        });
+    }
+    return formatValue(value, field);
+  };
+
+  const glance: { label: string; value: ReactNode }[] = [
+    { label: 'Component kind', value: label },
+    { label: 'Layer', value: `${def.tier} · ${TIER_LABELS[def.tier]}` },
+    { label: 'License / access', value: licenseLine(item) },
+    { label: 'Billing class', value: BILLING_LABELS[item.billing_class] },
+    { label: 'Record status', value: item.status },
+    { label: 'Catalog version', value: item.version },
+    {
+      label: 'Provenance',
+      value: `${verificationLabel(verification)} · ${evidenceDateLabel(freshness)}`,
+    },
+    {
+      label: 'Illustrative baseline',
+      value: price.amount ? `${price.label} / month` : `${price.label} — ${price.note}`,
+    },
+    {
+      label: 'Demo compatibility',
+      value:
+        conflicts > 0
+          ? `${conflicts} detected conflict${conflicts === 1 ? '' : 's'} in current demo choices`
+          : unknown
+            ? 'Unknown — the demo rules cannot decide this item yet'
+            : 'No detected conflicts in current demo choices',
+    },
+  ];
+
   return (
-    <>
-      <PageHeader eyebrow={`${def.tier} · ${TIER_LABELS[def.tier]} · ${label}`} title={item.name}>
-        {item.description}
-      </PageHeader>
-      <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 lg:grid-cols-[1fr_20rem]">
-        <div className="grid min-w-0 gap-6">
-          {item.tags?.includes('synthetic') ? (
-            <Notice tone="warning" title="Synthetic demo record.">
-              This component is fictional test data for the preview. Its specifications are invented
-              and are not a real product.
-            </Notice>
-          ) : null}
-          <section aria-labelledby="spec-h" className="card p-4">
-            <h2 id="spec-h" className="text-lg font-semibold">
-              Specifications
-            </h2>
-            <table className="data-table mt-2">
-              <caption className="sr-only">Specification of {item.name}</caption>
-              <tbody>
-                {fields.map((f) => {
-                  const v = spec[f.key];
-                  const ref = f.isRef && typeof v === 'string' ? catalog.byId.get(v) : undefined;
-                  const refs =
-                    f.isRef && Array.isArray(v)
-                      ? v.map((x) => catalog.byId.get(String(x)))
-                      : undefined;
-                  return (
-                    <tr key={f.key}>
-                      <th scope="row" className="w-1/3 font-medium normal-case tracking-normal">
-                        {f.label}
-                        {f.required ? <span className="muted text-xs"> (required)</span> : null}
-                      </th>
-                      <td className={v === undefined ? 'muted italic' : 'tabular'}>
-                        {ref ? (
-                          <Link className="link" to={itemPath(ref)}>
-                            {ref.name}
-                          </Link>
-                        ) : refs ? (
-                          refs.map((r, i) =>
-                            r ? (
-                              <Link key={r.id} className="link mr-2" to={itemPath(r)}>
-                                {r.name}
-                              </Link>
-                            ) : (
-                              <span key={i}>{String((v as unknown[])[i])} (not in catalog) </span>
-                            ),
-                          )
-                        ) : (
-                          formatValue(v, f)
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-                {item.license ? (
-                  <tr>
-                    <th scope="row" className="font-medium normal-case tracking-normal">
-                      Licence (catalog metadata)
-                    </th>
-                    <td>
-                      {Object.entries(item.license)
-                        .map(([k, v]) => `${humanize(k)}: ${formatValue(v)}`)
-                        .join(' · ')}
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </section>
-          <section aria-labelledby="deps-h" className="card p-4">
-            <h2 id="deps-h" className="text-lg font-semibold">
-              Dependencies
-            </h2>
-            <p className="muted mt-1 text-sm">
-              From the contract dependency graph. Edges drive re-evaluation in both directions; they
-              are not compatibility verdicts.
-            </p>
-            {rels ? (
-              <div className="mt-3 grid gap-4 md:grid-cols-2">
+    <div className="app-page">
+      <div className="container detail-container">
+        <div className="breadcrumb">
+          <Link to="/catalog">COMPONENT CATALOG</Link>
+          <span>/</span>
+          <span>{item.name.toUpperCase()}</span>
+        </div>
+        <div className="detail-layout">
+          <div>
+            <div className="detail-hero">
+              <div className="detail-identity">
+                <span className={`component-logo ${logo.color}`} aria-hidden="true">
+                  {logo.text}
+                </span>
                 <div>
-                  <h3 className="font-semibold">{label} depends on</h3>
-                  <ul className="mt-1 space-y-1 text-sm">
-                    {rels.dependsOn.length ? (
-                      rels.dependsOn.map((e) => (
-                        <li key={e.id}>
-                          <Link className="link" to={kindPath(e.depends_on_kind)}>
-                            {KIND_LABELS[e.depends_on_kind]}
-                          </Link>{' '}
-                          <span className="muted">
-                            ({e.relationship}, when {e.activation.replace(/_/g, ' ')})
-                          </span>
-                        </li>
-                      ))
-                    ) : (
-                      <li className="muted">Nothing.</li>
-                    )}
-                  </ul>
-                </div>
-                <div>
-                  <h3 className="font-semibold">Depends on {labelInSentence(label)}</h3>
-                  <ul className="mt-1 space-y-1 text-sm">
-                    {rels.dependents.length ? (
-                      rels.dependents.map((e) => (
-                        <li key={e.id}>
-                          <Link className="link" to={kindPath(e.dependent_kind)}>
-                            {KIND_LABELS[e.dependent_kind]}
-                          </Link>{' '}
-                          <span className="muted">
-                            ({e.relationship}, when {e.activation.replace(/_/g, ' ')})
-                          </span>
-                        </li>
-                      ))
-                    ) : (
-                      <li className="muted">Nothing.</li>
-                    )}
-                  </ul>
+                  <div className="eyebrow">
+                    {def.tier} / {label.toUpperCase()} / COMPONENT PROFILE
+                  </div>
+                  <h1>{item.name}</h1>
                 </div>
               </div>
-            ) : (
-              <Loading />
-            )}
-          </section>
-          <section aria-labelledby="rules-h" className="card p-4">
-            <h2 id="rules-h" className="text-lg font-semibold">
-              Compatibility rules involving {labelInSentence(label)} ({rules.length})
-            </h2>
-            <ul className="mt-2 space-y-2 text-sm">
-              {rules.map((r) => (
-                <li key={r.id}>
-                  <p>{r.message}</p>
-                  <p className="muted text-xs">
-                    <code className="font-mono">{r.id}</code> · {r.severity} · unknown →{' '}
-                    {r.on_unknown}
-                  </p>
-                </li>
+              <p className="detail-lead">{item.description}</p>
+              <div className="detail-tags">
+                {(item.tags ?? []).map((tag) => (
+                  <span key={tag}>{tag}</span>
+                ))}
+                <span>{accessSummary(item)}</span>
+              </div>
+            </div>
+            <h2 className="detail-subhead">At a glance</h2>
+            <div className="detail-table">
+              {glance.map((row) => (
+                <div key={row.label}>
+                  <span>{row.label}</span>
+                  <strong>{row.value}</strong>
+                </div>
               ))}
-            </ul>
-          </section>
-        </div>
-        <aside aria-label="Selection and evidence" className="grid content-start gap-4">
-          <div className="card grid gap-2 p-4">
-            {item.tags?.includes('synthetic') ? <SyntheticBadge /> : null}
-            <p className="text-sm">
-              Status: <strong>{item.status}</strong> · version{' '}
-              <code className="font-mono">{item.version}</code>
+            </div>
+            <div className="detail-note">
+              <Icon name="info" />
+              <div>
+                <strong>Preview data only.</strong> This component description, compatibility
+                coverage and estimated costs are illustrative. The production catalog needs sourced
+                product specifications, verified versions and source freshness metadata.
+              </div>
+            </div>
+            <h2 className="detail-subhead">Specification</h2>
+            <div className="detail-table">
+              {fields.map((field) => (
+                <div key={field.key}>
+                  <span>{field.label}</span>
+                  <strong>{renderSpecValue(field, spec[field.key])}</strong>
+                </div>
+              ))}
+            </div>
+
+            <h2 className="detail-subhead">Evidence &amp; provenance</h2>
+            <p className="detail-provenance-status">
+              Recorded provenance status: <strong>{verificationLabel(verification)}</strong>
             </p>
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={add}
-              disabled={!draft || (isSelected && def.cardinality === 'one')}
-            >
-              {isSelected
-                ? 'In your stack'
-                : current
-                  ? `Replace current ${labelInSentence(label)}`
-                  : `Add to stack (${def.tier} · ${label})`}
-            </button>
-            <Link
-              className="link text-sm"
-              to={`/compare?ids=${[item, ...siblings.slice(0, 1)].map((i) => idToSlug(i.id)).join(',')}`}
-            >
-              Compare with another {labelInSentence(label)}
-            </Link>
-            <Link className="link text-sm" to={kindPath(item.kind)}>
-              All {labelInSentence(label)} records
-            </Link>
+            <div className="detail-note">
+              <Icon name="info" />
+              <div>
+                This date does not establish currentness or independent verification. Historical
+                verified labels may record source checks only. Independent verification requires
+                linked reproduction or corroboration; the recorded status alone is not proof.
+              </div>
+            </div>
+            <ul className="detail-provenance">
+              {item.provenance.length ? (
+                item.provenance.map((entry, index) => (
+                  <li key={`${entry.checked_at}-${index}`}>
+                    {entry.source_uri ? (
+                      <a className="text-link" href={entry.source_uri} rel="noopener noreferrer">
+                        Source
+                      </a>
+                    ) : (
+                      <span className="dim">No source URL recorded</span>
+                    )}{' '}
+                    · {entry.verification_status} · checked {entry.checked_at.slice(0, 10)}
+                    {entry.notes ? <span className="pt-sub">{entry.notes}</span> : null}
+                  </li>
+                ))
+              ) : (
+                <li className="dim">No provenance records in this demo item.</li>
+              )}
+            </ul>
           </div>
-          <div className="card p-4 text-sm">
-            <h2 className="font-semibold">Cost context</h2>
-            <p className="mt-1">Billing: {BILLING_LABELS[item.billing_class]}</p>
-            {rates.length ? (
-              <ul className="mt-2 space-y-1">
-                {rates.map((r) => {
-                  const expired = Boolean(r.valid_until && r.valid_until < now);
-                  return (
-                    <li key={r.id} className="tabular">
-                      {formatMoney(r.unit_price.amount, r.unit_price.currency)} per{' '}
-                      {r.meter.replace(/_/g, ' ')}
-                      {r.region ? ` (${r.region})` : ''} — {r.price_type},{' '}
-                      {r.provenance.verification_status}
-                      {expired ? (
-                        <strong className="ml-1 text-amber-900 dark:text-amber-200">expired</strong>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <p className="muted mt-1">
-                {item.billing_class === 'metered'
-                  ? 'No rate in the pricebook — cost is unknown.'
-                  : 'No metered rates.'}
+          <aside className="detail-aside">
+            <div className="detail-buy">
+              <div className="eyebrow">EXAMPLE MONTHLY BASELINE</div>
+              <div className="big-price">
+                {price.amount ? price.label : 'Unknown'}{' '}
+                <span>{price.amount ? '/ month*' : 'no demo rate'}</span>
+              </div>
+              <p>
+                Not a vendor quote. Runtime, traffic, usage, and region can change the real cost
+                significantly.
               </p>
-            )}
-            {rates.some((r) => r.provenance.notes?.includes('SYNTHETIC')) ? (
-              <p className="mt-2 text-xs font-semibold text-violet-800 dark:text-violet-300">
-                Synthetic demo prices — not real quotes.
-              </p>
-            ) : null}
-          </div>
-          <div className="card p-4 text-sm">
-            <h2 className="font-semibold">Evidence &amp; provenance</h2>
-            {ev.data ? (
-              <>
-                <p className="mt-1">
-                  Verification: <strong>{ev.data.verification}</strong>
-                </p>
-                <p>
-                  Last checked {new Date(ev.data.freshness.checkedAt).toLocaleDateString()} (
-                  {ev.data.freshness.ageDays} days, {ev.data.freshness.state})
-                </p>
-                <ul className="mt-2 space-y-1 text-xs">
-                  {ev.data.provenance.map((p, i) => (
-                    <li key={i}>
-                      {p.source_uri ? (
-                        <a className="link" href={p.source_uri} rel="noopener noreferrer">
-                          Source
-                        </a>
-                      ) : (
-                        <span>No source URL recorded</span>
-                      )}{' '}
-                      · {p.verification_status}
-                      {p.notes ? <span className="muted block">{p.notes}</span> : null}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            ) : (
-              <Loading />
-            )}
-          </div>
-        </aside>
+              <button
+                className="btn btn-primary"
+                type="button"
+                onClick={add}
+                disabled={!build || inStack}
+                title={inStack ? 'This component is already selected' : undefined}
+              >
+                {inStack ? '✓ In your build' : 'Add to my stack →'}
+              </button>
+              <Link className="btn btn-outline" to={compareHref}>
+                Compare alternatives ↗
+              </Link>
+              <div className={`status-bar${conflicts ? ' issue' : unknown ? ' neutral' : ''}`}>
+                <Icon name={conflicts ? 'x-circle' : unknown ? 'alert' : 'check-circle'} />
+                {conflicts
+                  ? `${conflicts} demo conflict${conflicts === 1 ? '' : 's'} to review`
+                  : unknown
+                    ? 'Unknown in demo rules — not treated as compatible'
+                    : 'No conflicts in demo rules'}
+              </div>
+            </div>
+            <div className="detail-related">
+              <h3>Other {labelInSentence(label)}</h3>
+              {related.length ? (
+                related.map((other) => (
+                  <button
+                    key={other.id}
+                    type="button"
+                    onClick={() => void navigate(itemPath(other))}
+                  >
+                    {other.name} <Icon name="arrow-right" />
+                  </button>
+                ))
+              ) : (
+                <p>No other {labelInSentence(label)} records in this demo catalog.</p>
+              )}
+            </div>
+          </aside>
+        </div>
       </div>
-    </>
+    </div>
   );
 }

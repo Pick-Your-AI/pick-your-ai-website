@@ -97,8 +97,8 @@ export function AsciiStack() {
             {reducedMotion
               ? 'Still / reduced motion'
               : paused
-                ? '▷ Resume animation'
-                : 'Ⅱ Pause animation'}
+                ? 'Resume animation'
+                : 'Pause animation'}
           </button>
         </div>
       </figcaption>

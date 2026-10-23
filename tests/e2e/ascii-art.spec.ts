@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
 test('ASCII controls pause rotation and assemble the same seven-tier scene', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/ascii-study');
   const art = page.locator('.ascii-art');
   await expect(art).toHaveAttribute('aria-hidden', 'true');
   const initial = await art.textContent();
@@ -43,7 +43,7 @@ test('reduced motion keeps artwork still and layouts fit at narrow widths', asyn
   page,
 }, info) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
+  await page.goto('/ascii-study');
   await expect(page.getByRole('button', { name: 'Still / reduced motion' })).toBeDisabled();
   for (const theme of ['light', 'dark']) {
     const switchButton = page.getByRole('button', { name: `Switch to ${theme} theme` });
@@ -80,8 +80,38 @@ test('reduced motion keeps artwork still and layouts fit at narrow widths', asyn
     ).toEqual([]);
   }
   await page.setViewportSize({ width: 320, height: 800 });
-  await page.goto('/');
+  await page.goto('/ascii-study');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
   await page.screenshot({ path: info.outputPath('home-320.png'), fullPage: true });
+});
+
+test('study navigation preserves the main design and starts a blank build explicitly', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const heading = page.getByRole('heading', { level: 1 });
+  const before = await heading.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { font: style.fontFamily, size: style.fontSize, color: style.color };
+  });
+  await page.goto('/ascii-study');
+  await expect(page.locator('.tier-index a').nth(1)).toHaveAttribute('href', '/catalog?layer=T1');
+  await page.locator('.starter-open').first().click();
+  await expect(page).toHaveURL(/\/builder$/);
+  await expect(page.getByTestId('overall-status')).not.toContainText(
+    '0 of 4 required choices made',
+  );
+  await page.goto('/ascii-study');
+  await page.getByRole('button', { name: 'Start a stack' }).click();
+  await expect(page).toHaveURL(/\/builder$/);
+  await expect(page.getByTestId('overall-status')).toContainText('0 of 4 required choices made');
+  // Client navigation keeps lazy CSS loaded: it must still have no effect outside the study.
+  await page.locator('header a.brand').click();
+  await expect(page).toHaveURL(/\/$/);
+  const after = await page.getByRole('heading', { level: 1 }).evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { font: style.fontFamily, size: style.fontSize, color: style.color };
+  });
+  expect(after).toEqual(before);
 });

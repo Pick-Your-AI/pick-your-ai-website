@@ -8,13 +8,13 @@
 
 ## Stack
 
-Vite 8 · React 19 · TypeScript 6 (strict, `noUncheckedIndexedAccess`) · Tailwind CSS 4 · React Router 8 (data router, lazy routes) · TanStack Query 5 · Ajv 8 standalone validators · json-schema-to-typescript · Vitest + Testing Library · Playwright + axe-core.
+Vite 8 · React 19 · TypeScript 6 (strict, `noUncheckedIndexedAccess`) · plain CSS design system (`src/styles/mock.css` + `src/styles/index.css`, no utility framework) · React Router 8 (data router, lazy routes) · TanStack Query 5 · Ajv 8 standalone validators · json-schema-to-typescript · Vitest + Testing Library · Playwright + axe-core.
 
 ## Layers
 
 | Layer             | Path                                                     | Responsibility                                                                                                                                                                        |
 | ----------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Presentation      | `src/pages`, `src/features/*`, `src/components`          | Pages, builder UI, catalog UI, primitives (`status.tsx`, `feedback.tsx`, `layout.tsx`, `icons.tsx`)                                                                                   |
+| Presentation      | `src/pages`, `src/features/*`, `src/components`          | Pages, builder UI, catalog UI, primitives (`status.tsx`, `feedback.tsx`, `layout.tsx`, `icon.tsx`) and the view helpers `lib/layers.ts`, `lib/item-cost.ts`, `lib/compat.ts`          |
 | Application       | `src/app`                                                | Routing, `BuilderProvider` (current draft, commit, persistence, invalidation), TanStack Query hooks keyed by build id and revision                                                    |
 | Domain / contract | `src/contracts`, `src/domain`                            | Generated types and validators, registry, baseline graph and ruleset, evaluator (port of `reference/evaluate.py`), activation, invalidation, build operations, cost, freshness, share |
 | Data access       | `src/data`                                               | Provider interfaces (`types.ts`), HTTP client and providers, local build repository, configuration (`config.ts`), `DataError`                                                         |
@@ -22,6 +22,8 @@ Vite 8 · React 19 · TypeScript 6 (strict, `noUncheckedIndexedAccess`) · Tailw
 | Infrastructure    | `scripts/`, `.github/workflows/ci.yml`, `vite.config.ts` | Contract vendoring and verification, type generation, `version.json`, CI                                                                                                              |
 
 The presentation layer imports provider _interfaces_ only, through `useData()`. Switching `VITE_DATA_MODE` swaps implementations without touching any page.
+
+The builder route includes a small loading shell in the initial bundle so its heading can paint before the editor, forms and schema metadata load. The editor remains lazy-loaded behind Suspense, and the same shell covers pending build data. Its parts-list styles load with the shell; other page content remains route-split.
 
 ## Data flow for a change
 
@@ -35,12 +37,12 @@ user action (Add / Replace / Configure / Remove / Objectives)
       useBuildAnalysis(build):
         ['cost', id, rev]       PricingProvider.estimate
         ['resources', id, rev]  ResourceEstimateProvider.estimate
-        ['evaluation', id, rev] CompatibilityEvaluator.evaluate(build, {cost, resources})
-      the previous revision's results stay on screen, explicitly labelled "re-evaluating"
-  → aria-live announcement: "Revision N evaluated: X failing, Y unknown"
+        ['evaluation', id, rev, costId, resourceId] CompatibilityEvaluator.evaluate(build, {cost, resources})
+      prior-evaluation metadata is labelled stale; findings, verdicts, counts and readiness await the current report
+  → current-report aria-live announcement: "Revision N evaluated: X failing, Y unknown"
 ```
 
-Results are keyed by `(build id, revision)`, so a result for an older revision is never presented as current. The evaluator itself ignores cost and resource evidence whose `build_revision` does not match.
+Build-derived results are keyed by `(build id, revision)`, and evaluation also includes the admitted immutable cost and resource evidence IDs. Late or replacement evidence triggers reevaluation. The query layer excludes evidence from another build or revision and marks previous reports as stale. The builder withholds previous findings, summary outcomes, counts, readiness and screen-reader announcements until the current report is available.
 
 ## Contracts and versioning
 

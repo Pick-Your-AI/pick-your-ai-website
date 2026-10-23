@@ -1,142 +1,1035 @@
-@import 'tailwindcss';
-@import './art-direction.css';
-
-@custom-variant dark (&:where(.dark, .dark *));
-
 /*
- * PickYour.AI design tokens. Brand: deep teal + slate with a single amber accent.
- * Status colours are reserved for compatibility outcomes and always paired with an icon and a word.
+ * PickYour.AI stylesheet.
+ *
+ * `mock.css` is the design system ported verbatim from the approved design mock
+ * (`docs/design/pickyourai-complete.html`). Everything in this file is additive scaffolding the React shell
+ * needs: accessibility helpers, loading/notice states and print rules. Keep new visual design in
+ * mock.css so the site stays faithful to the mock; add only functional glue here.
  */
-@theme {
-  --font-sans: ui-sans-serif, system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-mono: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace;
+@import './fonts.css';
+@import './mock.css';
+/*
+ * `mock-legacy.css` is deliberately never imported: it holds the mock's screens this app does not
+ * implement. See its header for how those rules were verified dead.
+ */
+/*
+ * `dense.css` is imported by the builder route shell so the initial builder heading can paint
+ * before the editor module loads. Catalog and compare also import it; Vite deduplicates the CSS.
+ */
 
-  --color-brand-50: #f0fdfa;
-  --color-brand-100: #ccfbf1;
-  --color-brand-200: #99f6e4;
-  --color-brand-300: #5eead4;
-  --color-brand-400: #2dd4bf;
-  --color-brand-500: #14b8a6;
-  --color-brand-600: #0d9488;
-  --color-brand-700: #0f766e;
-  --color-brand-800: #115e59;
-  --color-brand-900: #134e4a;
-  --color-brand-950: #042f2e;
-  --color-accent-400: #fbbf24;
-  --color-accent-500: #f59e0b;
-  --color-accent-600: #d97706;
-}
-
-:root {
+/* The theme class is applied to <html> before first paint (see public/theme-init.js). */
+html.light {
   color-scheme: light;
 }
-.dark {
-  color-scheme: dark;
-}
 
-body {
-  @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
+/* ---------- accessibility helpers ---------- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.sr-only-focusable:focus,
+.sr-only-focusable:focus-visible {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 200;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 10px 16px;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #072b25;
+  font-weight: 700;
 }
 
 /* Visible, consistent focus indicator (WCAG 2.4.7 / 2.4.11). */
 :focus-visible {
-  outline: 3px solid var(--color-brand-500);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 4px;
 }
-
-/* Headings focused programmatically after navigation need no ring (they are not interactive). */
+html.light :focus-visible {
+  outline-color: var(--accent2);
+}
 [tabindex='-1']:focus {
   outline: none;
 }
 
-.tabular {
-  font-variant-numeric: tabular-nums;
+/* Programmatic focus target for the page heading after client-side navigation. */
+h1[tabindex='-1']:focus-visible {
+  outline: none;
 }
 
-@utility btn {
-  @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60;
+/* ---------- functional states the mock did not need ---------- */
+.page-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 60px 0;
+  color: var(--muted);
+  font: 12px var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
-
-@layer components {
-  .card {
-    @apply rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900;
+.page-loading .live-dot {
+  animation: pyai-pulse 1.2s ease-in-out infinite;
+}
+@keyframes pyai-pulse {
+  0%,
+  100% {
+    opacity: 1;
   }
-  .btn-primary {
-    @apply btn bg-brand-700 text-white hover:bg-brand-800 dark:bg-brand-600 dark:text-slate-950 dark:hover:bg-brand-500;
-  }
-  .btn-secondary {
-    @apply btn border border-slate-300 bg-white text-slate-800 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800;
-  }
-  .btn-ghost {
-    @apply btn text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800;
-  }
-  .btn-danger {
-    @apply btn border border-red-300 bg-white text-red-800 hover:bg-red-50 dark:border-red-800 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-950;
-  }
-  .btn-sm {
-    @apply min-h-8 px-2 py-1 text-xs;
-  }
-  .link {
-    @apply font-medium text-brand-800 underline decoration-brand-300 underline-offset-2 hover:decoration-brand-700 dark:text-brand-300 dark:decoration-brand-700 dark:hover:decoration-brand-300;
-  }
-  .input {
-    @apply min-h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-400;
-  }
-  .label {
-    @apply mb-1 block text-sm font-medium text-slate-800 dark:text-slate-200;
-  }
-  .hint {
-    @apply mt-1 text-xs text-slate-600 dark:text-slate-400;
-  }
-  .eyebrow {
-    @apply text-xs font-semibold tracking-wide text-brand-800 uppercase dark:text-brand-300;
-  }
-  .muted {
-    @apply text-slate-600 dark:text-slate-400;
-  }
-  .prose-doc {
-    @apply max-w-3xl space-y-4 leading-relaxed;
-  }
-  .prose-doc h2 {
-    @apply mt-8 text-xl font-semibold;
-  }
-  .prose-doc h3 {
-    @apply mt-6 text-lg font-semibold;
-  }
-  .prose-doc ul {
-    @apply list-disc space-y-1 pl-6;
-  }
-  .prose-doc ol {
-    @apply list-decimal space-y-1 pl-6;
-  }
-  .prose-doc code {
-    @apply rounded bg-slate-100 px-1 py-0.5 font-mono text-sm dark:bg-slate-800;
-  }
-  .data-table {
-    @apply w-full border-collapse text-left text-sm;
-  }
-  .data-table th {
-    @apply border-b border-slate-200 px-3 py-2 text-xs font-semibold tracking-wide text-slate-600 uppercase dark:border-slate-700 dark:text-slate-400;
-  }
-  .data-table td {
-    @apply border-b border-slate-100 px-3 py-2 align-top dark:border-slate-800;
+  50% {
+    opacity: 0.25;
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
+.notice-error {
+  border: 1px solid #805354;
+  background: #39282d;
+  color: #ffd7d3;
+  padding: 15px 18px;
+  border-radius: 9px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.notice-error strong {
+  color: #ffada6;
+}
+html.light .notice-error {
+  border-color: #e0a7a3;
+  background: #fdeceb;
+  color: #6d2320;
+}
+html.light .notice-error strong {
+  color: #922f2a;
 }
 
+.notice-ok {
+  border: 1px solid #2f6d5b;
+  background: #10291f;
+  color: #b7e8d5;
+  padding: 13px 16px;
+  border-radius: 9px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+html.light .notice-ok {
+  border-color: #9ecdc0;
+  background: #e9f6f1;
+  color: #14503f;
+}
+
+/* Inline control sizing for native inputs used by the real builder (name, search, selects). */
+.control-input {
+  width: 100%;
+  min-height: 38px;
+  border-radius: 8px;
+  border: 1px solid var(--line2);
+  background: #0f1a24;
+  color: var(--text);
+  padding: 9px 12px;
+  font-size: 12px;
+}
+.control-input::placeholder {
+  color: var(--dim);
+}
+html.light .control-input {
+  background: #fff;
+  border-color: #b9cfca;
+  color: var(--text);
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.check-row input {
+  accent-color: var(--accent);
+}
+
+.field-label {
+  display: block;
+  font: 10px var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+/* Definition list used by the summary/detail tables. */
+.kv {
+  display: grid;
+  grid-template-columns: minmax(120px, 34%) minmax(0, 1fr);
+  gap: 8px 16px;
+  font-size: 12px;
+}
+.kv dt {
+  color: var(--muted);
+}
+.kv dd {
+  margin: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* Wrapping table region (keyboard scrollable). */
+.table-scroll {
+  overflow-x: auto;
+}
+.table-scroll:focus-visible {
+  outline-offset: 4px;
+}
+
+/* ---------- print ---------- */
 @media print {
-  .no-print {
+  .no-print,
+  .demo-banner,
+  .site-header,
+  footer,
+  .compare-tray,
+  .toast {
     display: none !important;
   }
+  body {
+    background: #fff !important;
+  }
+  body,
+  body * {
+    color: #000 !important;
+    border-color: #777 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+  body * {
+    background: transparent !important;
+  }
+}
+
+/* ---------- outcome / severity badges (icon + word, never colour alone) ---------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line2);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font: 600 10px var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--muted);
+  background: #131f2b;
+}
+.badge .ico {
+  width: 13px;
+  height: 13px;
+}
+.badge-pass {
+  color: #83eac0;
+  border-color: #42735d;
+  background: #14291f;
+}
+.badge-fail {
+  color: #ffada6;
+  border-color: #805354;
+  background: #39282d;
+}
+.badge-unknown {
+  color: #f8d09d;
+  border-color: #80624c;
+  background: #33291f;
+}
+.badge-skipped {
+  color: #b9c7cd;
+  border-color: #40545a;
+  background: #16222c;
+}
+.badge-synthetic {
+  color: #cbb6f4;
+  border-color: #595276;
+  background: #342e4c;
+  border-style: dashed;
+}
+html.light .badge {
+  background: #eef4f2;
+  color: var(--muted);
+}
+html.light .badge-pass {
+  color: #0f5f45;
+  border-color: #9ecdc0;
+  background: #e9f6f1;
+}
+html.light .badge-fail {
+  color: #922f2a;
+  border-color: #e0a7a3;
+  background: #fdeceb;
+}
+html.light .badge-unknown {
+  color: #7a4d13;
+  border-color: #e3c08c;
+  background: #fdf3e2;
+}
+html.light .badge-synthetic {
+  color: #4b3a70;
+  border-color: #c3b6dd;
+  background: #f1ecfa;
+}
+
+.severity {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: 600 10px var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.severity .ico {
+  width: 13px;
+  height: 13px;
+}
+.severity-error {
+  color: var(--red);
+}
+.severity-warning {
+  color: var(--orange);
+}
+.severity-info {
+  color: var(--blue);
+}
+
+/* ---------- builder: h1 uses the mock's section-heading treatment ---------- */
+.build-section h1 {
+  font: 700 clamp(29px, 3.2vw, 40px)/1.18 var(--display);
+  letter-spacing: -1.5px;
+  margin: 12px 0 10px;
+}
+
+/* Collapsible objectives block under the builder shell (functional, not part of the mock). */
+.builder-extras {
+  margin-top: 22px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #0e1822;
+  padding: 16px 20px;
+}
+.builder-extras summary {
+  cursor: pointer;
+  font: 600 12px var(--display);
+  color: var(--text);
+}
+.builder-extras[open] summary {
+  margin-bottom: 14px;
+}
+.builder-meta {
+  margin: 12px 0 0;
+  font: 10px var(--mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.builder-meta a {
+  color: var(--accent);
+}
+html.light .builder-extras {
+  background: #f6fbf9;
+}
+
+/* ---------- generic forms (objectives + selection settings) ---------- */
+.settings-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+.settings-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 9px;
+  grid-column: 1 / -1;
+  margin-top: 4px;
+}
+.hint-text {
+  margin: 5px 0 0;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--dim);
+}
+.field-error {
+  margin: 5px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--red);
+}
+html.light .field-error {
+  color: #922f2a;
+}
+
+/* ---------- generic content panel + data table (match the mock's card/table treatment) ---------- */
+.panel {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 22px 22px 24px;
+  min-width: 0;
+}
+.panel > h2 {
+  font: 700 18px var(--display);
+  letter-spacing: -0.4px;
+  margin: 0 0 12px;
+}
+.panel h3 {
+  font: 600 13px var(--display);
+  margin: 16px 0 8px;
+}
+.panel p,
+.panel li {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+html.light .panel {
+  background: #fff;
+}
+
+.data-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 560px;
+}
+.data-table th,
+.data-table td {
+  text-align: left;
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--line2);
+  font-size: 11px;
+  vertical-align: top;
+}
+.data-table thead th {
+  font: 600 10px var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: #16232f;
+}
+.data-table tbody th {
+  font: 600 11px var(--display);
+  color: var(--text);
+}
+.data-table td {
+  color: #c1d4d4;
+}
+.data-table tbody tr:last-child th,
+.data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.data-table caption {
+  text-align: left;
+  font: 600 11px var(--display);
+  color: var(--muted);
+  padding-bottom: 8px;
+}
+html.light .data-table thead th {
+  background: #eaf2f0;
+  color: var(--muted);
+}
+html.light .data-table td {
+  color: #294a46;
+}
+html.light .data-table th,
+html.light .data-table td {
+  border-bottom-color: #d5e3e0;
+}
+
+/* ---------- build summary page ---------- */
+.summary-page {
+  display: grid;
+  gap: 18px;
+  padding-top: 34px;
+  padding-bottom: 90px;
+}
+.summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.summary-split {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+.summary-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.summary-history li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: baseline;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 6px;
+}
+.summary-history .mono {
+  color: var(--accent);
+  font-size: 10px;
+}
+.summary-details {
+  margin-top: 14px;
+}
+.summary-details summary {
+  cursor: pointer;
+  font: 600 12px var(--display);
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.summary-headline {
+  font: 700 22px var(--display);
+  color: var(--text);
+  margin: 0 0 6px;
+}
+.summary-assumptions {
+  margin: 6px 0 0;
+  padding-left: 16px;
+  font-size: 10px;
+  color: var(--dim);
+}
+
+.summary-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.summary-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ---------- notices ---------- */
+.notice-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.notice-message {
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}
+.notice-details {
+  margin-top: 8px;
+}
+.notice-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.notice-action {
+  margin-top: 12px;
+}
+
+/* ---------- configuration error ---------- */
+.config-error {
+  padding: 80px 0;
+  max-width: 720px;
+}
+.config-error h1 {
+  font: 700 30px var(--display);
+  letter-spacing: -1px;
+  margin: 0 0 12px;
+}
+.config-error p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+/* ---------- legal / 404 ---------- */
+.legal-content {
+  padding-top: 44px;
+  padding-bottom: 90px;
+  max-width: 900px;
+}
+.legal-content .method-chapter > p,
+.legal-list {
+  font-size: 13px;
+  line-height: 1.85;
+  color: var(--muted);
+}
+.legal-list {
+  padding-left: 18px;
+  display: grid;
+  gap: 10px;
+}
+.legal-list strong {
+  color: var(--text);
+}
+.notfound-body {
+  padding: 60px 0 100px;
+}
+.notfound-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Contrast floor (WCAG 2.2 AA, 4.5:1 for normal text).
+ * The mock's palette uses two very low-contrast greys for micro-labels. They are lifted here to
+ * the nearest tone that still reads as "dim" but passes on every dark surface in the design.
+ * Values were measured against the darkest and lightest surfaces (#080e16 … #1a2939).
+ * ------------------------------------------------------------------------------------------- */
+:root {
+  --dim: #809ba8; /* was #627784: 3.2–4.1:1 */
+}
+.footer-bottom {
+  color: #8da5b2; /* was #67818c: 3.6–4.5:1 */
+}
+.footer-bottom span:last-child {
+  color: #9fc0b1;
+}
+.directory-category em,
+.directory-price small,
+.directory-category-cell small,
+.saved-card-metrics small,
+.valuation small,
+.compare-blank,
+.choice-empty,
+.detail-note,
+.template-node small,
+.rule-detail .rule-id {
+  color: #8ba5b0;
+}
+
+/* Light theme: the same floor against the light surfaces (#fff … #e9f0ee). */
+html.light {
+  --dim: #55706c; /* was #6c8784: 3.3–3.9:1 on white */
+}
+html.light .footer-bottom {
+  color: #4d6b66;
+}
+html.light .footer-bottom span:last-child {
+  color: #3f6357;
+}
+html.light .directory-category em,
+html.light .directory-price small,
+html.light .directory-category-cell small,
+html.light .saved-card-metrics small,
+html.light .compare-blank,
+html.light .choice-empty,
+html.light .template-node small {
+  color: #41605a;
+}
+
+/* Micro-labels inside dark cards (mock greys lifted to the 4.5:1 floor). */
+.cost small,
+.foot-disclaimer,
+.breadcrumb span,
+.directory-category-cell,
+.directory-price small,
+.compare-key,
+.saved-card p,
+.template-showcase-foot > span {
+  color: #8ba5b0;
+}
+.breadcrumb span {
+  color: #93aab5;
+}
+.builder-meta a,
+.foot-disclaimer a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+html.light .compare-key,
+html.light .saved-card p {
+  color: #41605a;
+}
+/* The summary rows are real buttons now; keep the mock's flat appearance. */
+button.summary-item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+button.summary-item:hover {
+  background: #16232f;
+}
+html.light button.summary-item:hover {
+  background: #eaf2f0;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Light theme contrast patch.
+ * The mock's light skin reuses several dark-surface greys on white cards. Where an element follows
+ * the theme, the colour is expressed with the theme's own variables (so the always-dark blocks —
+ * builder shell, preview panel, rule board, modal — keep their dark palette automatically); where
+ * the mock hardcodes a dark-surface tone, a targeted light rule lifts it to 4.5:1.
+ * ------------------------------------------------------------------------------------------- */
+html.light .stat span,
+html.light .stat-intro span,
+html.light .catalog-metric,
+html.light .filter-chip,
+html.light .component-count span,
+html.light .vendor,
+html.light .footer-description,
+html.light .directory-category,
+html.light .directory-column-head,
+html.light .directory-category-cell,
+html.light .compare-key {
+  color: var(--muted);
+}
+html.light .catalog-metric strong,
+html.light .footer-column h2,
+html.light .template-showcase-foot > span strong {
+  color: var(--text);
+}
+html.light .directory-category .ico {
+  color: var(--muted);
+}
+html.light .directory-category.on,
+html.light .directory-category.on .ico,
+html.light .directory-category.on em,
+html.light .directory-pill.on {
+  color: #0d5741;
+}
+html.light .directory-category.on {
+  background: #d4eee3;
+}
+html.light .compare-tab.on {
+  color: #ffffff;
+}
+html.light .build-status {
+  color: #14503f;
+  background: #dff0e8;
+  border-color: #9ecdc0;
+}
+html.light .footer-column a {
+  color: #3c5a54;
+}
+html.light .template-showcase-foot,
+html.light .saved-card-actions {
+  background: #eef4f2;
+}
+html.light .component-card.selected {
+  background: #e6f4ee;
+}
+html.light .component-card .component-note {
+  color: #922f2a;
+}
+html.light .issue {
+  color: #5a3a24;
+}
+html.light .outcome-card.pass > span {
+  color: #0f5f45;
+}
+html.light .outcome-card.fail > span,
+html.light .severity-error {
+  color: #922f2a;
+}
+html.light .outcome-card.warn > span,
+html.light .severity-warning {
+  color: #7a4d13;
+}
+html.light .outcome-card.unknown > span,
+html.light .severity-info {
+  color: #2b4f86;
+}
+html.light .eyebrow,
+html.light .chapter-index,
+html.light .figure-small,
+html.light .mint-dot,
+html.light .method-top-metrics i,
+html.light .rule-detail .rule-id,
+html.light .formula-card > span {
+  color: #0d5741;
+}
+html.light .method-toc-note,
+html.light .formula-card,
+html.light .rule-detail,
+html.light .rules-browser {
+  background: #ffffff;
+}
+html.light .rule-example {
+  background: #eef4f2;
+  color: var(--text);
+}
+html.light .rule-titles button.on {
+  background: #d9efe6;
+  color: #0d5741;
+}
+html.light .roadmap-marker {
+  background: #e6eeec;
+  color: #41605a;
+}
+html.light .roadmap-marker.done {
+  background: #d9efe6;
+  color: #0d5741;
+}
+html.light .choice-cell select {
+  background: #ffffff;
+  color: var(--text);
+  border-color: #9ebbb4;
+}
+/* Always-dark blocks keep the dark palette, including the lifted dim tone. */
+html.light .builder-shell,
+html.light .preview-panel,
+html.light .rule-board,
+html.light .modal {
+  --dim: #809ba8;
+  --muted: #91a5b3;
+  --text: #eaf2f3;
+}
+html.light .builder-shell .btn-primary,
+html.light .preview-panel .btn-primary,
+html.light .rule-board .btn-primary,
+html.light .modal .btn-primary {
+  color: #072b25;
+}
+
+/* Accent-coloured surfaces need their own foreground per theme (dark ink on mint, white on green). */
+:root {
+  --on-accent: #072b25;
+}
+html.light {
+  --on-accent: #ffffff;
+}
+.summary-save,
+.component-card.selected .card-select {
+  color: var(--on-accent);
+}
+
+/* Theme-following text inside cards, so the always-dark builder and the light pages both pass. */
+.component-card p,
+.component-card .compare-action,
+.confidence-point,
+.template-showcase-foot > span {
+  color: var(--muted);
+}
+.component-card .cost {
+  color: var(--text);
+}
+.component-card .cost small {
+  color: var(--dim);
+}
+html.light .directory-column-head {
+  color: #3f5b57;
+}
+html.light .directory-buttons button {
+  background: #eef4f2;
+  color: var(--text);
+  border-color: #a8c4be;
+}
+html.light .directory-buttons .dir-add {
+  background: #13775e;
+  color: #ffffff;
+  border-color: #13775e;
+}
+/* Dark islands: the builder shell keeps the mock's dark chip/card tones in both themes. */
+html.light .builder-shell .filter-chip {
+  color: #8ba5b0;
+}
+html.light .builder-shell .filter-chip.active {
+  color: #0b332b;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+html.light .builder-shell .component-count span,
+html.light .builder-shell .vendor {
+  color: #8ba5b0;
+}
+html.light .builder-shell .component-card.selected {
+  background: #19352f77;
+}
+html.light .component-card {
+  background: #ffffff;
+  border-color: #cad9d7;
+}
+html.light .component-card h4 {
+  color: var(--text);
+}
+html.light .filter-chip.active {
+  background: #d9efe6;
+  color: #0d5741;
+  border-color: #4d9c83;
+}
+html.light .builder-shell .component-card {
+  background: #14212d;
+  border-color: var(--line);
+}
+html.light .builder-shell .component-card h4 {
+  color: #e7f4ee;
+}
+html.light .builder-shell {
+  --on-accent: #072b25;
+}
+html.light .component-card.incompatible {
+  background: #fdeceb;
+  border-color: #e0a7a3;
+}
+html.light .builder-shell .component-card.incompatible {
+  background: #231e26;
+  border-color: #805354;
+}
+html.light .builder-shell .component-card .component-note {
+  color: #ffada6;
+}
+/* Empty layer slots in a starter diagram read as outlines, never as filled choices. */
+.template-node.empty .node-box {
+  border-style: dashed;
+  border-color: var(--line2);
+  background: transparent;
+  color: var(--dim);
+}
+.template-node.empty small {
+  color: var(--dim);
+}
+
+/* Kind tabs: a layer can contain several component kinds; the mock shows one product grid at a
+   time, so the kinds are tabs above the chooser. */
+.kind-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 16px 0 14px;
+}
+.kind-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line2);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 11px;
+  font: 600 11px var(--display);
+  cursor: pointer;
+  min-height: 32px;
+}
+.kind-tab em {
+  font: 400 10px var(--mono);
+  font-style: normal;
+  color: var(--dim);
+}
+.kind-tab:hover {
+  border-color: var(--accent2);
+  color: var(--text);
+}
+.kind-tab.on {
+  background: #17362e;
+  border-color: #42735d;
+  color: #b7e8d5;
+}
+.kind-tab.on em {
+  color: #83eac0;
+}
+html.light .builder-shell .kind-tab {
+  color: #8ba5b0;
+  border-color: var(--line2);
+}
+html.light .builder-shell .kind-tab.on {
+  background: #17362e;
+  border-color: #42735d;
+  color: #b7e8d5;
+}
+.component-note {
+  align-items: flex-start;
+}
+.component-note .ico {
+  margin-top: 2px;
+  flex: none;
+}
+html.light .no-results {
+  color: var(--muted);
+  border-color: #a8c4be;
+}
+html.light .no-results .ico {
+  color: #0d5741;
+}
+html.light .breadcrumb,
+html.light .breadcrumb a,
+html.light .breadcrumb span {
+  color: #41605a;
+}
+/* The mock dims the trailing crumb with opacity, which drops it below AA on the light surface. */
+html.light .breadcrumb span {
+  opacity: 1;
+}
+html.light .breadcrumb a {
+  color: #0d5741;
+}
+html.light .detail-table > div > span {
+  background: #eef4f2;
+  color: #41605a;
+}
+html.light .detail-table > div strong {
+  color: var(--text);
+}
+html.light .detail-buy .status-bar {
+  color: #0d5741;
+}
+html.light .detail-buy .status-bar.issue {
+  color: #922f2a;
+}
+.detail-buy .status-bar.neutral,
+html.light .detail-buy .status-bar.neutral {
+  color: var(--text);
+}
+
+/* The sort select needs room for the real option labels ("Recommended first"). */
+.filter-select {
+  max-width: 178px;
+}
+.summary-heading span {
+  text-align: right;
+}
+
+/* The preview header must never let a long demo title collide with the DEMO STACK tag. */
+.preview-top > div {
+  min-width: 0;
+}
+.preview-title {
+  overflow-wrap: anywhere;
+}
+.preview-tag {
+  flex: none;
+  margin-left: 10px;
+}
+
+/* No compatibility verdict exists until the current evaluation arrives. */
+.compat-panel.neutral {
+  background: var(--surface);
+  border-color: var(--line2);
+}
+.compat-panel.neutral .compat-title {
+  color: var(--text);
+}
+.compat-panel.neutral p {
+  color: var(--muted);
 }

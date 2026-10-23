@@ -12,7 +12,7 @@
  * There is no read endpoint for resource estimates or a "current snapshot" in v1; the snapshot id
  * and graph/ruleset ids are configuration (see docs/DATA_INTEGRATION.md).
  */
-import type { BuildSnapshot, CatalogSnapshot, ComponentKind } from '../../contracts';
+import type { BuildSnapshot, CatalogSnapshot, ComponentKind, ContractName } from '../../contracts';
 import { BASELINE_GRAPH, BASELINE_RULESET } from '../../contracts';
 import { DataError } from '../errors';
 import { LocalBuildRepository } from '../local-builds';
@@ -46,6 +46,26 @@ export interface HttpProviderConfig {
 
 const enc = encodeURIComponent;
 
+function hasOnlyKeys(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.keys(value).every((key) => keys.includes(key))
+  );
+}
+
+function requireArtifactId<T extends { id: string }>(
+  contract: ContractName,
+  value: T,
+  requestedId: string,
+): T {
+  if (value.id !== requestedId) {
+    throw new DataError('malformed', `${contract} does not match the requested ID.`, { contract });
+  }
+  return value;
+}
+
 export class HttpCatalogRepository implements CatalogRepository {
   private snapshot: Promise<CatalogSnapshot> | null = null;
   private readonly client: ContractHttpClient;
@@ -59,11 +79,11 @@ export class HttpCatalogRepository implements CatalogRepository {
     if (snapshotId && snapshotId !== this.cfg.catalogSnapshotId) {
       return this.client
         .contract('CatalogSnapshot', 'GET', `/catalog/snapshots/${enc(id)}`)
-        .then((r) => r.value);
+        .then((r) => requireArtifactId('CatalogSnapshot', r.value, id));
     }
     this.snapshot ??= this.client
       .contract('CatalogSnapshot', 'GET', `/catalog/snapshots/${enc(id)}`)
-      .then((r) => r.value)
+      .then((r) => requireArtifactId('CatalogSnapshot', r.value, id))
       .catch((e) => {
         this.snapshot = null; // allow retry after failure
         throw e;
@@ -81,14 +101,27 @@ export class HttpCatalogRepository implements CatalogRepository {
   }
   async getDependencyGraph() {
     const id = this.cfg.dependencyGraphId ?? BASELINE_GRAPH.id;
-    return (await this.client.contract('DependencyGraph', 'GET', `/dependencies/${enc(id)}`)).value;
+    const { value } = await this.client.contract(
+      'DependencyGraph',
+      'GET',
+      `/dependencies/${enc(id)}`,
+    );
+    return requireArtifactId('DependencyGraph', value, id);
   }
   async getRuleset() {
     const id = this.cfg.rulesetId ?? BASELINE_RULESET.id;
     const version = this.cfg.rulesetVersion ?? BASELINE_RULESET.version;
-    return (
-      await this.client.contract('Ruleset', 'GET', `/rulesets/${enc(id)}?version=${enc(version)}`)
-    ).value;
+    const { value } = await this.client.contract(
+      'Ruleset',
+      'GET',
+      `/rulesets/${enc(id)}?version=${enc(version)}`,
+    );
+    if (value.id !== id || value.version !== version) {
+      throw new DataError('malformed', 'Ruleset does not match the requested ID and version.', {
+        contract: 'Ruleset',
+      });
+    }
+    return value;
   }
 }
 
@@ -98,20 +131,35 @@ export class HttpCompatibilityEvaluator implements CompatibilityEvaluator {
     this.client = client;
   }
   async evaluate(build: BuildSnapshot, evidence: EvaluationEvidence = {}) {
-    const body: Record<string, unknown> = { build_revision: build.revision };
+    const { id, revision } = build;
+    const locks = { ...build.locks };
+    const body: Record<string, unknown> = { build_revision: revision };
     if (evidence.resourceEstimate) body.resource_estimate_id = evidence.resourceEstimate.id;
     if (evidence.costEstimate) body.cost_estimate_id = evidence.costEstimate.id;
     const { value } = await this.client.contract(
       'EvaluationReport',
       'POST',
-      `/builds/${enc(build.id)}/evaluate`,
+      `/builds/${enc(id)}/evaluate`,
       body,
       { 'Idempotency-Key': idempotencyKey() },
     );
-    if (value.build_id !== build.id || value.build_revision !== build.revision) {
+    if (value.build_id !== id || value.build_revision !== revision) {
       throw new DataError('malformed', 'Evaluation report is for a different build revision.', {
         contract: 'EvaluationReport',
       });
+    }
+    if (
+      value.catalog_snapshot_id !== locks.catalog_snapshot_id ||
+      value.ruleset_id !== locks.ruleset_id ||
+      value.ruleset_version !== locks.ruleset_version ||
+      value.dependency_graph_id !== locks.dependency_graph_id ||
+      value.dependency_graph_revision !== locks.dependency_graph_revision
+    ) {
+      throw new DataError(
+        'malformed',
+        'Evaluation report does not match the requested catalog, ruleset, and dependency graph.',
+        { contract: 'EvaluationReport' },
+      );
     }
     return value;
   }
@@ -120,33 +168,37 @@ export class HttpCompatibilityEvaluator implements CompatibilityEvaluator {
     kind: ComponentKind,
     role = 'primary',
   ): Promise<CompatibleOption[]> {
+    const { id, revision } = build;
     const { data } = await this.client.request(
       'GET',
-      `/builds/${enc(build.id)}/compatible-options?kind=${enc(kind)}&role=${enc(role)}`,
+      `/builds/${enc(id)}/compatible-options?kind=${enc(kind)}&role=${enc(role)}`,
     );
-    const d = data as { build_id?: unknown; build_revision?: unknown; options?: unknown };
     const verdicts = new Set(['compatible', 'incompatible', 'unknown']);
     const valid =
-      d &&
-      d.build_id === build.id &&
-      typeof d.build_revision === 'number' &&
-      Array.isArray(d.options) &&
-      d.options.every(
-        (o: Partial<CompatibleOption>) =>
-          typeof o?.catalog_item_id === 'string' &&
+      hasOnlyKeys(data, ['build_id', 'build_revision', 'kind', 'options']) &&
+      data.build_id === id &&
+      Number.isInteger(data.build_revision) &&
+      data.kind === kind &&
+      Array.isArray(data.options) &&
+      data.options.every(
+        (o: unknown) =>
+          hasOnlyKeys(o, ['catalog_item_id', 'catalog_item_version', 'verdict', 'rule_ids']) &&
+          typeof o.catalog_item_id === 'string' &&
           typeof o.catalog_item_version === 'string' &&
-          verdicts.has(o.verdict as string) &&
-          Array.isArray(o.rule_ids),
+          typeof o.verdict === 'string' &&
+          verdicts.has(o.verdict) &&
+          Array.isArray(o.rule_ids) &&
+          o.rule_ids.every((ruleId: unknown) => typeof ruleId === 'string'),
       );
     if (!valid)
       throw new DataError('malformed', 'compatible-options response does not match the contract.');
-    if (d.build_revision !== build.revision) {
+    if (data.build_revision !== revision) {
       throw new DataError(
         'malformed',
         'compatible-options response is for a different build revision.',
       );
     }
-    return d.options as CompatibleOption[];
+    return data.options as CompatibleOption[];
   }
 }
 
@@ -160,22 +212,31 @@ export class HttpPricingProvider implements PricingProvider {
   async getPricebook(pricebookId?: string) {
     const id = pricebookId ?? this.cfg.pricebookId;
     if (!id) throw new DataError('unsupported', 'No pricebook is configured.');
-    return (await this.client.contract('Pricebook', 'GET', `/pricebooks/${enc(id)}`)).value;
+    const { value } = await this.client.contract('Pricebook', 'GET', `/pricebooks/${enc(id)}`);
+    return requireArtifactId('Pricebook', value, id);
   }
   async estimate(build: BuildSnapshot, periodDays = 30) {
+    const { id, revision } = build;
     const pricebookId = build.locks.pricebook_id ?? this.cfg.pricebookId;
     if (!pricebookId) throw new DataError('unsupported', 'Build has no pricebook lock.');
     const { value } = await this.client.contract(
       'CostEstimate',
       'POST',
-      `/builds/${enc(build.id)}/estimate-cost`,
-      { build_revision: build.revision, pricebook_id: pricebookId, period_days: periodDays },
+      `/builds/${enc(id)}/estimate-cost`,
+      { build_revision: revision, pricebook_id: pricebookId, period_days: periodDays },
       { 'Idempotency-Key': idempotencyKey() },
     );
-    if (value.build_revision !== build.revision) {
+    if (value.build_id !== id || value.build_revision !== revision) {
       throw new DataError('malformed', 'Cost estimate is for a different build revision.', {
         contract: 'CostEstimate',
       });
+    }
+    if (value.pricebook_id !== pricebookId || value.period_days !== periodDays) {
+      throw new DataError(
+        'malformed',
+        'Cost estimate does not match the requested pricebook and period.',
+        { contract: 'CostEstimate' },
+      );
     }
     return value;
   }
@@ -205,19 +266,43 @@ export class HttpBuildRepository implements BuildRepository {
   }
   async get(buildId: string): Promise<StoredBuild> {
     const { value } = await this.client.contract('BuildSnapshot', 'GET', `/builds/${enc(buildId)}`);
+    requireArtifactId('BuildSnapshot', value, buildId);
     return { build: value, revisions: [value], changes: [] };
   }
   async save(stored: StoredBuild, expectedRevision: number | null): Promise<StoredBuild> {
     const b = stored.build;
+    const { id, revision } = b;
+    // A saved revision must permit an exact +1 step in JavaScript. Capture the
+    // submitted identity before awaiting so caller mutation cannot retarget it.
+    const nextRevision = expectedRevision === null ? 1 : expectedRevision + 1;
+    if (
+      (expectedRevision !== null &&
+        (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1)) ||
+      revision !== nextRevision
+    ) {
+      throw new DataError(
+        'malformed',
+        expectedRevision === null
+          ? 'A new remote build must start at revision 1.'
+          : 'A remote build update must use the next revision after a valid saved revision.',
+        { contract: 'BuildSnapshot' },
+      );
+    }
     const { value } =
       expectedRevision === null
         ? await this.client.contract('BuildSnapshot', 'POST', '/builds', b, {
             'Idempotency-Key': idempotencyKey(),
           })
-        : await this.client.contract('BuildSnapshot', 'PUT', `/builds/${enc(b.id)}`, b, {
+        : await this.client.contract('BuildSnapshot', 'PUT', `/builds/${enc(id)}`, b, {
             'If-Match': `"${expectedRevision}"`,
             'Idempotency-Key': idempotencyKey(),
           });
+    requireArtifactId('BuildSnapshot', value, id);
+    if (value.revision !== revision) {
+      throw new DataError('malformed', 'BuildSnapshot does not match the submitted revision.', {
+        contract: 'BuildSnapshot',
+      });
+    }
     const saved = { ...stored, build: value };
     await this.local.save(saved, null);
     return saved;
