@@ -90,9 +90,10 @@ function HowItWorks() {
                 <span>{TIER_SUMMARIES[tier]}</span>
               </span>
               <span className="tier-meta">
-                {['T3', 'T4', 'T5'].includes(tier)
-                  ? 'OPTIONAL'
-                  : `${kindsInTier(tier).length} KINDS`}
+                {kindsInTier(tier).every((kind) => kind.activation === 'optional')
+                  ? 'OPTIONAL / '
+                  : ''}
+                {kindsInTier(tier).length} KINDS
               </span>
               <span className="tier-arrow" aria-hidden="true">
                 ↗

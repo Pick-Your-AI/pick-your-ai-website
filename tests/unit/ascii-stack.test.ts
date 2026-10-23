@@ -28,6 +28,23 @@ describe('ASCII stack artwork', () => {
     );
   });
 
+  it('renders seven separated layer silhouettes, not a single band of noise', () => {
+    const bands = (text: string) =>
+      text.split('\n').reduce((result, line, index, lines) => {
+        return result + (line.trim() && (index === 0 || !lines[index - 1]!.trim()) ? 1 : 0);
+      }, 0);
+    for (let step = 0; step < 24; step++) {
+      expect(bands(renderStack({ ...frame, rotation: (step * Math.PI) / 12 }))).toBe(7);
+    }
+    expect(bands(renderStack({ ...frame, spread: 0 }))).toBeLessThan(7);
+  });
+
+  it('uses only the intended surface and chip glyphs', () => {
+    expect(new Set(renderStack(frame).replace(/\s/g, ''))).toEqual(
+      new Set(['+', ':', '.', 'o', '=', '#', '*']),
+    );
+  });
+
   it('caps rendering work even when given excessive dimensions', () => {
     const text = renderStack({ ...frame, columns: 10000, rows: 10000 });
     const lines = text.split('\n');

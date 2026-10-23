@@ -13,7 +13,8 @@ export function renderStack(frame: StackFrame): string {
   const yaw = Number.isFinite(frame.rotation) ? frame.rotation : 0.62;
   const cy = Math.cos(yaw);
   const sy = Math.sin(yaw);
-  const pitch = 0.38;
+  // A shallow viewing angle keeps the exploded slabs visually separate.
+  const pitch = 0.1;
   const cp = Math.cos(pitch);
   const sp = Math.sin(pitch);
   const direction: Vec3 = [sy * cp, -sp, -cy * cp];

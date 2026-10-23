@@ -9,10 +9,7 @@ test('ASCII controls pause rotation and assemble the same seven-tier scene', asy
   expect(initial?.replace(/\s/g, '').length).toBeGreaterThan(500);
   await expect.poll(() => art.textContent()).not.toBe(initial);
   await page.getByRole('button', { name: 'Pause animation' }).click();
-  await expect(page.getByRole('button', { name: 'Resume animation' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await expect(page.getByRole('button', { name: 'Resume animation' })).toBeVisible();
   const paused = await art.textContent();
   const stable = await art.evaluate(
     (element) =>
@@ -30,10 +27,7 @@ test('ASCII controls pause rotation and assemble the same seven-tier scene', asy
   );
   expect(stable).toBe(true);
   await page.getByRole('button', { name: 'Assemble' }).click();
-  await expect(page.getByRole('button', { name: 'Explode' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await expect(page.getByRole('button', { name: 'Explode' })).toBeVisible();
   expect(await art.textContent()).not.toBe(paused);
   await page.getByRole('button', { name: 'Explode' }).click();
   await expect(art).toHaveText(paused!);
@@ -44,7 +38,8 @@ test('reduced motion keeps artwork still and layouts fit at narrow widths', asyn
 }, info) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/ascii-study');
-  await expect(page.getByRole('button', { name: 'Still / reduced motion' })).toBeDisabled();
+  await expect(page.getByText('Still / reduced motion', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /animation/ })).toHaveCount(0);
   for (const theme of ['light', 'dark']) {
     const switchButton = page.getByRole('button', { name: `Switch to ${theme} theme` });
     if (await switchButton.count()) await switchButton.click();
@@ -96,6 +91,7 @@ test('study navigation preserves the main design and starts a blank build explic
     return { font: style.fontFamily, size: style.fontSize, color: style.color };
   });
   await page.goto('/ascii-study');
+  await expect(page.locator('.tier-index li').last()).toContainText('OPTIONAL / 5 KINDS');
   await expect(page.locator('.tier-index a').nth(1)).toHaveAttribute('href', '/catalog?layer=T1');
   await page.locator('.starter-open').first().click();
   await expect(page).toHaveURL(/\/builder$/);

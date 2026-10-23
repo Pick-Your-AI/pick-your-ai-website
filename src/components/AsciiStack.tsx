@@ -3,7 +3,6 @@ import { renderStack } from '../lib/ascii-stack';
 
 // Art-direction dials. Rendering is capped independently inside renderStack.
 const ART = { columns: 96, rows: 68, rotation: 0.62, spread: 1, fps: 12, speed: 0.085 };
-const STILL = renderStack(ART);
 
 export function AsciiStack() {
   const output = useRef<HTMLPreElement>(null);
@@ -26,34 +25,45 @@ export function AsciiStack() {
     const node = output.current;
     const region = stage.current;
     if (!node || !region) return;
-    let visible = true;
-    let timer = 0;
+    let visible = false;
+    let timer: number | undefined;
     let last = 0;
-    let rotation = angle.current;
     const draw = () => {
-      angle.current = rotation;
-      node.textContent = renderStack({ ...ART, rotation, spread: compact ? 0 : ART.spread });
+      node.textContent = renderStack({
+        ...ART,
+        rotation: angle.current,
+        spread: compact ? 0 : ART.spread,
+      });
     };
     draw();
     if (paused || reducedMotion) return;
+    const stop = () => {
+      if (timer !== undefined) window.clearInterval(timer);
+      timer = undefined;
+    };
+    const sync = () => {
+      if (!visible || document.hidden) {
+        stop();
+      } else if (timer === undefined) {
+        last = performance.now();
+        timer = window.setInterval(() => {
+          const now = performance.now();
+          angle.current += (Math.min(now - last, 150) / 1000) * ART.speed;
+          last = now;
+          draw();
+        }, 1000 / ART.fps);
+      }
+    };
     const observer = new IntersectionObserver(([entry]) => {
       visible = entry?.isIntersecting ?? false;
+      sync();
     });
     observer.observe(region);
-    const tick = (time: number) => {
-      if (time - last >= 1000 / ART.fps) {
-        if (visible && !document.hidden) {
-          rotation += (Math.min(time - last, 150) / 1000) * ART.speed;
-          draw();
-        }
-        last = time;
-      }
-      timer = requestAnimationFrame(tick);
-    };
-    timer = requestAnimationFrame(tick);
+    document.addEventListener('visibilitychange', sync);
     return () => {
-      cancelAnimationFrame(timer);
+      stop();
       observer.disconnect();
+      document.removeEventListener('visibilitychange', sync);
     };
   }, [paused, compact, reducedMotion]);
 
@@ -70,36 +80,25 @@ export function AsciiStack() {
         <span className="ascii-cross ascii-cross-br" aria-hidden="true">
           +
         </span>
-        <pre className="ascii-art" ref={output} aria-hidden="true">
-          {STILL}
-        </pre>
+        <pre className="ascii-art" ref={output} aria-hidden="true" />
       </div>
       <figcaption className="ascii-caption">
         <span>
           Seven tiers.
           <br />
-          <strong>One connected stack.</strong>
+          <strong>Seven-layer study.</strong>
         </span>
         <div className="ascii-controls">
-          <button
-            type="button"
-            onClick={() => setCompact((value) => !value)}
-            aria-pressed={compact}
-          >
+          <button type="button" onClick={() => setCompact((value) => !value)}>
             {compact ? '[ + ] Explode' : '[ − ] Assemble'}
           </button>
-          <button
-            type="button"
-            onClick={() => setPaused((value) => !value)}
-            aria-pressed={paused || reducedMotion}
-            disabled={reducedMotion}
-          >
-            {reducedMotion
-              ? 'Still / reduced motion'
-              : paused
-                ? 'Resume animation'
-                : 'Pause animation'}
-          </button>
+          {reducedMotion ? (
+            <span>Still / reduced motion</span>
+          ) : (
+            <button type="button" onClick={() => setPaused((value) => !value)}>
+              {paused ? 'Resume animation' : 'Pause animation'}
+            </button>
+          )}
         </div>
       </figcaption>
     </figure>

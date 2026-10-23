@@ -1,148 +1,93 @@
-# Local ASCII art direction
+# ASCII art direction study
 
-Tracking: https://github.com/Pick-Your-AI/pickyour.ai/issues/32
+Tracking: [#32](https://github.com/Pick-Your-AI/pick-your-ai-website/issues/32) and
+[#33](https://github.com/Pick-Your-AI/pick-your-ai-website/issues/33).
+Review: [PR #323](https://github.com/Pick-Your-AI/pick-your-ai-website/pull/323).
 
-## Integration for re-review (2026-10-23)
+## Scope
 
-The branch now incorporates current main. Open `/ascii-study` after `npm run dev` to review the proposal. The approved homepage, application shell and builder remain on main's design; study CSS is scoped to its page and uses the shared theme toggle. Tier links use the current catalog layer query and Start a stack creates a blank build. The screenshots and verification below describe the original study, not the integrated revision. The original builder still-frame proposal remains visible in the archived screenshot; it is not applied to the current builder. Design approval is still pending.
+Run `npm ci` and `npm run dev`, then open `/ascii-study`. This separate review page
+preserves the warm paper/ink proposal alongside the approved main UI. Its stylesheet is
+scoped under `.ascii-study` and follows the shared light/dark toggle. The homepage,
+application shell, builder and parts registers retain main's design. No deployment or
+production design approval is implied by this study.
 
-### Integrated revision validation
+The original study was based on `c731bc451d227eac843750418b6de3c3377ea90b`; the conflict
+resolution incorporates main at `27f230c2b7a42249bc3f3ebad2be9269740ee767`. The saved
+[home](design/ascii-study/home.png) and [builder](design/ascii-study/builder.png) images
+show that historical proposal, not the current integrated page. The builder image is
+retained for discussion; its artwork is not applied to the current builder.
 
-- Formatting, lint, TypeScript, contract verification and production dependency audit: pass.
-- Unit suite: 478 tests passed; deployment-admission tests: 115 passed.
-- Static build and `scripts/check-dist.mjs`: pass.
-- Playwright: 134 passed, 16 existing project-specific skips. Includes study animation,
-  reduced motion, light/dark axe checks, narrow widths, explicit blank-build creation,
-  starter selection and CSS isolation after client-side navigation.
-- Desktop light and mobile dark screenshots inspected. This verifies rendering, not design approval.
+## Visual references and geometry
 
-## Brief
+The original author cited [shitty-prompts.com](https://shitty-prompts.com) and
+[polymathic.mov](https://polymathic.mov) as visual references. The scene is original
+mathematical geometry, rendered as text without a bitmap generator or third-party renderer.
 
-Refresh the existing frontend with an original 3D ASCII aesthetic inspired by
-https://shitty-prompts.com and https://polymathic.mov. Keep the functional stack
-builder, canonical research contract, synthetic-data disclosures and explicit
-unknown states. Work in an isolated local worktree and display it on localhost
-for live art direction. No publication or deployment is included.
-
-## Source and isolation
-
-The source was downloaded from the public upstream main archive on 2026-10-17.
-The main API reported `c731bc451d227eac843750418b6de3c3377ea90b` immediately
-after download. The archive was seeded into a separate local repository, then
-a clean linked worktree was created on `job/pickyour-ascii`.
-
-## Reference observations
-
-- shitty-prompts.com: oversized sans typography, near-black background, mint
-  character-rendered spheres, fine borders, small monospace labels, pause control.
-- polymathic.mov: warm paper background (`#fdf9f3`), ink (`#060605`), ember
-  (`#c2410c`), pixel display typography, ray-cast character forms, subtle texture.
-- Proposed synthesis: warm paper and ink for a clear working tool, restrained
-  teal for actions, large editorial type, and a rotating exploded ASCII stack
-  that describes the product's tiers.
-
-## Task graph
-
-```text
-source + references
-       |
-       v
-visual brief + canonical tier mapping
-       |
-       +----> Sol: page composition + shared visual system
-       |
-       +----> Luna: ASCII stack renderer + motion controls
-       |
-       +----> Luna: functional / accessibility review
-                        |
-                        v
-                  integration + checks
-                        |
-                        v
-               localhost art direction
-```
-
-The OpenRig CLI is blocked from this sandbox (`EPERM`). A direct `/healthz`
-audit confirms the existing daemon is healthy; it has not been restarted.
-The choice to use built-in GPT agents instead is pending with Ari. Do not
-represent prepared tasks as running agents. The prepared native rig and task
-bodies are in the maintainer workspace's `context/frontend-swarm/` directory.
-
-## Done test
-
-- Character-based 3D artwork visible in the actual frontend, with pause,
-  reduced-motion support and bounded rendering work.
-- Cohesive homepage, navigation, builder and catalogue styling at desktop and
-  mobile widths. Visible keyboard focus and sufficient text contrast.
-- Existing starter, builder, selection, save, compare and share flows preserved.
-- No modifications to vendored contracts, generated types, operations or deploy files.
-- Typecheck, lint, unit tests, static production build, contract verification and
-  browser/accessibility checks pass, or existing failures are documented with evidence.
-- Local preview remains available for Ari's visual feedback; taste is not declared locked.
+The scene contains seven slabs with two chips on each. The exploded default frame has
+seven separate row bands at the 24 sampled viewing angles. Assembly and some viewing angles overlap their silhouettes;
+the compact image does not promise seven visibly distinct bands. This is an abstract
+layer study, not a dependency diagram: it contains no connecting geometry and its slabs
+are not labelled as individual contract tiers. The adjacent list provides the actual
+T0-to-T6 order, names, kind counts and registry-derived optional activation.
 
 ## Current dials
 
-| Dial             | Value                                   | Where                           |
-| ---------------- | --------------------------------------- | ------------------------------- |
-| Paper / ink      | `#f8f6ef` / `#202922`                   | `src/styles/art-direction.css`  |
-| Dark paper / ink | `#111713` / `#e8e9de`                   | same                            |
-| Signal           | `#0f766e` light, `#91d7bd` dark         | same                            |
-| Display type     | 78–116 px on desktop, responsive        | `--display-size`                |
-| ASCII frame      | 96 columns × 68 rows                    | `src/components/AsciiStack.tsx` |
-| Rotation         | 12 fps cap, 0.085 radians/sec           | `ART` in the component          |
-| Layer spacing    | compact 0.48, exploded 1.12 scene units | `src/lib/ascii-stack.ts`        |
+| Dial             | Value                                       | Where                           |
+| ---------------- | ------------------------------------------- | ------------------------------- |
+| Paper / ink      | `#f8f6ef` / `#202922`                       | `src/styles/art-direction.css`  |
+| Dark paper / ink | `#111713` / `#e8e9de`                       | same                            |
+| Signal           | `#0f766e` light, `#91d7bd` dark             | same                            |
+| Display type     | 78�116 px on desktop, responsive            | `--display-size`                |
+| ASCII frame      | 96 columns � 68 rows                        | `src/components/AsciiStack.tsx` |
+| Rotation         | 12 scheduled updates/sec, 0.085 radians/sec | `ART` in the component          |
+| Layer spacing    | compact 0.48, exploded 1.12 scene units     | `src/lib/ascii-stack.ts`        |
 
-## Verification, first study
+The interval exists only while the scene intersects the viewport and the document is
+visible. Pause, reduced motion, offscreen state and unmount clear it. Browser scheduling
+can delay updates; 12 is the requested cadence, not a measured frame-rate guarantee.
+There is no module-load render. Action buttons change their labels without `aria-pressed`;
+reduced-motion status is plain text. Controls are underlined at rest.
 
-Commands run against the current implementation:
+## Reproduction and evidence
 
-- `npm run typecheck`: pass.
-- `npm run lint`: pass.
-- `npm test`: **69 passed** across 7 files.
-- `npm run contracts:verify`: 46 vendored files intact; 43 baseline files match.
-- `npm run build`: static output built; the pre-existing large-validator-chunk warning remains.
-- `node scripts/check-dist.mjs`: pass.
-- `npx playwright test --config _local-playwright.mjs --workers 2`: **39 passed,
-  3 intentionally skipped** across desktop Chromium and Pixel 7. The skips are
-  the existing project-specific desktop/mobile alternatives.
-- New browser coverage: animated frame changes, pause stability, compact/exploded
-  state, reduced motion, light/dark axe checks on affected routes, width checks
-  through 320 px. Existing builder, selection, persistence, export and sharing
-  checks remain green.
-- Prettier on all changed files and `git diff --check`: pass.
+Run the repository checks from `AGENTS.md`:
 
-The temporary ignored `_local-playwright.mjs` points to the matching official
-Chromium headless shell under `/tmp/pickyour-playwright` and uses IPv4. The
-default local browser version was absent. Direct preview startup returned
-`EPERM`; running the existing Playwright command through its available tool
-path completed the suite. No project dependency or committed runner config changed.
+```sh
+npm run format:check
+npm run lint
+npm run typecheck
+npm run contracts:verify
+npm test
+npm run build
+node scripts/check-dist.mjs
+npm run test:e2e
+npm run audit
+```
 
-Saved full-page renders are under `test-results/ascii-art-reduced-motion-k-4db0e-ayouts-fit-at-narrow-widths-{desktop,mobile}-chromium/`.
-Both light and dark themes and a 320 px render were reviewed. A local 50-frame
-Node measurement averaged 13.43 ms per frame; this is a development-machine
-observation, not a mobile performance guarantee.
+Focused coverage:
 
-The first study is ready for visual direction, not taste approval. The requested
-Sol/Luna swarm and formal GitHub assignment are still pending. No agent swarm
-has been launched, and no push, deployment or design-lock commit was made.
+```sh
+npx vitest run tests/unit/ascii-stack.test.ts tests/unit/ascii-animation.test.tsx
+npx playwright test tests/e2e/ascii-art.spec.ts
+```
 
-The final audit confirmed through the GitHub connector that `PUSHINGSQUARES`
-has pull access but no push or triage permission. An explicit assignment request
-returned `403 Resource not accessible by integration`. The native rig spec
-validates locally; the agent-spec validator cannot finish while CLI access
-returns `EPERM`. Those gates have recurred across three consecutive goal turns.
+The geometry tests reject a single noise band or fewer than seven default slabs and check
+the intended glyph set. These checks do not certify artistic quality. Lifecycle tests
+check timer cadence and teardown under visibility, pause and reduced-motion changes.
+Browser tests cover both themes, accessibility, narrow widths, starter selection, blank-build
+creation, registry-derived labels and CSS isolation after client navigation.
 
-## Work log
+The browser test writes screenshots into its ignored `test-results/` output. Re-run it to
+produce current local images; those generated paths are not published evidence. No portable
+CPU, paint-time or device-performance measurement is claimed. Design acceptance and
+karutoil's re-review remain separate from automated validation.
 
-- 2026-10-17: Inspected both reference sites and source architecture. Created
-  GitHub tracking issue #32. Assignee controls are absent for the signed-in
-  account; CLI assignment also cannot reach the API from this sandbox.
-- 2026-10-17: Initial `npm ci` failed with `ENOTFOUND registry.npmjs.org`.
-  Downloaded lockfile package archives using the available curl network path;
-  completed an offline install in a temporary cache.
-- 2026-10-17: Built the first local study independently while the swarm transport
-  choice remained pending. Added original ray-cast ASCII geometry and motion
-  controls, replaced both raster illustration usages, and applied the paper/ink
-  visual system across the existing application. Progress posted to
-  https://github.com/Pick-Your-AI/pickyour.ai/issues/32#issuecomment-6227255829;
-  renderer tracked by issue #33. All checks above are current.
+## Validation of the review fixes (2026-10-23)
+
+Formatting, lint, typecheck, contract verification, the static build, `check-dist` and
+production dependency audit passed. The unit suite passed 482 tests plus 115 deployment
+admission checks. Playwright passed 134 tests with 16 existing project-specific skips.
+The three-layer and noise-band mutations were both rejected by the geometry tests.
+The desktop light screenshot was inspected after the pitch correction. Hosted CI and
+independent review are reported separately in the PR.
