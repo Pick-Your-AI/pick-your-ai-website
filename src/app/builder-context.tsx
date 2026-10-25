@@ -30,6 +30,14 @@ export interface LastChange extends InvalidationResult {
 
 type SaveState = { status: 'idle' | 'saving' | 'saved' } | { status: 'error'; message: string };
 
+interface SaveSession {
+  revision: number | null;
+  queue: BuildDraft[];
+  running: boolean;
+  conflict: boolean;
+  error: Extract<SaveState, { status: 'error' }> | null;
+}
+
 interface BuilderApi {
   draft: BuildDraft | null;
   ready: boolean;
@@ -74,11 +82,19 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [lastChange, setLastChange] = useState<LastChange | null>(null);
   const [saveState, setSaveState] = useState<SaveState>({ status: 'idle' });
-  const savedRevision = useRef<number | null>(null);
+  const draftRef = useRef<BuildDraft | null>(null);
+  const saveSession = useRef<SaveSession | null>(null);
+  const navigation = useRef(0);
   // Set once the user starts, opens or changes a build, so a slow initial load never overwrites it.
   const touched = useRef(false);
   const catalogById = catalog.byId;
   const snapshotId = catalog.data?.id;
+
+  const activate = useCallback((next: BuildDraft, revision: number | null) => {
+    saveSession.current = { revision, queue: [], running: false, conflict: false, error: null };
+    draftRef.current = next;
+    setDraft(next);
+  }, []);
 
   // Load the current draft once the catalog is known.
   useEffect(() => {
@@ -94,55 +110,78 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
     (id ? builds.get(id) : Promise.reject(new Error('none')))
       .then((stored) => {
         if (cancelled || touched.current) return;
-        setDraft(stored);
-        savedRevision.current = stored.build.revision;
+        activate(stored, stored.build.revision);
       })
       .catch(() => {
         if (cancelled || touched.current) return;
-        setDraft(fresh());
-        savedRevision.current = null;
+        activate(fresh(), null);
       })
       .finally(() => !cancelled && setReady(true));
     return () => {
       cancelled = true;
     };
-  }, [builds, snapshotId, ready]);
+  }, [activate, builds, snapshotId, ready]);
 
   const persist = useCallback(
-    async (next: BuildDraft) => {
-      setSaveState({ status: 'saving' });
-      try {
-        await builds.save(next, savedRevision.current);
-        savedRevision.current = next.build.revision;
-        writeCurrentId(next.build.id);
-        setSaveState({ status: 'saved' });
-      } catch (e) {
-        setSaveState({
-          status: 'error',
-          message: isDataError(e) ? e.message : 'Could not save this build.',
-        });
+    (next: BuildDraft) => {
+      const session = saveSession.current;
+      if (!session) return;
+      session.queue.push(next);
+      if (session.conflict) {
+        setSaveState(session.error!);
+        return;
       }
+      setSaveState({ status: 'saving' });
+      if (session.running) return;
+      session.running = true;
+      session.error = null;
+      // Each revision depends on the previous acknowledgement. Keep the queue
+      // with the opened draft so late work cannot change another build's state.
+      void (async () => {
+        try {
+          while (session.queue.length) {
+            const pending = session.queue[0]!;
+            await builds.save(pending, session.revision);
+            session.revision = pending.build.revision;
+            session.queue.shift();
+            if (saveSession.current === session) writeCurrentId(pending.build.id);
+          }
+        } catch (e) {
+          session.conflict = isDataError(e) && e.kind === 'conflict';
+          session.error = {
+            status: 'error',
+            message: isDataError(e) ? e.message : 'Could not save this build.',
+          };
+        } finally {
+          session.running = false;
+          if (saveSession.current === session) {
+            setSaveState(session.error ?? { status: 'saved' });
+          }
+        }
+      })();
     },
     [builds],
   );
 
   const apply = useCallback<BuilderApi['apply']>(
     (change, summary, changedKinds) => {
-      setDraft((current) => {
-        if (!current) return current;
-        const next = commit(current, change, summary, changedKinds);
-        if (graph.data) {
-          const before = buildContext(current.build, catalogById);
-          const after = buildContext(next.build, catalogById);
-          setLastChange({
-            ...affectedByChange(graph.data, changedKinds, before, after),
-            revision: next.build.revision,
-            summary,
-          });
-        }
-        void persist(next);
-        return next;
-      });
+      const current = draftRef.current;
+      if (!current) return;
+      touched.current = true;
+      const next = commit(current, change, summary, changedKinds);
+      if (graph.data) {
+        const before = buildContext(current.build, catalogById);
+        const after = buildContext(next.build, catalogById);
+        setLastChange({
+          ...affectedByChange(graph.data, changedKinds, before, after),
+          revision: next.build.revision,
+          summary,
+        });
+      }
+      // Persist outside a state updater: React may replay updaters in StrictMode.
+      draftRef.current = next;
+      setDraft(next);
+      persist(next);
     },
     [catalogById, graph.data, persist],
   );
@@ -151,8 +190,10 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
     (template, name) => {
       // Claim the draft immediately so a slower initial load cannot replace it.
       touched.current = true;
+      const request = ++navigation.current;
       void (async () => {
         const catalogSnapshotId = snapshotId ?? (await catalogRepo.getSnapshot()).id;
+        if (request !== navigation.current) return;
         const base = createBuild({ catalogSnapshotId, name });
         const build: BuildSnapshot = template
           ? {
@@ -171,27 +212,27 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
           template ? `Created from "${template.name}"` : 'Created build',
         );
         touched.current = true;
-        savedRevision.current = null;
         setLastChange(null);
-        setDraft(next);
+        activate(next, null);
         setReady(true);
         void persist(next);
       })();
     },
-    [persist, snapshotId, catalogRepo],
+    [activate, persist, snapshotId, catalogRepo],
   );
 
   const open = useCallback<BuilderApi['open']>(
     async (buildId) => {
+      const request = ++navigation.current;
       const stored = await builds.get(buildId);
+      if (request !== navigation.current) return;
       touched.current = true;
-      savedRevision.current = stored.build.revision;
       setLastChange(null);
-      setDraft(stored);
+      activate(stored, stored.build.revision);
       writeCurrentId(buildId);
       setSaveState({ status: 'saved' });
     },
-    [builds],
+    [activate, builds],
   );
 
   const restore = useCallback<BuilderApi['restore']>(
