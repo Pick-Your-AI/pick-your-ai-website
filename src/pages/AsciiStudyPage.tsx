@@ -44,7 +44,7 @@ function Hero() {
             Explore the catalog <span aria-hidden="true">→</span>
           </Link>
         </div>
-        <p className="hero-footnote">Synthetic preview. Your builds stay in this browser.</p>
+        <p className="hero-footnote">Synthetic preview.</p>
       </div>
       <AsciiStack />
       <div className="hero-strip">
