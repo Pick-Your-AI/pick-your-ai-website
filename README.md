@@ -96,3 +96,8 @@ merged through a pull request with the required CI status green.
 ## License
 
 [MIT](LICENSE)
+
+## Contributor routing
+
+For a blocked decision, use [the repository routing procedure](CONTRIBUTING.md#routing-decisions).
+Start with the existing issue and its accepted owner; preserve its scope and evidence requirements.
