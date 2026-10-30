@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- **Organization directory integration (`/organization/`), with no bundle admitted yet.** A strict, pinned importer and validator (`scripts/organization.mjs`, `scripts/organization-lib.mjs`) for the reviewed `Pick-Your-AI/.github` `docs/organization/current/` bundle: exact commit SHA only, fixed upstream, SHA-256 pin per file, chart triple and same-revision completeness, privacy and safety checks, a closed file inventory (only the four core files plus the model's declared chart triples), an exact reviewed SHA-256 for the browser script (the pattern scan is supplementary), and one admission path: merged into `.github` main with a recorded human review. `contracts/organization/PIN.json` records the unmerged candidate `9abadb5…` as **pending**, not admitted; `check-dist.mjs` and CI refuse unadmitted or altered bytes. Until a bundle is admitted, `/organization` shows a "not published yet" page. The About page links to the directory and the canonical escalation policy (no shared-layout change, so the pixel-exact visual baselines are untouched). See `docs/ORGANIZATION_DIRECTORY.md`. Needs operations changes (path-scoped CSP, `.mmd` MIME, live verification) before any bundle can be deployed.
+
 ### Changed
 
 - **Builder, catalog and compare rebuilt on a dense "parts list" layer** (`src/styles/dense.css`, `src/components/parts.tsx`) modelled on the PCPartPicker interaction patterns recorded in `docs/research/pcpartpicker-ux-notes.md`: fixed component rows in dependency order with "Choose …" empty states, a status strip carrying the worst outcome plus live estimates, a running total under the table, lettered findings with severity and outcome as words, an explicit "what was not checked" note, a compatibility filter that is on by default with `unknown` as its own bucket, `aria-sort` table headers, active-filter chips, and URL-carried filter state.

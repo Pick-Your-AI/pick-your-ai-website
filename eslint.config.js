@@ -15,6 +15,9 @@ export default tseslint.config(
       'playwright-report',
       'test-results',
       'public/theme-init.js',
+      // Vendored verbatim from a pinned upstream commit; verified by scripts/organization.mjs.
+      'public/organization',
+      'tests/fixtures/organization',
     ],
   },
   {
