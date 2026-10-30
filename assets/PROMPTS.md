@@ -1,6 +1,7 @@
 # Generated art provenance
 
 ## assets/icon.png
+
 - Date: 2026-10-30
 - Tool and model: Codex CLI 0.164.0 built-in image generation (model id not reported by the tool)
 - Seed: not supported

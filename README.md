@@ -5,6 +5,7 @@
 <!-- showcase:banner:end -->
 
 <!-- showcase:nav:start -->
+
 **Pick Your AI** · [All repositories](https://github.com/Pick-Your-AI) · [Docs](docs/) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 <!-- showcase:nav:end -->
 
@@ -13,6 +14,7 @@
 # PickYour.AI
 
 <!-- showcase:badges:start -->
+
 ![Node 22+](https://img.shields.io/badge/node-22%2B-115E59?logo=nodedotjs&logoColor=white)
 ![Type Web app](https://img.shields.io/badge/type-Web%20app-0F766E)
 ![License MIT](https://img.shields.io/badge/license-MIT-64748B)
@@ -20,6 +22,7 @@
 <!-- showcase:badges:end -->
 
 <!-- showcase:tagline:start -->
+
 **Pick Your AI: a PCPartPicker-inspired builder for complete AI stacks. Explore components, compatibility, and costs in a preview using synthetic data.**
 <!-- showcase:tagline:end -->
 
