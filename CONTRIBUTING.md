@@ -1,5 +1,7 @@
 # Contributing to pickyour.ai
 
+Current team and Project names: [organization naming register](https://github.com/Pick-Your-AI/.github/blob/ce8c876f6331b4f427d7fc8c2deff4776d003cf5/docs/NAMING.md).
+
 ## Setup
 
 Requirements: Node 22 LTS or newer, npm, git.
@@ -25,17 +27,17 @@ The [organization contributing rules](https://github.com/Pick-Your-AI/.github/bl
 
 ## Access and roles
 
-Access is granted through the Pick-Your-AI GitHub teams. The model below was reported in [PR #317](https://github.com/Pick-Your-AI/pick-your-ai-website/pull/317) on 2026-10-19; current GitHub team and repository settings govern installed permissions. Parent teams under `Maintainers` get Triage; push access is held by the child teams listed below.
+Access is granted through the Pick-Your-AI GitHub teams. The model below was reported in [PR #317](https://github.com/Pick-Your-AI/pick-your-ai-website/pull/317) on 2026-10-19; current GitHub team and repository settings govern installed permissions. Parent teams under `Organization Maintainers` get Triage; push access is held by the child teams listed below.
 
-| Role                                           | Who                                                    | Access to this repository                               |
-| ---------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------- |
-| Lead Maintainers (`Lead Maintainers` team)     | @CompleteDotTech, @BunsDev                             | Admin                                                   |
-| Site team (`pickyour.ai` for this repository)  | @CompleteDotTech, @karutoil, @BunsDev, @pushingsquares | Write                                                   |
-| `Websites` parent team                         | Members of the child teams above                       | Triage                                                  |
-| Early contributors (`early-contributors` team) | Members of the `early-contributors` team               | Write, on branches named `contrib/<your-login>/<topic>` |
-| Other contributors                             | Anyone else                                            | Fork and pull request                                   |
+| Role                                                      | Who                                                    | Access to this repository                               |
+| --------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------- |
+| Lead Maintainers (`Lead Maintainers - Main Website` team) | @CompleteDotTech, @BunsDev                             | Admin                                                   |
+| Site team (`Main Website` for this repository)            | @CompleteDotTech, @karutoil, @BunsDev, @pushingsquares | Write                                                   |
+| `Websites` parent team                                    | Members of the child teams above                       | Triage                                                  |
+| Early contributors (`early-contributors` team)            | Members of the `early-contributors` team               | Write, on branches named `contrib/<your-login>/<topic>` |
+| Other contributors                                        | Anyone else                                            | Fork and pull request                                   |
 
-For team-membership requests, contact the Lead Maintainers (@CompleteDotTech and @BunsDev). Organization administrators retain the authority described in the organization contributing rules. Team membership grants access but does not waive the review and CI requirements above.
+The team names above were aligned on 2026-10-29; the listed people remain the historical PR #317 snapshot, not a current roster. For team-membership requests, consult the current GitHub team maintainers and the [accepted delegation record](https://github.com/Pick-Your-AI/.github/issues/18). Organization administrators retain the authority described in the organization contributing rules. Team membership grants access but does not waive the review and CI requirements above.
 
 ## npm scripts
 
