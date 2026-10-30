@@ -1,4 +1,33 @@
+<!-- showcase:banner:start -->
+<p align="center">
+  <img src="docs/images/banner.png" alt="pick-your-ai-website by Pick Your AI" width="100%">
+</p>
+<!-- showcase:banner:end -->
+
+<!-- showcase:nav:start -->
+**Pick Your AI** · [All repositories](https://github.com/Pick-Your-AI) · [Docs](docs/) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+<!-- showcase:nav:end -->
+
+<div align="center">
+
 # PickYour.AI
+
+<!-- showcase:badges:start -->
+![Node 22+](https://img.shields.io/badge/node-22%2B-115E59?logo=nodedotjs&logoColor=white)
+![Type Web app](https://img.shields.io/badge/type-Web%20app-0F766E)
+![License MIT](https://img.shields.io/badge/license-MIT-64748B)
+[![CI](https://github.com/Pick-Your-AI/pick-your-ai-website/actions/workflows/ci.yml/badge.svg)](https://github.com/Pick-Your-AI/pick-your-ai-website/actions/workflows/ci.yml)
+<!-- showcase:badges:end -->
+
+<!-- showcase:tagline:start -->
+**Pick Your AI: a PCPartPicker-inspired builder for complete AI stacks. Explore components, compatibility, and costs in a preview using synthetic data.**
+<!-- showcase:tagline:end -->
+
+</div>
+
+---
+
+## About
 
 **Build a compatible AI stack, part by part.** PickYour.AI is a builder for
 complete AI solutions in the spirit of a PC parts list: choose a workload and
@@ -17,7 +46,7 @@ evidence while checking compatibility as you go.
 > Every component, price, and compatibility result on the site today is
 > **synthetic demonstration data**, labelled as such.
 
-## Quick start
+## Quick Start
 
 ```sh
 npm ci
@@ -27,7 +56,9 @@ npm run dev
 See [CONTRIBUTING.md](CONTRIBUTING.md) for scripts and workflow, and
 [AGENTS.md](AGENTS.md) for the rules every change must follow.
 
-## Documentation
+## Notes
+
+### Documentation
 
 | Topic                                       | Document                                                   |
 | ------------------------------------------- | ---------------------------------------------------------- |
@@ -43,7 +74,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for scripts and workflow, and
 
 Some documents are added by later PRs; see `CHANGELOG.md`.
 
-## What this repo contains
+### What this repo contains
 
 This repository is the website frontend and build tooling for PickYour.AI. It
 is a static SPA served by Apache on GoDaddy shared hosting, with compatibility
@@ -56,7 +87,7 @@ logic and catalog rules driven by the vendorized research contract under
 - Synthetic fixture data until real catalog research lands
 - Accessibility-first UI work aiming for WCAG 2.2 AA
 
-## Contract and source-of-truth rules
+### Contract and source-of-truth rules
 
 - `contracts/v1/` is vendored from `Pick-Your-AI/pick-your-ai-research` and is
   treated as authoritative.
@@ -68,7 +99,7 @@ logic and catalog rules driven by the vendorized research contract under
 - No credentials, private build content, or secret values are committed to the
   repo.
 
-## Building and deployment
+### Building and deployment
 
 This site is intentionally static. The host has no Node runtime, so the
 production build must generate a full static `dist/` directory and remain
@@ -85,7 +116,7 @@ npm run build && npm run test:e2e
 npm run audit
 ```
 
-## Contributing
+### Contributing
 
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md)
 before making changes.
