@@ -391,6 +391,18 @@ export default function BuildSummaryPage() {
                       <span className="dim">
                         ({humanize(e.confidence)}, {e.estimator_id}@{e.estimator_version})
                       </span>
+                      {e.assumptions.length ? (
+                        <ul
+                          className="summary-assumptions"
+                          aria-label={`Assumptions for ${humanize(e.metric.split('.').at(-1) ?? e.metric)}`}
+                        >
+                          {e.assumptions.map((assumption, index) => (
+                            <li key={index}>{assumption}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="dim">No assumptions provided.</p>
+                      )}
                     </li>
                   ))}
                 </ul>
