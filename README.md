@@ -63,17 +63,18 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for scripts and workflow, and
 
 ### Documentation
 
-| Topic                                       | Document                                                   |
-| ------------------------------------------- | ---------------------------------------------------------- |
-| Architecture, data flow, state              | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)               |
-| Research → website mapping and traceability | [docs/RESEARCH_MAPPING.md](docs/RESEARCH_MAPPING.md)       |
-| Moving from fixtures to real data           | [docs/DATA_INTEGRATION.md](docs/DATA_INTEGRATION.md)       |
-| Product, sitemap, journeys                  | [docs/PRODUCT.md](docs/PRODUCT.md)                         |
-| Design system and accessibility             | [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)             |
-| Testing strategy                            | [docs/TESTING.md](docs/TESTING.md)                         |
-| Build contract for deployment               | [docs/DEPLOYMENT_CONTRACT.md](docs/DEPLOYMENT_CONTRACT.md) |
-| Image asset provenance                      | [docs/ASSETS.md](docs/ASSETS.md)                           |
-| Operations (deploy, DNS, rollback)          | [docs/operations/](docs/operations/)                       |
+| Topic                                       | Document                                                         |
+| ------------------------------------------- | ---------------------------------------------------------------- |
+| Architecture, data flow, state              | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)                     |
+| Research → website mapping and traceability | [docs/RESEARCH_MAPPING.md](docs/RESEARCH_MAPPING.md)             |
+| Moving from fixtures to real data           | [docs/DATA_INTEGRATION.md](docs/DATA_INTEGRATION.md)             |
+| Product, sitemap, journeys                  | [docs/PRODUCT.md](docs/PRODUCT.md)                               |
+| Design system and accessibility             | [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)                   |
+| Testing strategy                            | [docs/TESTING.md](docs/TESTING.md)                               |
+| Build contract for deployment               | [docs/DEPLOYMENT_CONTRACT.md](docs/DEPLOYMENT_CONTRACT.md)       |
+| Organization directory (`/organization/`)   | [docs/ORGANIZATION_DIRECTORY.md](docs/ORGANIZATION_DIRECTORY.md) |
+| Image asset provenance                      | [docs/ASSETS.md](docs/ASSETS.md)                                 |
+| Operations (deploy, DNS, rollback)          | [docs/operations/](docs/operations/)                             |
 
 Some documents are added by later PRs; see `CHANGELOG.md`.
 
@@ -114,6 +115,7 @@ Before opening a PR, the repo expects the following checks to pass:
 npm ci
 npm run format:check && npm run lint && npm run typecheck
 npm run contracts:verify
+npm run organization:verify
 npm test
 npm run build && npm run test:e2e
 npm run audit

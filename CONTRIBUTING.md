@@ -50,6 +50,8 @@ For team-membership requests, contact the Lead Maintainers (@CompleteDotTech and
 | `contracts:verify`        | Check vendored contract hashes (`-- --upstream` also compares with GitHub)     |
 | `contracts:update`        | Re-vendor `contracts/v1` (`-- --ref <sha>`)                                    |
 | `contracts:types`         | Regenerate TypeScript types from the JSON Schemas                              |
+| `organization:verify`     | Check the pinned organization bundle (`-- --upstream` also compares upstream)  |
+| `organization:update`     | Admit a reviewed `.github` commit (`-- --ref <sha> --basis …`; see the guide)  |
 | `test`                    | Vitest unit and integration tests                                              |
 | `test:e2e`                | Playwright smoke and axe accessibility tests against `vite preview`            |
 | `audit`                   | `npm audit` for production dependencies (high and above)                       |
@@ -63,6 +65,16 @@ The contract is owned by the research repository. To adopt a new upstream versio
 3. Fix any type errors and fixture validation failures, update `CHANGELOG.md`, and open a PR.
 
 See `docs/DATA_INTEGRATION.md` for the full process.
+
+## Updating the organization directory
+
+`/organization/` serves a reviewed, immutable bundle generated in `Pick-Your-AI/.github`. Do not edit
+`public/organization/` or `contracts/organization/PIN.json` by hand. A new bundle enters through
+`npm run organization:update` on a `feat/…` branch and an ordinary PR, which is a new website commit. The
+importer fetches only from the fixed upstream at a full commit SHA, and admits only a commit that is on
+`.github` `main` with a recorded human review; there is no exception path. The bundled `directory.js` must be
+a reviewed hash. See
+[docs/ORGANIZATION_DIRECTORY.md](docs/ORGANIZATION_DIRECTORY.md).
 
 ## Toolchain major upgrades
 

@@ -6,6 +6,10 @@ contracts/v1/
 # Preserve the independently pinned upstream label artifact verbatim.
 contracts/display-labels/v1.0.0.json
 src/contracts/generated/
+# The admitted organization bundle is vendored verbatim (hash-pinned), not formatted here.
+public/organization/
+# Verbatim copy of the reviewed upstream script (code fixture; hash asserted by the tests).
+tests/fixtures/organization/
 playwright-report/
 test-results/
 public/.htaccess

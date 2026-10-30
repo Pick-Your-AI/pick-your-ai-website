@@ -1,0 +1,741 @@
+diff --git a/.github/workflows/deploy-production.yml b/.github/workflows/deploy-production.yml
+index f89eac5..c880676 100644
+--- a/.github/workflows/deploy-production.yml
++++ b/.github/workflows/deploy-production.yml
+@@ -158,0 +159,13 @@ jobs:
++      - name: Read the target release's organization pin
++        id: pin
++        run: |
++          # The checkout above is main, but the release being verified is $TARGET: its /organization/
++          # state is whatever its own pin says. A target that predates the integration has no pin.
++          git fetch --no-tags --depth=1 origin "$TARGET"
++          if git cat-file -e FETCH_HEAD:contracts/organization/PIN.json 2>/dev/null; then
++            git show FETCH_HEAD:contracts/organization/PIN.json > "$RUNNER_TEMP/organization-pin.json"
++            echo "path=$RUNNER_TEMP/organization-pin.json" >> "$GITHUB_OUTPUT"
++          else
++            echo "path=" >> "$GITHUB_OUTPUT"
++          fi
++
+@@ -160,0 +174,2 @@ jobs:
++        env:
++          ORGANIZATION_PIN: ${{ steps.pin.outputs.path }}
+diff --git b/.github/workflows/organization-update-proposal.yml b/.github/workflows/organization-update-proposal.yml
+new file mode 100644
+index 0000000..ccd24e8
+--- /dev/null
++++ b/.github/workflows/organization-update-proposal.yml
+@@ -0,0 +1,163 @@
++name: Propose organization directory update
++
++# STATUS: PREPARED FOR THE OPERATIONS OWNER. NOT ENABLED. IT CANNOT PUBLISH ANYTHING AUTOMATICALLY TODAY.
++#
++# This is a proposal for one narrow, manual-dispatch route from a merged Pick-Your-AI/.github organization
++# bundle to a pull request here (docs/ORGANIZATION_DIRECTORY.md). It does not make end-to-end publication
++# automatic and must not be described that way. The currently available proposal route is the importer run
++# locally by an authorized human (`npm run organization:update`).
++#
++# MISSING OWNER GATES (nothing here enables, bypasses or requests them):
++#   1. A writer. This repository's Actions setting for creating pull requests is off
++#      (can_approve_pull_request_reviews=false), so the workflow token cannot open the PR, and a PR opened with
++#      GITHUB_TOKEN would not start CI. A separate, narrowly scoped publication identity, authorized by the
++#      owners, is the alternative. The .github collector App must never receive write access here.
++#   2. Branch rules. The contributor-boundary rules exclude contrib/* and apply to feat/* branches, so the
++#      branch is contrib/github-actions/organization-<sha12>. Owners must confirm that a workflow-created
++#      branch under that name is acceptable.
++#   3. Enabling. The job is skipped unless the repository variable ORGANIZATION_PROPOSAL_ENABLED is 'true',
++#      which only the owners set once 1 and 2 are settled.
++#
++# Properties: manual `workflow_dispatch` only; runs the importer from this repository's own main; the fetched
++# .github commit is data (hash-checked, validated, never executed; no automation branch is followed; the
++# upstream host is fixed in the importer); the commit must be merged into .github main and the claimed
++# human review is checked against the API; one verified branch and one PR are reused, a failed earlier run
++# is recovered (the PR is created if only the push succeeded), and unrelated work on the branch is never
++# overwritten. It never merges, approves or deploys. The merge here is the website source-pin approval.
++on:
++  workflow_dispatch:
++    inputs:
++      ref:
++        description: Full 40-character commit SHA on Pick-Your-AI/.github main
++        required: true
++        type: string
++      pull_request:
++        description: Number of the merged Pick-Your-AI/.github pull request
++        required: true
++        type: string
++      review_id:
++        description: ID of the approving independent human review on that pull request
++        required: true
++        type: string
++
++permissions:
++  contents: read
++
++concurrency:
++  group: organization-update
++  cancel-in-progress: false
++
++jobs:
++  propose:
++    name: validate and propose
++    if: github.ref == 'refs/heads/main' && vars.ORGANIZATION_PROPOSAL_ENABLED == 'true'
++    runs-on: ubuntu-latest
++    timeout-minutes: 15
++    permissions:
++      contents: write
++      pull-requests: write
++    env:
++      REF: ${{ inputs.ref }}
++      PR: ${{ inputs.pull_request }}
++      REVIEW_ID: ${{ inputs.review_id }}
++      GH_TOKEN: ${{ github.token }}
++    steps:
++      - name: Check inputs
++        run: |
++          [[ "$REF" =~ ^[0-9a-f]{40}$ ]] || { echo "ref must be a full 40-char lowercase sha"; exit 1; }
++          [[ "$PR" =~ ^[0-9]{1,6}$ ]] || { echo "pull_request must be a number"; exit 1; }
++          [[ "$REVIEW_ID" =~ ^[0-9]{1,15}$ ]] || { echo "review_id must be a number"; exit 1; }
++
++      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
++        with:
++          ref: ${{ github.sha }}
++          fetch-depth: 0
++
++      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
++        with:
++          node-version: '22'
++          cache: npm
++
++      # Dependency lifecycle scripts are not needed to run the importer.
++      - run: npm ci --ignore-scripts
++
++      - name: Check the merge and the human approval claimed for this commit
++        id: claims
++        run: |
++          api() { gh api -H 'Accept: application/vnd.github+json' "$@"; }
++          pr="$(api "repos/Pick-Your-AI/.github/pulls/$PR")"
++          review="$(api "repos/Pick-Your-AI/.github/pulls/$PR/reviews/$REVIEW_ID")"
++          # No pipe into tee: the default step shell has no pipefail, which would mask a failed check.
++          reviewer="$(node --input-type=module -e '
++            const [pr, review] = [process.argv[1], process.argv[2]].map((s) => JSON.parse(s));
++            const ref = process.env.REF;
++            const problems = [];
++            if (!pr.merged) problems.push("pull request is not merged");
++            if (pr.base?.ref !== "main") problems.push("pull request did not merge into main");
++            if (review.state !== "APPROVED") problems.push(`review state is ${review.state}`);
++            if (review.user?.type !== "User") problems.push("reviewer is not a human user account");
++            if (review.user?.login === pr.user?.login) problems.push("reviewer is the pull request author");
++            if (review.commit_id !== pr.head?.sha) problems.push("approval is not on the pull request final head");
++            if (pr.merge_commit_sha !== ref && pr.head?.sha !== ref)
++              problems.push("commit is neither the final head nor the merge commit of that pull request");
++            if (!/^[A-Za-z0-9-]{1,39}$/.test(review.user?.login ?? "")) problems.push("unexpected reviewer login");
++            if (problems.length) { console.error(problems.join("\n")); process.exit(1); }
++            console.log(review.user.login);
++          ' "$pr" "$review")"
++          echo "reviewer=$reviewer" >> "$GITHUB_OUTPUT"
++
++      - name: Import (fixed upstream, exact SHA, ancestor of main)
++        env:
++          REVIEWER: ${{ steps.claims.outputs.reviewer }}
++        run: |
++          node scripts/organization.mjs update --ref "$REF" \
++            --pull-request "https://github.com/Pick-Your-AI/.github/pull/$PR" \
++            --review-url "https://github.com/Pick-Your-AI/.github/pull/$PR#pullrequestreview-$REVIEW_ID" \
++            --reviewer "$REVIEWER"
++          npm run organization:verify
++
++      - name: Reconcile the branch and pull request (reuse one, recover a partial run)
++        run: |
++          if git diff --quiet origin/main -- public/organization contracts/organization \
++             && [ -z "$(git ls-files --others --exclude-standard -- public/organization contracts/organization)" ]; then
++            echo "This commit is already admitted on main; nothing to propose." | tee -a "$GITHUB_STEP_SUMMARY"
++            exit 0
++          fi
++          branch="contrib/github-actions/organization-${REF:0:12}"
++          git config user.name "github-actions[bot]"
++          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
++          # Commit locally so the verified result can be compared with any existing remote branch.
++          git switch -c proposal-local
++          git add public/organization contracts/organization/PIN.json
++          git commit -q -m "feat: admit organization directory bundle ${REF:0:12}" \
++            -m "Source: Pick-Your-AI/.github@$REF (merged in pull request $PR). Proposed by a manually dispatched workflow; see docs/ORGANIZATION_DIRECTORY.md."
++
++          branch_exists=no; branch_matches=no; open_pr=no
++          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
++            branch_exists=yes
++            git fetch --no-tags origin "refs/heads/$branch:refs/remotes/origin/$branch"
++            branch_matches="$(node scripts/deploy/organization-live.mjs branch-matches --branch "origin/$branch" --head proposal-local)"
++          fi
++          if [ "$(gh pr list --head "$branch" --state open --json number --jq 'length')" != "0" ]; then open_pr=yes; fi
++
++          action="$(node scripts/deploy/organization-live.mjs plan \
++            --branch-exists "$branch_exists" --branch-matches "$branch_matches" --open-pr "$open_pr")"
++          echo "Plan: $action (branch exists: $branch_exists, matches: $branch_matches, open PR: $open_pr)" | tee -a "$GITHUB_STEP_SUMMARY"
++
++          title="feat: admit organization directory bundle ${REF:0:12}"
++          body="Manual propagation of the reviewed organization bundle at \`Pick-Your-AI/.github@$REF\` (merged pull request #$PR, review $REVIEW_ID). The importer verified the exact commit, the closed file inventory, the reviewed script hash, the privacy rules, and that the commit is an ancestor of \`.github\` main. Merging this is the website source-pin approval and deploys through the normal pipeline. Checks do not start automatically for a pull request opened with the workflow token: run \`ci-required\` with an authorized identity before merging. Publication time is the deployment readback, not the observation time."
++          create_pr() {
++            gh pr create --base main --head "$branch" --title "$title" --body "$body" || {
++              echo "Pull request creation failed. If this repository does not allow Actions to create pull requests, that is an owner gate; the branch is kept and a re-run will create only the pull request." | tee -a "$GITHUB_STEP_SUMMARY"
++              exit 1
++            }
++          }
++          case "$action" in
++            noop) ;;
++            create-pr) create_pr ;;
++            create-branch-and-pr)
++              # Never force: a concurrent writer makes this fail instead of being overwritten.
++              git push origin "proposal-local:refs/heads/$branch"
++              create_pr
++              ;;
++          esac
+diff --git a/docs/operations/deployment-runbook.md b/docs/operations/deployment-runbook.md
+index 215231c..ef2e5d9 100644
+--- a/docs/operations/deployment-runbook.md
++++ b/docs/operations/deployment-runbook.md
+@@ -68,0 +69,33 @@ The CPU regression suite runs in the ordinary `npm test` CI gate. Its response e
++## Organization directory (`/organization/`)
++
++The site serves a vendored, hash-pinned copy of the reviewed `Pick-Your-AI/.github` organization bundle
++(`public/organization/`, pinned in `contracts/organization/PIN.json`; contract in
++[docs/ORGANIZATION_DIRECTORY.md](../ORGANIZATION_DIRECTORY.md)). It deploys like any other change: the bundle is part of
++`site-dist`, and a changed bundle is a new website commit.
++
++- `.htaccess` serves `.mmd` as `text/plain` and relaxes only `style-src` (to `'self' 'unsafe-inline'`) under
++  `/organization/`. The canonical page embeds one `<style>` block and its SVG exports carry inline styles.
++  `script-src` stays `'self'`; the rest of the site keeps `style-src 'self'`. Drop the exception when the generator
++  ships an external stylesheet.
++- `verify-live.sh` section 7 reads the pin of the release being verified. If a bundle is admitted it checks that the
++  actual `GET /organization/` response is **byte-identical to the pinned `index.html`** (not just a marker), the
++  effective CSP of every enforced policy (`scripts/deploy/organization-live.mjs`: `script-src` exactly `'self'`,
++  `script-src-elem`/`-attr` not widened, only `style-src` relaxed), the `/organization` redirect, and every file's
++  HTTP 200, MIME type and SHA-256 against the pin. If none is admitted it expects the pending SPA page and a real 404 for
++  `/organization/directory.js`. A rollback passes the target release's pin (`ORGANIZATION_PIN`); a target that predates
++  the integration has none and the section is skipped.
++- **Hosting gate.** The shared host currently injects its own monitoring (an inline script and an external script from
++  the host provider's CDN) into HTML responses. The CSP blocks their execution but cannot keep the bytes identical, so
++  the exact-bytes check on `/organization/` fails by design until the site is opted out of host-injected monitoring and
++  byte equality is verified. Do not weaken the check or strip injected content to pass a deployment. That is a hosting
++  account action for the owner; no one has authorized the website worker to take it.
++- Publication time is the time of the successful readback in the **Verify live site through Cloudflare** step. The
++  bundle's own observation time is older and says nothing about deployment.
++- Roll back a bad bundle like any release (`rollback_to=<sha>`), or revert the admitting PR.
++- `.github/workflows/organization-update-proposal.yml` is a prepared, **disabled** manual-dispatch route. It cannot
++  open a pull request until the owners settle a writer (the repository setting that lets Actions create pull
++  requests is off; a separate narrowly scoped identity is the alternative) and confirm the `contrib/…` branch name,
++  then set `ORGANIZATION_PROPOSAL_ENABLED`. Until then proposals come from an authorized human running the importer.
++- Run the helper's tests with `node --test scripts/deploy/organization-live.test.mjs` (add it to the CI test script
++  together with the pinned expectation in `live-admission.test.mjs`).
++
+diff --git a/public/.htaccess b/public/.htaccess
+index 3d18f4e..a1992db 100644
+--- a/public/.htaccess
++++ b/public/.htaccess
+@@ -9,0 +10,3 @@ AddType image/svg+xml .svg
++# Mermaid sources shipped with the organization directory (/organization/*.mmd) have no default type;
++# with nosniff an untyped response is a blank download. Served as plain text.
++AddType text/plain .mmd
+@@ -58,0 +62,8 @@ AddType image/svg+xml .svg
++  # /organization/ is the canonical, generated directory vendored byte for byte from the reviewed
++  # Pick-Your-AI/.github bundle (docs/ORGANIZATION_DIRECTORY.md). It embeds one <style> block and its
++  # SVG exports carry inline styles, which style-src 'self' blocks (measured: unstyled page and
++  # hundreds of CSP errors per opened SVG). Only style-src is relaxed, only under this path;
++  # script-src stays 'self'. Remove once the generator emits an external stylesheet.
++  <If "%{REQUEST_URI} =~ m#^/organization/#">
++    Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests"
++  </If>
+diff --git b/scripts/deploy/organization-live.mjs b/scripts/deploy/organization-live.mjs
+new file mode 100644
+index 0000000..7073a50
+--- /dev/null
++++ b/scripts/deploy/organization-live.mjs
+@@ -0,0 +1,189 @@
++#!/usr/bin/env node
++// Checks used by the operations proposal for the /organization/ directory (docs/ORGANIZATION_DIRECTORY.md).
++// Pure Node, no dependencies, so verify-live.sh and the proposal workflow can call it and the tests can
++// reproduce each failure mode.
++//
++//   organization-live.mjs csp-organization <raw-response-headers>   strict /organization/ CSP
++//   organization-live.mjs csp-site <raw-response-headers>           the rest of the site stays strict
++//   organization-live.mjs route <PIN.json> <response-body-file>     canonical route == pinned index.html
++//   organization-live.mjs plan --branch-exists yes|no --branch-matches yes|no --open-pr yes|no
++//   organization-live.mjs branch-matches --branch <ref> [--base origin/main] [--head HEAD]
++import { execFileSync } from 'node:child_process';
++import { createHash } from 'node:crypto';
++import { readFileSync } from 'node:fs';
++import { fileURLToPath, pathToFileURL } from 'node:url';
++
++export const sha256 = (data) => createHash('sha256').update(data).digest('hex');
++
++const SELF = "'self'";
++const same = (tokens, expected) =>
++  Array.isArray(tokens) &&
++  tokens.length === expected.length &&
++  [...tokens].sort().join(' ') === [...expected].sort().join(' ');
++
++/** Parses `Content-Security-Policy` header lines from raw `curl -D` output; report-only lines are ignored. */
++export function parsePolicies(rawHeaders) {
++  const policies = [];
++  for (const line of String(rawHeaders).split(/\r?\n/)) {
++    const m = /^content-security-policy:\s*(.*)$/i.exec(line);
++    if (!m) continue;
++    // One header may carry several comma-separated policies; every one of them is enforced.
++    for (const policy of m[1].split(',')) {
++      const directives = new Map();
++      for (const part of policy.split(';')) {
++        const [name, ...tokens] = part.trim().split(/\s+/);
++        if (!name) continue;
++        // The first occurrence of a directive wins (CSP3).
++        if (!directives.has(name.toLowerCase())) directives.set(name.toLowerCase(), tokens);
++      }
++      if (directives.size) policies.push(directives);
++    }
++  }
++  return policies;
++}
++
++const show = (tokens) => (tokens === undefined ? '(absent)' : `[${tokens.join(' ')}]`);
++
++/**
++ * /organization/ may relax only style-src (the canonical page has an inline <style> block). Scripts must
++ * stay 'self' in EVERY enforced policy, including through script-src-elem / script-src-attr and the
++ * default-src fallback; a substring match for "script-src 'self'" would also accept extra origins.
++ */
++export function checkOrganizationCsp(rawHeaders) {
++  const policies = parsePolicies(rawHeaders);
++  if (!policies.length) return ['no Content-Security-Policy header on /organization/'];
++  const errors = [];
++  policies.forEach((p, i) => {
++    const at = `CSP policy ${i + 1}`;
++    const script = p.get('script-src') ?? p.get('default-src');
++    if (!same(script, [SELF]))
++      errors.push(`${at}: effective script-src must be exactly 'self', got ${show(script)}`);
++    const elem = p.get('script-src-elem');
++    if (elem !== undefined && !same(elem, [SELF]))
++      errors.push(`${at}: script-src-elem may not widen scripts, got ${show(elem)}`);
++    const attr = p.get('script-src-attr');
++    if (attr !== undefined && !same(attr, ["'none'"]))
++      errors.push(`${at}: script-src-attr must be absent or 'none', got ${show(attr)}`);
++    const style = p.get('style-src') ?? p.get('default-src');
++    if (!same(style, [SELF, "'unsafe-inline'"]))
++      errors.push(`${at}: effective style-src must be exactly 'self' 'unsafe-inline', got ${show(style)}`);
++    for (const name of ['style-src-elem', 'style-src-attr']) {
++      const v = p.get(name);
++      if (v !== undefined && !same(v, [SELF, "'unsafe-inline'"]))
++        errors.push(`${at}: ${name} must be exactly 'self' 'unsafe-inline', got ${show(v)}`);
++    }
++  });
++  return errors;
++}
++
++/** The exception is path-scoped: the rest of the site keeps style-src 'self' with no inline relaxation. */
++export function checkSiteCsp(rawHeaders) {
++  const policies = parsePolicies(rawHeaders);
++  if (!policies.length) return ['no Content-Security-Policy header on /'];
++  const errors = [];
++  policies.forEach((p, i) => {
++    const style = p.get('style-src') ?? p.get('default-src');
++    if (!same(style, [SELF])) errors.push(`CSP policy ${i + 1} on /: style-src was loosened, got ${show(style)}`);
++    const script = p.get('script-src') ?? p.get('default-src');
++    if (!same(script, [SELF])) errors.push(`CSP policy ${i + 1} on /: script-src must be 'self', got ${show(script)}`);
++    for (const [name, expected] of [
++      ['script-src-elem', [SELF]], ['script-src-attr', ["'none'"]],
++      ['style-src-elem', [SELF]], ['style-src-attr', ["'none'"]],
++    ]) {
++      const value = p.get(name);
++      if (value !== undefined && !same(value, expected))
++        errors.push(`CSP policy ${i + 1} on /: ${name} has unexpected sources ${show(value)}`);
++    }
++  });
++  return errors;
++}
++
++/**
++ * The actual canonical /organization/ response must be byte-identical to the pinned index.html. A marker
++ * such as id="directory" accepts a stale or wrong canonical route; so does ignoring injected content.
++ * Do not "fix" a mismatch by stripping or ignoring anything in the body.
++ */
++export function checkCanonicalRoute(pin, body) {
++  const admitted = pin?.admitted;
++  if (!admitted) return ['no bundle is admitted in the pin'];
++  const entry = admitted.files.find((f) => f.path === 'index.html');
++  if (!entry) return ['the pin has no index.html'];
++  const got = sha256(body);
++  if (got === entry.sha256 && body.length === entry.bytes) return [];
++  return [
++    `GET /organization/ is ${body.length} bytes, sha256 ${got}; the pinned index.html is ${entry.bytes} bytes, sha256 ${entry.sha256}. ` +
++      'The route is stale, wrong, or the host altered the HTML (host-injected content breaks byte identity by design; see docs/ORGANIZATION_DIRECTORY.md, hosting gate).',
++  ];
++}
++
++/**
++ * Reconciles a proposal run with what already exists, so a re-run recovers instead of failing or
++ * overwriting: one verified branch, one PR. Unrelated or divergent work is never touched.
++ */
++export function planProposal({ branchExists, branchMatches, openPr }) {
++  if (openPr && branchExists && branchMatches) return { action: 'noop', reason: 'the correct pull request is already open' };
++  if (openPr) return { action: 'fail', reason: 'an open pull request exists but its branch is missing or differs from the verified proposal; reconcile it manually' };
++  if (branchExists && branchMatches) return { action: 'create-pr', reason: 'the verified branch exists without a pull request (earlier run failed after pushing); create only the pull request' };
++  if (branchExists) return { action: 'fail', reason: 'the branch exists with unrelated or different content; it is never overwritten' };
++  return { action: 'create-branch-and-pr', reason: 'nothing exists yet' };
++}
++
++const git = (args, cwd) => execFileSync('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim();
++
++/** True when `branch` is exactly one commit above `base` and its bundle paths equal `head`'s. */
++export function branchMatches({ cwd = '.', branch, base = 'origin/main', head = 'HEAD', paths = ['public/organization', 'contracts/organization'] }) {
++  try {
++    git(['merge-base', '--is-ancestor', base, branch], cwd);
++    if (git(['rev-list', '--count', `${base}..${branch}`], cwd) !== '1') return false;
++    const changed = git(['diff', '--name-only', `${base}...${branch}`], cwd).split('\n').filter(Boolean);
++    if (changed.some((name) => !paths.some((allowed) => name === allowed || name.startsWith(`${allowed}/`)))) return false;
++    git(['diff', '--quiet', head, branch, '--', ...paths], cwd);
++    return true;
++  } catch {
++    return false;
++  }
++}
++
++function option(args, name) {
++  const i = args.indexOf(name);
++  return i < 0 ? undefined : args[i + 1];
++}
++const yes = (v) => v === 'yes';
++
++function main(argv) {
++  const [cmd, ...args] = argv;
++  let errors = [];
++  if (cmd === 'csp-organization') errors = checkOrganizationCsp(readFileSync(args[0], 'utf8'));
++  else if (cmd === 'csp-site') errors = checkSiteCsp(readFileSync(args[0], 'utf8'));
++  else if (cmd === 'route') errors = checkCanonicalRoute(JSON.parse(readFileSync(args[0], 'utf8')), readFileSync(args[1]));
++  else if (cmd === 'plan') {
++    const plan = planProposal({
++      branchExists: yes(option(args, '--branch-exists')),
++      branchMatches: yes(option(args, '--branch-matches')),
++      openPr: yes(option(args, '--open-pr')),
++    });
++    if (plan.action === 'fail') errors = [plan.reason];
++    else {
++      console.error(plan.reason);
++      console.log(plan.action);
++      return 0;
++    }
++  } else if (cmd === 'branch-matches') {
++    const ok = branchMatches({ branch: option(args, '--branch'), base: option(args, '--base') ?? 'origin/main', head: option(args, '--head') ?? 'HEAD' });
++    console.log(ok ? 'yes' : 'no');
++    return 0;
++  } else {
++    console.error('usage: organization-live.mjs csp-organization|csp-site|route|plan|branch-matches ...');
++    return 2;
++  }
++  if (errors.length) {
++    console.error(errors.join('\n'));
++    return 1;
++  }
++  console.log(`${cmd}: ok`);
++  return 0;
++}
++
++if (process.argv[1] && import.meta.url === pathToFileURL(fileURLToPath(pathToFileURL(process.argv[1]))).href) {
++  process.exitCode = main(process.argv.slice(2));
++}
+diff --git b/scripts/deploy/organization-live.test.mjs b/scripts/deploy/organization-live.test.mjs
+new file mode 100644
+index 0000000..02eecef
+--- /dev/null
++++ b/scripts/deploy/organization-live.test.mjs
+@@ -0,0 +1,227 @@
++// Reproducible checks for the /organization/ operations proposal: strict CSP, canonical-route byte
++// identity, and recovery/reuse of one proposal branch and PR. Run: node --test scripts/deploy/organization-live.test.mjs
++import assert from 'node:assert/strict';
++import { execFileSync } from 'node:child_process';
++import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import test from 'node:test';
++import {
++  branchMatches,
++  checkCanonicalRoute,
++  checkOrganizationCsp,
++  checkSiteCsp,
++  parsePolicies,
++  planProposal,
++  sha256,
++} from './organization-live.mjs';
++
++const ORG_CSP =
++  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'";
++const SITE_CSP = ORG_CSP.replace("style-src 'self' 'unsafe-inline'", "style-src 'self'");
++const headers = (...policies) =>
++  ['HTTP/2 200', 'content-type: text/html', ...policies.map((p) => `Content-Security-Policy: ${p}`), ''].join('\r\n');
++
++test('CSP: the intended /organization/ policy passes', () => {
++  assert.deepEqual(checkOrganizationCsp(headers(ORG_CSP)), []);
++});
++
++test('CSP: extra script origins are refused (a substring match for script-src would accept them)', () => {
++  const widened = [
++    ORG_CSP.replace("script-src 'self'", "script-src 'self' https://evil.example"),
++    ORG_CSP.replace("script-src 'self'", "script-src 'self' 'unsafe-inline'"),
++    ORG_CSP.replace("script-src 'self'", "script-src 'self' 'unsafe-eval'"),
++    ORG_CSP.replace("script-src 'self'", "script-src 'self' *"),
++    ORG_CSP.replace("script-src 'self'", "script-src 'self' data:"),
++    ORG_CSP.replace("script-src 'self'", "script-src https://evil.example 'self'"),
++    ORG_CSP.replace("script-src 'self'", "script-src 'self' 'strict-dynamic'"),
++  ];
++  for (const csp of widened) {
++    const errors = checkOrganizationCsp(headers(csp));
++    assert.ok(errors.some((e) => /effective script-src must be exactly 'self'/.test(e)), csp);
++  }
++  // The previous check, grep "script-src 'self'" and no "unsafe", accepts the remote origin:
++  const substring = (csp) => csp.includes("script-src 'self'") && !/script-src[^;]*unsafe/.test(csp);
++  assert.equal(substring(widened[0]), true, 'the old substring check would have accepted this');
++});
++
++test('CSP: script-src-elem and script-src-attr may not override script-src', () => {
++  for (const extra of [
++    "script-src-elem 'self' https://evil.example",
++    "script-src-elem https://evil.example",
++    "script-src-elem 'unsafe-inline'",
++    "script-src-attr 'unsafe-inline'",
++    "script-src-attr 'self'",
++  ]) {
++    const errors = checkOrganizationCsp(headers(`${ORG_CSP}; ${extra}`));
++    assert.ok(errors.length > 0, extra);
++  }
++  assert.deepEqual(checkOrganizationCsp(headers(`${ORG_CSP}; script-src-attr 'none'`)), []);
++  assert.deepEqual(checkOrganizationCsp(headers(`${ORG_CSP}; script-src-elem 'self'`)), []);
++});
++
++test('CSP: default-src is the fallback, and every enforced policy is checked', () => {
++  const fallbackOk = "default-src 'self' 'unsafe-inline'";
++  // style 'self' 'unsafe-inline' via default-src would also open scripts: refused.
++  assert.ok(checkOrganizationCsp(headers(fallbackOk)).length > 0);
++  const noScriptSrc = ORG_CSP.replace("script-src 'self'; ", "").replace("default-src 'self'", "default-src 'self' https://cdn.example");
++  assert.ok(checkOrganizationCsp(headers(noScriptSrc)).length > 0);
++  // Two header lines, one widened: the intersection is enforced, but each must individually be safe.
++  const errors = checkOrganizationCsp(headers(ORG_CSP, ORG_CSP.replace("script-src 'self'", "script-src 'self' https://x.example")));
++  assert.ok(errors.some((e) => e.startsWith('CSP policy 2')));
++  assert.deepEqual(checkOrganizationCsp(headers(ORG_CSP, ORG_CSP)), []);
++  // A comma-separated pair in one header is two policies.
++  assert.equal(parsePolicies(headers(`${ORG_CSP}, ${SITE_CSP}`)).length, 2);
++  assert.ok(checkOrganizationCsp(headers(`${ORG_CSP}, ${SITE_CSP}`)).some((e) => /policy 2.*style-src/.test(e)));
++});
++
++test('CSP: the style exception must really be present, report-only is ignored, absence fails', () => {
++  assert.ok(checkOrganizationCsp(headers(SITE_CSP)).some((e) => /effective style-src/.test(e)));
++  assert.ok(
++    checkOrganizationCsp(headers(ORG_CSP.replace("style-src 'self' 'unsafe-inline'", "style-src 'self' 'unsafe-inline' https://fonts.example"))).some((e) => /style-src/.test(e)),
++  );
++  assert.ok(checkOrganizationCsp(headers(`${ORG_CSP}; style-src-elem 'self'`)).some((e) => /style-src-elem/.test(e)));
++  assert.deepEqual(checkOrganizationCsp(`HTTP/2 200\r\nContent-Security-Policy-Report-Only: ${ORG_CSP}\r\n`), ['no Content-Security-Policy header on /organization/']);
++  assert.deepEqual(checkOrganizationCsp('HTTP/2 200\r\n'), ['no Content-Security-Policy header on /organization/']);
++});
++
++test('CSP: the exception stays path-scoped (the rest of the site keeps style-src self)', () => {
++  assert.deepEqual(checkSiteCsp(headers(SITE_CSP)), []);
++  assert.ok(checkSiteCsp(headers(ORG_CSP)).some((e) => /style-src was loosened/.test(e)));
++  assert.ok(checkSiteCsp(headers(SITE_CSP.replace("script-src 'self'", "script-src 'self' https://x.example"))).length > 0);
++});
++
++test('CSP: element and attribute directives cannot add remote sources', () => {
++  assert.ok(checkOrganizationCsp(headers(`${ORG_CSP}; style-src-elem 'unsafe-inline' https://example.invalid`)).length);
++  assert.ok(checkOrganizationCsp(headers(`${ORG_CSP}; style-src-attr 'self' 'unsafe-inline' https://example.invalid`)).length);
++  for (const directive of ['script-src-elem', 'script-src-attr', 'style-src-elem', 'style-src-attr']) {
++    assert.ok(checkSiteCsp(headers(`${SITE_CSP}; ${directive} https://example.invalid`)).length, directive);
++  }
++  assert.deepEqual(checkOrganizationCsp(headers(`${ORG_CSP}; style-src-elem 'self' 'unsafe-inline'`)), []);
++});
++
++const INDEX = Buffer.from('<!doctype html><html lang="en"><title>Current organization</title><main id="directory"></main></html>\n');
++const pin = (index = INDEX) => ({
++  admitted: { files: [{ path: 'index.html', sha256: sha256(index), bytes: index.length }] },
++});
++
++test('canonical route: the actual /organization/ response must equal the pinned index.html', () => {
++  assert.deepEqual(checkCanonicalRoute(pin(), INDEX), []);
++  // A marker alone (id="directory") would accept all of these.
++  const stale = Buffer.from(INDEX.toString().replace('Current organization', 'Previous organization'));
++  const spa = Buffer.from('<!doctype html><html><div id="root"></div></html>');
++  for (const body of [stale, spa, Buffer.alloc(0), Buffer.concat([INDEX, Buffer.from('\n')])]) {
++    const errors = checkCanonicalRoute(pin(), body);
++    assert.equal(errors.length, 1);
++    assert.match(errors[0], /pinned index\.html/);
++  }
++});
++
++test('canonical route: host-injected content fails by design and is never stripped or ignored', () => {
++  const injected = Buffer.from(
++    INDEX.toString().replace('</html>', '<script>/* host monitoring */</script><script src="https://cdn.example/monitor.js"></script></html>'),
++  );
++  assert.ok(injected.toString().includes('id="directory"'), 'the marker is still present');
++  const errors = checkCanonicalRoute(pin(), injected);
++  assert.equal(errors.length, 1);
++  assert.match(errors[0], /host-injected content breaks byte identity by design/);
++  assert.deepEqual(checkCanonicalRoute({ admitted: null }, INDEX), ['no bundle is admitted in the pin']);
++});
++
++test('proposal plan: reuse one verified branch/PR, recover a partial run, never overwrite', () => {
++  const plan = (branchExists, branchMatches, openPr) => planProposal({ branchExists, branchMatches, openPr }).action;
++  assert.equal(plan(false, false, false), 'create-branch-and-pr');
++  // Pushed, then PR creation failed: a re-run creates only the PR.
++  assert.equal(plan(true, true, false), 'create-pr');
++  // Already proposed correctly: success, no duplicate.
++  assert.equal(plan(true, true, true), 'noop');
++  // Unrelated or divergent work is never overwritten.
++  assert.equal(plan(true, false, false), 'fail');
++  assert.equal(plan(true, false, true), 'fail');
++  assert.equal(plan(false, false, true), 'fail');
++});
++
++const env = { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.invalid', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.invalid' };
++const git = (cwd, ...args) => execFileSync('git', args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim();
++
++test('branch match: exactly one commit with identical bundle paths is the verified proposal', { timeout: 60_000 }, () => {
++  const repo = mkdtempSync(join(tmpdir(), 'pyai-ops-branch-'));
++  try {
++    git(repo, 'init', '-q', '-b', 'main');
++    writeFileSync(join(repo, 'a.txt'), 'base');
++    git(repo, 'add', '-A');
++    git(repo, 'commit', '-q', '-m', 'base');
++    git(repo, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
++    const write = (content) => {
++      mkdirSync(join(repo, 'public/organization'), { recursive: true });
++      mkdirSync(join(repo, 'contracts/organization'), { recursive: true });
++      writeFileSync(join(repo, 'public/organization/index.html'), content);
++      writeFileSync(join(repo, 'contracts/organization/PIN.json'), `{"v":"${content}"}`);
++    };
++    const commit = (message) => {
++      git(repo, 'add', '-A');
++      git(repo, 'commit', '-q', '-m', message);
++    };
++    // The importer's result, committed locally (what the workflow compares against).
++    git(repo, 'switch', '-q', '-c', 'proposal-local');
++    write('v1');
++    commit('proposal');
++    const proposal = git(repo, 'rev-parse', 'HEAD');
++    const remote = (name, sha) => git(repo, 'update-ref', `refs/remotes/origin/${name}`, sha);
++
++    // Identical single-commit branch (earlier run pushed, then PR creation failed): matches.
++    remote('good', proposal);
++    assert.equal(branchMatches({ cwd: repo, branch: 'origin/good', head: 'proposal-local' }), true);
++
++    // Same bundle plus unrelated work in the SAME commit must also be rejected.
++    git(repo, 'switch', '-q', '-c', 'same-commit-extra', 'origin/main');
++    write('v1');
++    writeFileSync(join(repo, 'unrelated-in-same-commit.txt'), 'someone else');
++    commit('bundle with unrelated work');
++    remote('same-commit-extra', git(repo, 'rev-parse', 'HEAD'));
++    assert.equal(branchMatches({ cwd: repo, branch: 'origin/same-commit-extra', head: 'proposal-local' }), false);
++    git(repo, 'switch', '-q', 'proposal-local');
++
++    // Extra unrelated commit on top: not the verified proposal, must not be reused or overwritten.
++    git(repo, 'switch', '-q', '-c', 'extra');
++    writeFileSync(join(repo, 'unrelated.txt'), 'someone else');
++    commit('unrelated work');
++    remote('extra', git(repo, 'rev-parse', 'HEAD'));
++    assert.equal(branchMatches({ cwd: repo, branch: 'origin/extra', head: 'proposal-local' }), false);
++
++    // Different bundle content.
++    git(repo, 'switch', '-q', 'proposal-local');
++    git(repo, 'switch', '-q', '-c', 'other');
++    write('v2');
++    commit('different bundle');
++    remote('other', git(repo, 'rev-parse', 'HEAD'));
++    assert.equal(branchMatches({ cwd: repo, branch: 'origin/other', head: 'proposal-local' }), false);
++
++    // A branch with no commits above main.
++    remote('empty', git(repo, 'rev-parse', 'origin/main'));
++    assert.equal(branchMatches({ cwd: repo, branch: 'origin/empty', head: 'proposal-local' }), false);
++
++    // Missing ref.
++    assert.equal(branchMatches({ cwd: repo, branch: 'origin/missing', head: 'proposal-local' }), false);
++  } finally {
++    rmSync(repo, { recursive: true, force: true });
++  }
++});
++
++test('shell and workflow wiring: the strict checks are actually used, nothing weaker remains', () => {
++  const verify = readFileSync(new URL('./verify-live.sh', import.meta.url), 'utf8');
++  assert.match(verify, /organization-live\.mjs route "\$PIN" \/tmp\/pyai-org-index\.html/);
++  assert.match(verify, /organization-live\.mjs csp-organization/);
++  assert.match(verify, /organization-live\.mjs csp-site/);
++  assert.doesNotMatch(verify, /grep -q 'id="directory"'/, 'a marker must not decide the canonical route');
++  assert.doesNotMatch(verify, /script-src[^\n]*grep|grep[^\n]*script-src 'self'/, 'no substring CSP check');
++  const workflow = readFileSync(new URL('../../.github/workflows/organization-update-proposal.yml', import.meta.url), 'utf8');
++  assert.match(workflow, /ORGANIZATION_PROPOSAL_ENABLED == 'true'/);
++  assert.match(workflow, /MISSING OWNER GATES/);
++  assert.match(workflow, /contrib\/github-actions\/organization-/);
++  assert.doesNotMatch(workflow, /feat\/organization/);
++  assert.match(workflow, /organization-live\.mjs plan/);
++  assert.match(workflow, /organization-live\.mjs branch-matches/);
++  assert.doesNotMatch(workflow, /--force|push -f|--basis|owner-accepted/);
++  assert.doesNotMatch(workflow, /schedule:|pull_request_target|repository_dispatch/);
++});
+diff --git a/scripts/deploy/verify-live.sh b/scripts/deploy/verify-live.sh
+index dd06bb1..6fc2064 100644
+--- a/scripts/deploy/verify-live.sh
++++ b/scripts/deploy/verify-live.sh
+@@ -70,0 +71,63 @@ if [ "$wk" != "200" ] || ! grep -q 'id="root"' /tmp/pyai-wk; then ok "/.well-kno
++# 7. Organization directory (/organization/). The expected state comes from the pin of the release being
++#    verified: the deploy job's checkout is that commit; the rollback job passes the target release's
++#    pin in ORGANIZATION_PIN (set but empty = that release predates the integration).
++PIN="${ORGANIZATION_PIN-contracts/organization/PIN.json}"
++if [ -z "$PIN" ] || [ ! -f "$PIN" ]; then
++  echo "  --   no organization pin for this release; /organization/ not verified"
++else
++  org_files="$(python3 - "$PIN" <<'PY'
++import json, sys
++admitted = json.load(open(sys.argv[1]))["admitted"]
++if admitted:
++    for f in admitted["files"]:
++        print(f["path"], f["sha256"])
++PY
++)" || { bad "organization pin is unreadable"; org_files=""; }
++  if [ -n "$org_files" ]; then
++    ohdr="$(c -o /tmp/pyai-org-index.html -D - --max-time 15 "$BASE/organization/?v=$SHA")"
++    ocode="$(printf '%s' "$ohdr" | head -1 | awk '{print $2}')"
++    [ "$ocode" = "200" ] && ok "GET /organization/ → 200" || bad "GET /organization/ → $ocode"
++    grep -qi '^content-type: text/html' <<<"$ohdr" && ok "/organization/ is text/html" || bad "/organization/ content-type"
++    grep -qi '^cache-control:.*no-cache' <<<"$ohdr" && ok "/organization/ Cache-Control no-cache" || bad "/organization/ missing Cache-Control no-cache"
++    # The ACTUAL canonical route must be byte-identical to the pinned index.html. A marker is not enough, and
++    # nothing may be stripped or ignored: host-injected content makes this fail until operations opts out.
++    if out="$(node scripts/deploy/organization-live.mjs route "$PIN" /tmp/pyai-org-index.html 2>&1)"; then ok "GET /organization/ is byte-identical to the pinned index.html"; else bad "$out"; fi
++    printf '%s' "$ohdr" > /tmp/pyai-org-headers
++    printf '%s' "$hdr" > /tmp/pyai-root-headers
++    if out="$(node scripts/deploy/organization-live.mjs csp-organization /tmp/pyai-org-headers 2>&1)"; then ok "/organization/ CSP: script-src is 'self' only in every policy; inline styles allowed"; else bad "$out"; fi
++    if out="$(node scripts/deploy/organization-live.mjs csp-site /tmp/pyai-root-headers 2>&1)"; then ok "/ keeps style-src 'self' (exception is path-scoped)"; else bad "$out"; fi
++    oloc="$(c -o /dev/null -w '%{http_code} %{redirect_url}' --max-time 15 "$BASE/organization")"
++    [[ "$oloc" == "301 $BASE/organization/" ]] && ok "/organization → /organization/ ($oloc)" || bad "/organization redirect: $oloc"
++    # Every file in the complete bundle (README.md included): HTTP 200, the right MIME type, exactly the
++    # pinned bytes (not the SPA fallback).
++    while read -r name want; do
++      [ -n "$name" ] || continue
++      fhdr="$(c -o /tmp/pyai-org-file -D - --max-time 20 "$BASE/organization/$name?v=$SHA")"
++      fcode="$(printf '%s' "$fhdr" | head -1 | awk '{print $2}')"
++      got="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' /tmp/pyai-org-file)"
++      case "$name" in
++        *.html) want_type='text/html' ;;
++        *.js) want_type='(text|application)/javascript' ;;
++        *.json) want_type='application/json' ;;
++        *.svg) want_type='image/svg\+xml' ;;
++        *.png) want_type='image/png' ;;
++        *.mmd) want_type='text/plain' ;;
++        *.md) want_type='text/(markdown|plain)' ;;
++        *) want_type='' ;;
++      esac
++      if [ "$fcode" = "200" ] && [ "$got" = "$want" ] && grep -Eqi "^content-type: *$want_type" <<<"$fhdr"; then
++        ok "/organization/$name matches the pin"
++      else
++        bad "/organization/$name (HTTP $fcode, bytes match pin: $([ "$got" = "$want" ] && echo yes || echo no), type wanted: ${want_type:-any})"
++      fi
++    done <<<"$org_files"
++    mcode="$(c -o /dev/null -w '%{http_code}' --max-time 15 "$BASE/organization/does-not-exist-$SHA.svg")"
++    [ "$mcode" = "404" ] && ok "missing /organization file → 404" || bad "missing /organization file → $mcode (expected 404)"
++  else
++    pcode="$(c -o /tmp/pyai-org-pending.html -w '%{http_code}' --max-time 15 "$BASE/organization/")"
++    if [ "$pcode" = "200" ] && grep -q 'id="root"' /tmp/pyai-org-pending.html; then ok "/organization/ → pending SPA page (no bundle admitted)"; else bad "/organization/ → $pcode (expected the pending SPA page)"; fi
++    dcode="$(c -o /dev/null -w '%{http_code}' --max-time 15 "$BASE/organization/directory.js")"
++    [ "$dcode" = "404" ] && ok "no organization files served while none is admitted" || bad "/organization/directory.js → $dcode (expected 404)"
++  fi
++fi
++

@@ -29,6 +29,9 @@ export const routes: RouteObject[] = [
       { path: 'methodology', lazy: page(() => import('../pages/MethodologyPage')) },
       { path: 'about', lazy: page(() => import('../pages/AboutPage')) },
       { path: 'legal', lazy: page(() => import('../pages/LegalPage')) },
+      // Shown only while no reviewed bundle is admitted; once admitted, the host serves the static
+      // /organization/ directory directly (docs/ORGANIZATION_DIRECTORY.md).
+      { path: 'organization', lazy: page(() => import('../pages/OrganizationPendingPage')) },
       { path: '*', lazy: page(() => import('../pages/NotFoundPage')) },
     ],
   },

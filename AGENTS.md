@@ -6,6 +6,7 @@ This repository is the PickYour.AI website: a static React + TypeScript SPA serv
 
 - **The research contract is authoritative.** `contracts/v1/` is vendored verbatim from `Pick-Your-AI/pick-your-ai-research` at the SHA in `contracts/PROVENANCE.json`. Never edit it by hand. Re-vendor with `npm run contracts:update -- --ref <sha>`; propose contract changes through research issue #40.
 - **Use canonical identifiers.** Component kinds, tiers, outcome states (`pass`/`fail`/`unknown`/`skipped`), and severities (`info`/`warning`/`error`) come from the contract. Do not invent new enums or a separate compatibility policy; evaluation consumes `baseline/core-dependency-graph.json` and `baseline/core-ruleset.json`.
+- **The organization directory is vendored, never rendered here.** `public/organization/` holds a reviewed, immutable `Pick-Your-AI/.github` bundle pinned in `contracts/organization/PIN.json`. Never edit it by hand and never admit a commit without recorded approval: use `npm run organization:update` (see `docs/ORGANIZATION_DIRECTORY.md`). Do not add another organization renderer, registry or roster.
 - **Generated types are generated.** `src/contracts/generated/` is produced by `npm run contracts:types`. Do not edit it; CI fails if it drifts.
 - **No fabricated facts.** Fixtures are synthetic and must be labelled as such in the UI. Never present invented prices, benchmarks, citations, vendor names, or compatibility verdicts as real.
 - **Unknown is not pass.** Missing information must surface as `unknown`, never as compatible.
@@ -23,6 +24,7 @@ Operations files — `public/.htaccess`, `.github/workflows/deploy-production.ym
 npm ci
 npm run format:check && npm run lint && npm run typecheck
 npm run contracts:verify
+npm run organization:verify
 npm test
 npm run build && npm run test:e2e
 npm run audit

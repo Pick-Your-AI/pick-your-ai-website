@@ -28,6 +28,8 @@ const ROUTES = [
   '/methodology',
   '/about',
   '/legal',
+  // Either the pending SPA page or, once a bundle is admitted, the canonical static directory.
+  '/organization/',
   '/shared',
   '/nope',
 ];

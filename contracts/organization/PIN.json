@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "sourceRepository": "Pick-Your-AI/.github",
+  "sourcePath": "docs/organization/current",
+  "destination": "public/organization",
+  "note": "Vendored verbatim from an admitted immutable .github commit. Do not edit by hand; use `npm run organization:update` (docs/ORGANIZATION_DIRECTORY.md).",
+  "candidate": {
+    "sourceSha": "9abadb5fe22115da900dd86483c7428bc8b44b0e",
+    "eligibility": "pending",
+    "reason": "Head of unmerged Pick-Your-AI/.github PR #24. It has no recorded independent human approval and is not an ancestor of .github main, so it is not admitted, approved or deployable."
+  },
+  "admitted": null
+}
