@@ -25,3 +25,11 @@ body:
       options:
         - label: I have not pasted private build contents, credentials, or personal data.
           required: true
+  - type: textarea
+    id: routing_context
+    attributes:
+      label: Routing context (optional)
+      description: Only for an unresolved decision. Reuse answers above; do not include private rosters or security details. See CONTRIBUTING.md, Routing decisions.
+      placeholder: 'Decision needed; current responsible role; prior disposition; proposed next recipient.'
+    validations:
+      required: false
