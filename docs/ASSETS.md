@@ -1,5 +1,7 @@
 # Image assets and provenance
 
+The `/ascii-study` review page uses original mathematical text art from `src/lib/ascii-stack.ts`, rendered by `src/components/AsciiStack.tsx`. No bitmap generator or third-party renderer is involved. The saved study screenshots show the original pre-redesign proposal.
+
 All AI-generated raster images on the site were created with **OpenAI Codex** (`codex` CLI 0.162.1, `codex exec`, built-in `imagegen` skill / `image_gen` tool, GPT Image). No other image generator was used. UI icons are the inline SVG sprite in `src/components/icon.tsx` (ported from the approved design mock); the logo mark and favicon are hand-written SVG.
 
 | File                                                                                  | Used on                        | Source image                                                               | Generated (UTC)      | Alt text                                                                                    |
