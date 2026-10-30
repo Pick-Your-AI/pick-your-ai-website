@@ -1,0 +1,66 @@
+{
+  "config_sha256": "bd2386d654a06b2602ae9a379db613a44b7718a69e59e596c1aa59b3a6519e56",
+  "fingerprint": "8c7bab214fd47be0794da71aa255622c6f09de4dedd409199ebcfd85ac0ae754",
+  "inputs": {
+    "description": "Pick Your AI: a PCPartPicker-inspired builder for complete AI stacks. Explore components, compatibility, and costs in a preview using synthetic data.",
+    "icon_sha256": "a04ccbaaa1a15faa256e4e900dfb548b7fb35eb8410436b865dfbbabb98fd21b",
+    "language": "TypeScript",
+    "license": "MIT",
+    "override_sha256": "b8f8b5fdbdefd4fc1ab67b84b669bd36df2482cee70972adced7e3e68602a815",
+    "owner": "Pick-Your-AI",
+    "repo": "pick-your-ai-website",
+    "topics": [
+      "ai",
+      "ai-infrastructure",
+      "ai-stack",
+      "builder",
+      "compatibility",
+      "llm",
+      "pcpartpicker",
+      "pick-your-ai",
+      "react",
+      "static-site",
+      "typescript"
+    ],
+    "type": "web-app",
+    "visibility": "public"
+  },
+  "outputs": {
+    "banner.png": {
+      "bytes": 95900,
+      "chips": [
+        {
+          "box": [520, 243.0, 195.5, 38],
+          "kind": "key",
+          "source": "override",
+          "text": "Synthetic preview"
+        },
+        {
+          "box": [727.5, 243.0, 106.7, 38],
+          "kind": "attr",
+          "source": "override",
+          "text": "React 19"
+        },
+        {
+          "box": [846.2, 243.0, 129.8, 38],
+          "kind": "attr",
+          "source": "override",
+          "text": "TypeScript"
+        }
+      ],
+      "icon_source": "repo",
+      "px": [2560, 720],
+      "repository_id": 1422238606,
+      "scale": 2,
+      "sha256": "144fc48d75baa6c9c138903627a0070ff415cbf78450f947cd31bbaffff77e1c"
+    },
+    "card.svg": {
+      "bytes": 32158,
+      "repository_id": 1422238606,
+      "sha256": "2e3b43e52e00f74b71d39986481792dada2aba1cb1a7403c1a9d84d5d8a790f7"
+    }
+  },
+  "schema": 1,
+  "skill_version": "1.0.0",
+  "standard": "ct-std-v1"
+}
