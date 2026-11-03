@@ -39,4 +39,5 @@ roles and failed or stale lookups explicitly; do not infer accepted ownership fr
 membership or access. Preserve the existing assignee, local gates and private-reporting
 boundaries. The organization governance change merged on 2026-10-30
 (Pick-Your-AI/.github#23); published policy alone does not establish current
-private snapshots, accepted ownership, active routing or permission changes.
+private snapshots, accepted ownership, active routing, permission changes
+or recurring jobs.
