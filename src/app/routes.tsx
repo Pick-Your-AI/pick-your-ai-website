@@ -14,6 +14,7 @@ export const routes: RouteObject[] = [
     errorElement: <RouteError />,
     children: [
       { index: true, lazy: page(() => import('../pages/HomePage')) },
+      { path: 'ascii-study', lazy: page(() => import('../pages/AsciiStudyPage')) },
       { path: 'builder', Component: BuilderRoute },
       { path: 'catalog', lazy: page(() => import('../features/catalog/CatalogIndexPage')) },
       { path: 'catalog/:kindSlug', lazy: page(() => import('../features/catalog/SelectionPage')) },
