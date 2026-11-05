@@ -2,7 +2,7 @@
   "name": "pickyour-ai",
   "private": true,
   "version": "0.1.0",
-  "description": "PickYour.AI — a PCPartPicker-style AI stack builder (static SPA).",
+  "description": "PickYour.AI \u2014 a PCPartPicker-style AI stack builder (static SPA).",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -63,5 +63,10 @@
     "vite": "8.3.5",
     "vitest": "5.0.5",
     "yaml": "2.9.1"
+  },
+  "overrides": {
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^11.0.1"
+    }
   }
 }
