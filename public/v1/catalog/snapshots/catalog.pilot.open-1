@@ -1,0 +1,83 @@
+{
+  "schema_version": "1.0.0",
+  "id": "catalog.pilot.open-1",
+  "revision": 1,
+  "captured_at": "2026-11-05T14:30:00Z",
+  "items": [
+    {
+      "schema_version": "1.0.0",
+      "id": "cat.model_provider.qwen",
+      "kind": "model_provider",
+      "tier": "T1",
+      "name": "Qwen",
+      "version": "2026-11-05",
+      "status": "active",
+      "billing_class": "unknown",
+      "spec": {},
+      "description": "Publisher identity behind the Qwen2.5-0.5B-Instruct open-weight model. Distribution and hosting terms are not established here.",
+      "license": {
+        "spdx_id": "Apache-2.0"
+      },
+      "provenance": [
+        {
+          "source_uri": "https://huggingface.co/Qwen",
+          "checked_at": "2026-11-05T14:30:00Z",
+          "verification_status": "unverified",
+          "notes": "Publisher identity read from the Qwen model hub and the model card, not independently corroborated by a second publisher. No hosted inference, SLA or pricing claim is made; billing_class remains unknown."
+        }
+      ],
+      "updated_at": "2026-11-05T14:30:00Z"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "cat.model.qwen25_05b_instruct",
+      "kind": "model",
+      "tier": "T1",
+      "name": "Qwen2.5-0.5B-Instruct",
+      "version": "7ae557604adf67be50417f59c2c2f167def9a775",
+      "status": "active",
+      "billing_class": "unknown",
+      "spec": {
+        "provider_ref": "cat.model_provider.qwen",
+        "model_type": "generative",
+        "modalities_in": [
+          "text"
+        ],
+        "modalities_out": [
+          "text"
+        ],
+        "context_window_tokens": 32768,
+        "max_output_tokens": 8192,
+        "access_modes": [
+          "weights"
+        ],
+        "weight_access": "open",
+        "model_formats": [
+          "safetensors",
+          "pytorch"
+        ]
+      },
+      "description": "Open-weight instruction-tuned text model distributed under the Apache License 2.0. The revision is the immutable Hugging Face commit, not a consumer version label. Availability of a hosted inference service and cost are not established.",
+      "license": {
+        "spdx_id": "Apache-2.0",
+        "commercial_use_allowed": true,
+        "self_hosting_allowed": true
+      },
+      "provenance": [
+        {
+          "source_uri": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct",
+          "checked_at": "2026-11-05T14:30:00Z",
+          "verification_status": "unverified",
+          "notes": "Publisher model card states 'Context Length: Full 32,768 tokens and generation 8192 tokens'; model card and hub repository tag identify Apache-2.0 and an arXiv reference 2407.10671. Model card supplies weights and license identity; no independent task-quality or hosted-service measurement was performed."
+        },
+        {
+          "source_uri": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/blob/7ae557604adf67be50417f59c2c2f167def9a775/config.json",
+          "checked_at": "2026-11-05T14:30:00Z",
+          "verification_status": "unverified",
+          "notes": "Immutable-revision config.json reports max_position_embeddings=32768, model_type=qwen2, vocab_size=151936. The same hub revision's file listing includes safetensors weights. This is the publisher's exact artifact for that immutable revision, not an independent second reviewer."
+        }
+      ],
+      "updated_at": "2026-11-05T14:30:00Z"
+    }
+  ]
+}

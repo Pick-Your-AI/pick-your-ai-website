@@ -190,3 +190,9 @@ export function rowSubtitle(item: CatalogItem): string {
 
   return item.license?.spdx_id ?? '';
 }
+
+/** The synthetic fixture is identified by item tags, never by publisher names or absence of prices.
+ * A sourced item is not labelled synthetic just because it lacks a price or independent review. */
+export function isSyntheticCatalog(items: readonly CatalogItem[] | undefined): boolean {
+  return (items ?? []).some((item) => (item.tags ?? []).includes('synthetic'));
+}

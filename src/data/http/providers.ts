@@ -12,10 +12,21 @@
  * There is no read endpoint for resource estimates or a "current snapshot" in v1; the snapshot id
  * and graph/ruleset ids are configuration (see docs/DATA_INTEGRATION.md).
  */
-import type { BuildSnapshot, CatalogSnapshot, ComponentKind, ContractName } from '../../contracts';
-import { BASELINE_GRAPH, BASELINE_RULESET } from '../../contracts';
+import type {
+  BuildSnapshot,
+  CatalogSnapshot,
+  ComponentKind,
+  ContractName,
+  CostEstimate,
+  Pricebook,
+} from '../../contracts';
+import { assertContract, BASELINE_GRAPH, BASELINE_RULESET } from '../../contracts';
 import { DataError } from '../errors';
 import { LocalBuildRepository } from '../local-builds';
+import {
+  LocalCompatibilityEvaluator,
+  UnavailableResourceEstimateProvider,
+} from '../fixture/providers';
 import { ProvenanceEvidenceProvider } from '../shared';
 import type {
   BuildRepository,
@@ -30,6 +41,7 @@ import type {
   SavedBuildSummary,
   StoredBuild,
 } from '../types';
+import { estimateCost } from '../../domain/cost';
 import { ContractHttpClient, type FetchLike, idempotencyKey } from './client';
 
 export interface HttpProviderConfig {
@@ -42,6 +54,12 @@ export interface HttpProviderConfig {
   fetch?: FetchLike;
   /** Store builds on the API instead of in this browser (VITE_BUILD_STORE=http). */
   remoteBuilds?: boolean;
+  /**
+   * The API serves immutable GET artifacts only (VITE_API_SURFACE=static): catalog snapshot,
+   * pricebook, ruleset and dependency graph. Everything else runs locally, exactly as it does
+   * against fixtures. Use this to consume real data without deploying a dynamic service.
+   */
+  staticMirror?: boolean;
 }
 
 const enc = encodeURIComponent;
@@ -312,11 +330,60 @@ export class HttpBuildRepository implements BuildRepository {
   }
 }
 
+/**
+ * Pricing over a static mirror: fetch the published immutable pricebook, then compute the estimate
+ * in the browser using the same local estimator the fixtures use. No dynamic endpoints involved.
+ */
+export class StaticMirrorPricingProvider implements PricingProvider {
+  private readonly client: ContractHttpClient;
+  private readonly cfg: HttpProviderConfig;
+  private readonly catalog: CatalogRepository;
+  private readonly now: () => string;
+  constructor(
+    client: ContractHttpClient,
+    cfg: HttpProviderConfig,
+    catalog: CatalogRepository,
+    now: () => string = () => new Date().toISOString(),
+  ) {
+    this.client = client;
+    this.cfg = cfg;
+    this.catalog = catalog;
+    this.now = now;
+  }
+  async getPricebook(pricebookId?: string): Promise<Pricebook> {
+    const id = pricebookId ?? this.cfg.pricebookId;
+    if (!id) throw new DataError('unsupported', 'No pricebook is configured.');
+    const { value } = await this.client.contract('Pricebook', 'GET', `/pricebooks/${enc(id)}`);
+    return requireArtifactId('Pricebook', value, id);
+  }
+  async estimate(build: BuildSnapshot, periodDays = 30): Promise<CostEstimate> {
+    const pricebook = await this.getPricebook(build.locks.pricebook_id);
+    const snapshot = await this.catalog.getSnapshot();
+    const estimate = estimateCost(build, new Map(snapshot.items.map((i) => [i.id, i])), pricebook, {
+      periodDays,
+      now: this.now(),
+    });
+    return assertContract('CostEstimate', estimate);
+  }
+}
+
 export function createHttpProviders(cfg: HttpProviderConfig): DataProviders {
   const client = new ContractHttpClient({ baseUrl: cfg.baseUrl, fetch: cfg.fetch });
+  const catalog = new HttpCatalogRepository(client, cfg);
+  if (cfg.staticMirror) {
+    return {
+      mode: 'http',
+      catalog,
+      builds: new LocalBuildRepository(),
+      compatibility: new LocalCompatibilityEvaluator(catalog),
+      pricing: new StaticMirrorPricingProvider(client, cfg, catalog),
+      evidence: new ProvenanceEvidenceProvider(),
+      resources: new UnavailableResourceEstimateProvider(),
+    };
+  }
   return {
     mode: 'http',
-    catalog: new HttpCatalogRepository(client, cfg),
+    catalog,
     builds: cfg.remoteBuilds ? new HttpBuildRepository(client) : new LocalBuildRepository(),
     compatibility: new HttpCompatibilityEvaluator(client),
     pricing: new HttpPricingProvider(client, cfg),

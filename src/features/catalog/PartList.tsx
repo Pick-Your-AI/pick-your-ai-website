@@ -44,7 +44,14 @@ import {
 } from '../../components/parts';
 import { incompleteBuild } from '../builder/incomplete';
 import { itemPrice } from '../../lib/item-cost';
-import { KEY_FIELDS, itemPath, kindPath, rowSubtitle, specValue } from '../../lib/catalog-view';
+import {
+  KEY_FIELDS,
+  isSyntheticCatalog,
+  itemPath,
+  kindPath,
+  rowSubtitle,
+  specValue,
+} from '../../lib/catalog-view';
 import { useCompatByKind, verdictFor } from '../../lib/compat';
 import { LAYERS, headlineKind, itemLogo, layerOf } from '../../lib/layers';
 import { humanize, formatValue, specFields as schemaSpecFields } from '../../lib/schema-fields';
@@ -75,6 +82,10 @@ export function PartList({
   const [params, setParams] = useSearchParams();
   const { draft, apply } = useBuilder();
   const catalog = useCatalog();
+  // Items carry 'synthetic' explicitly. The synthetic fixture label must not describe real sourced
+  // items, and removing it must not invent an independent-verification claim.
+  const containsSynthetic =
+    catalog.data === undefined ? true : isSyntheticCatalog(catalog.data.items);
   const pricebook = usePricebook(draft?.build.locks.pricebook_id);
   const analysis = useBuildAnalysis(draft?.build);
   const ruleset = useRuleset();
@@ -405,6 +416,7 @@ export function PartList({
             conflicts={report?.summary.failed ?? 0}
             unknown={report?.summary.unknown ?? 0}
             incomplete={incompleteBuild(build, report, ruleset.data) ?? undefined}
+            synthetic={containsSynthetic}
           />
 
           <CompatFilter
@@ -529,7 +541,8 @@ export function PartList({
               <table className="pt">
                 <caption>
                   {sorted.length} component{sorted.length === 1 ? '' : 's'}
-                  {single ? ` · ${KIND_LABELS[single]}` : ''} · synthetic demo catalog
+                  {single ? ` · ${KIND_LABELS[single]}` : ''}{' '}
+                  {containsSynthetic ? ' · synthetic demo catalog' : ' · sourced pilot catalog'}
                 </caption>
                 <thead>
                   <tr>
@@ -748,7 +761,8 @@ export function PartList({
               The legend detail lives in the column headers' titles instead.
             */}
             <span className="pbar-meta">
-              Synthetic demo estimates · not a quote ·{' '}
+              {containsSynthetic ? 'Synthetic demo estimates' : 'Sourced pilot estimates'} · not a
+              quote ·{' '}
               <abbr title="Free or included billing on an unverified record that the build policy admits">
                 Included*
               </abbr>{' '}
