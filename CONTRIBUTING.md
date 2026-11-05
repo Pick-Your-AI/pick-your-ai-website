@@ -99,7 +99,7 @@ silently skip an unresolved role or treat a proposed mapping as accepted.
 An operator with read access must refresh the private snapshot before resolving:
 
 ```sh
-python /path/to/org-checkout/governance/router.py refresh --policy /path/to/org-checkout/governance/escalation-policy.json --snapshot /private/path/routing-snapshot.json --status /private/path/routing-status.json
+python /path/to/org-checkout/governance/router.py refresh --policy /path/to/org-checkout/governance/escalation-policy.json --snapshot /private/path/routing-snapshot.json --status /private/path/routing-status.json &&
 python /path/to/org-checkout/governance/router.py resolve --policy /path/to/org-checkout/governance/escalation-policy.json --snapshot /private/path/routing-snapshot.json --repo Pick-Your-AI/pick-your-ai-website --max-age-seconds 86400 --status /private/path/routing-status.json
 ```
 
