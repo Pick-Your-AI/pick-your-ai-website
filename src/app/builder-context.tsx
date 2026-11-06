@@ -79,6 +79,8 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
   const touched = useRef(false);
   const catalogById = catalog.byId;
   const snapshotId = catalog.data?.id;
+  // A static mirror publishes one pricebook; a new build must lock it rather than a fixture default.
+  const defaultPricebookId = catalogRepo.defaultPricebookId;
 
   // Load the current draft once the catalog is known.
   useEffect(() => {
@@ -90,7 +92,13 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
      * read as a recommendation, and "unknown is not pass" applies to a build nobody has configured.
      * Templates remain an explicit choice on /templates.
      */
-    const fresh = () => createDraft(createBuild({ catalogSnapshotId: snapshotId }));
+    const fresh = () =>
+      createDraft(
+        createBuild({
+          catalogSnapshotId: snapshotId,
+          pricebookId: defaultPricebookId,
+        }),
+      );
     (id ? builds.get(id) : Promise.reject(new Error('none')))
       .then((stored) => {
         if (cancelled || touched.current) return;
@@ -106,7 +114,7 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [builds, snapshotId, ready]);
+  }, [builds, snapshotId, ready, defaultPricebookId]);
 
   const persist = useCallback(
     async (next: BuildDraft) => {
@@ -153,7 +161,11 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
       touched.current = true;
       void (async () => {
         const catalogSnapshotId = snapshotId ?? (await catalogRepo.getSnapshot()).id;
-        const base = createBuild({ catalogSnapshotId, name });
+        const base = createBuild({
+          catalogSnapshotId,
+          name,
+          pricebookId: catalogRepo.defaultPricebookId,
+        });
         const build: BuildSnapshot = template
           ? {
               ...template,

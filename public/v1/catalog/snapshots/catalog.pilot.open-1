@@ -14,16 +14,13 @@
       "status": "active",
       "billing_class": "unknown",
       "spec": {},
-      "description": "Publisher identity behind the Qwen2.5-0.5B-Instruct open-weight model. Distribution and hosting terms are not established here.",
-      "license": {
-        "spdx_id": "Apache-2.0"
-      },
+      "description": "Publisher identity behind the Qwen2.5-0.5B-Instruct open-weight model. No provider-wide license, hosting commitment, SLA or pricing claim is made; the Apache-2.0 license recorded on the model is a property of that model artifact, not of the publisher.",
       "provenance": [
         {
           "source_uri": "https://huggingface.co/Qwen",
           "checked_at": "2026-11-05T14:30:00Z",
           "verification_status": "unverified",
-          "notes": "Publisher identity read from the Qwen model hub and the model card, not independently corroborated by a second publisher. No hosted inference, SLA or pricing claim is made; billing_class remains unknown."
+          "notes": "Publisher identity read from the Qwen organization on the model hub and from the model card; not independently corroborated. Any provider-wide licensing, hosting, SLA or pricing terms are unestablished and omitted rather than inferred from one model artifact."
         }
       ],
       "updated_at": "2026-11-05T14:30:00Z"

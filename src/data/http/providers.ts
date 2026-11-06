@@ -92,6 +92,10 @@ export class HttpCatalogRepository implements CatalogRepository {
     this.client = client;
     this.cfg = cfg;
   }
+  /** The configured pricebook, so a new build locks the artifact this deployment publishes. */
+  get defaultPricebookId(): string | undefined {
+    return this.cfg.pricebookId;
+  }
   getSnapshot(snapshotId?: string) {
     const id = snapshotId ?? this.cfg.catalogSnapshotId;
     if (snapshotId && snapshotId !== this.cfg.catalogSnapshotId) {
@@ -334,6 +338,38 @@ export class HttpBuildRepository implements BuildRepository {
  * Pricing over a static mirror: fetch the published immutable pricebook, then compute the estimate
  * in the browser using the same local estimator the fixtures use. No dynamic endpoints involved.
  */
+/**
+ * Static-mirror compatibility. The published ruleset is the only one this deployment serves, so a
+ * build locked to a different ruleset id/version must not receive a baseline verdict presented
+ * against its own revision. Returning an explicit unsupported result keeps "unknown" honest.
+ */
+export class StaticMirrorCompatibilityEvaluator implements CompatibilityEvaluator {
+  private readonly local: LocalCompatibilityEvaluator;
+  private readonly catalog: CatalogRepository;
+  constructor(catalog: CatalogRepository, now: () => string = () => new Date().toISOString()) {
+    this.catalog = catalog;
+    this.local = new LocalCompatibilityEvaluator(catalog, now);
+  }
+  private async assertLocked(build: BuildSnapshot) {
+    const ruleset = await this.catalog.getRuleset();
+    const { ruleset_id: id, ruleset_version: version } = build.locks;
+    if (id !== ruleset.id || version !== ruleset.version) {
+      throw new DataError(
+        'unsupported',
+        `Build locks ruleset ${id}@${version}, but this deployment publishes ${ruleset.id}@${ruleset.version}. Compatibility is not evaluated against a different ruleset.`,
+      );
+    }
+  }
+  async evaluate(build: BuildSnapshot, evidence: EvaluationEvidence = {}) {
+    await this.assertLocked(build);
+    return this.local.evaluate(build, evidence);
+  }
+  async compatibleOptions(build: BuildSnapshot, kind: ComponentKind, role = 'primary') {
+    await this.assertLocked(build);
+    return this.local.compatibleOptions(build, kind, role);
+  }
+}
+
 export class StaticMirrorPricingProvider implements PricingProvider {
   private readonly client: ContractHttpClient;
   private readonly cfg: HttpProviderConfig;
@@ -375,7 +411,7 @@ export function createHttpProviders(cfg: HttpProviderConfig): DataProviders {
       mode: 'http',
       catalog,
       builds: new LocalBuildRepository(),
-      compatibility: new LocalCompatibilityEvaluator(catalog),
+      compatibility: new StaticMirrorCompatibilityEvaluator(catalog),
       pricing: new StaticMirrorPricingProvider(client, cfg, catalog),
       evidence: new ProvenanceEvidenceProvider(),
       resources: new UnavailableResourceEstimateProvider(),

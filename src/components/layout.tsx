@@ -4,6 +4,8 @@ import { CONTRACT_PROVENANCE, kindsInTier } from '../contracts';
 import { buildVersion, shortSha } from '../lib/version';
 import { useData } from '../app/data-context';
 import { useBuilder } from '../app/builder-context';
+import { useCatalog } from '../app/queries';
+import { isSyntheticCatalog } from '../lib/catalog-view';
 import { LAYERS } from '../lib/layers';
 import { Icon, IconSprite } from './icon';
 import { ToastProvider } from './feedback';
@@ -37,12 +39,17 @@ export function Brand({ className = 'brand' }: { className?: string }) {
 /** "INTERACTIVE DESIGN PREVIEW" strip: the site's standing synthetic-data disclosure. */
 export function DemoBanner() {
   const { mode } = useData();
+  // Sourced pilot records must not be described as synthetic. Absence of verification is stated
+  // separately, so neither claim stands in for the other.
+  const catalog = useCatalog();
+  const synthetic = isSyntheticCatalog(catalog.data?.items);
   return (
     <div className="demo-banner" role="note" aria-label="Demo mode">
       <strong>INTERACTIVE DESIGN PREVIEW</strong>{' '}
       <span>
-        · Components, costs and compatibility checks use synthetic illustrative demo data, not
-        verified vendor information.
+        {synthetic
+          ? ' · Components, costs and compatibility checks use synthetic illustrative demo data, not verified vendor information.'
+          : ' · Components come from a sourced pilot catalog. Records remain unverified unless stated; cost and compatibility are not vendor-confirmed.'}
         {mode === 'http' ? ' This deployment reads a configured API.' : ''}{' '}
         <Link to="/methodology#data" className="underline underline-offset-2">
           Why?
