@@ -19,15 +19,13 @@ import type {
   ContractName,
   CostEstimate,
   Pricebook,
+  Ruleset,
 } from '../../contracts';
 import { assertContract, BASELINE_GRAPH, BASELINE_RULESET } from '../../contracts';
 import { DataError } from '../errors';
 import { LocalBuildRepository } from '../local-builds';
-import {
-  LocalCompatibilityEvaluator,
-  UnavailableResourceEstimateProvider,
-} from '../fixture/providers';
-import { ProvenanceEvidenceProvider } from '../shared';
+import { UnavailableResourceEstimateProvider } from '../fixture/providers';
+import { ProvenanceEvidenceProvider, compatibleOptionsLocal } from '../shared';
 import type {
   BuildRepository,
   CatalogRepository,
@@ -42,6 +40,7 @@ import type {
   StoredBuild,
 } from '../types';
 import { estimateCost } from '../../domain/cost';
+import { evaluateBuild } from '../../domain/evaluator';
 import { ContractHttpClient, type FetchLike, idempotencyKey } from './client';
 
 export interface HttpProviderConfig {
@@ -344,29 +343,53 @@ export class HttpBuildRepository implements BuildRepository {
  * against its own revision. Returning an explicit unsupported result keeps "unknown" honest.
  */
 export class StaticMirrorCompatibilityEvaluator implements CompatibilityEvaluator {
-  private readonly local: LocalCompatibilityEvaluator;
   private readonly catalog: CatalogRepository;
+  private readonly now: () => string;
   constructor(catalog: CatalogRepository, now: () => string = () => new Date().toISOString()) {
     this.catalog = catalog;
-    this.local = new LocalCompatibilityEvaluator(catalog, now);
+    this.now = now;
   }
-  private async assertLocked(build: BuildSnapshot) {
-    const ruleset = await this.catalog.getRuleset();
+  /**
+   * A report stamps the snapshot and ruleset ids from the build lock, so evaluating against this
+   * deployment's current artifacts would label findings with a revision they were not computed
+   * from. The snapshot is resolved *by the locked id* — `getSnapshot` validates it — so a lock this
+   * deployment does not publish fails here instead of being answered from the current revision.
+   */
+  private async lockedArtifacts(
+    build: BuildSnapshot,
+  ): Promise<{ snapshot: CatalogSnapshot; ruleset: Ruleset }> {
     const { ruleset_id: id, ruleset_version: version } = build.locks;
+    const ruleset = await this.catalog.getRuleset();
     if (id !== ruleset.id || version !== ruleset.version) {
       throw new DataError(
         'unsupported',
         `Build locks ruleset ${id}@${version}, but this deployment publishes ${ruleset.id}@${ruleset.version}. Compatibility is not evaluated against a different ruleset.`,
       );
     }
+    const snapshotId = build.locks.catalog_snapshot_id;
+    const snapshot = await this.catalog.getSnapshot(snapshotId).catch(() => {
+      throw new DataError(
+        'unsupported',
+        `Build locks catalog snapshot ${snapshotId}, which this deployment does not publish. Compatibility is not evaluated against a different snapshot.`,
+      );
+    });
+    return { snapshot, ruleset };
   }
   async evaluate(build: BuildSnapshot, evidence: EvaluationEvidence = {}) {
-    await this.assertLocked(build);
-    return this.local.evaluate(build, evidence);
+    const { snapshot, ruleset } = await this.lockedArtifacts(build);
+    const report = evaluateBuild({
+      build,
+      catalog: snapshot,
+      ruleset,
+      resourceEstimate: evidence.resourceEstimate ?? null,
+      costEstimate: evidence.costEstimate ?? null,
+      evaluatedAt: this.now(),
+    });
+    return assertContract('EvaluationReport', report);
   }
   async compatibleOptions(build: BuildSnapshot, kind: ComponentKind, role = 'primary') {
-    await this.assertLocked(build);
-    return this.local.compatibleOptions(build, kind, role);
+    const { snapshot, ruleset } = await this.lockedArtifacts(build);
+    return compatibleOptionsLocal(build, snapshot, ruleset, kind, role);
   }
 }
 
@@ -394,7 +417,14 @@ export class StaticMirrorPricingProvider implements PricingProvider {
   }
   async estimate(build: BuildSnapshot, periodDays = 30): Promise<CostEstimate> {
     const pricebook = await this.getPricebook(build.locks.pricebook_id);
-    const snapshot = await this.catalog.getSnapshot();
+    // The estimate is labelled with the build's lock, so it must be priced from that revision.
+    const snapshotId = build.locks.catalog_snapshot_id;
+    const snapshot = await this.catalog.getSnapshot(snapshotId).catch(() => {
+      throw new DataError(
+        'unsupported',
+        `Build locks catalog snapshot ${snapshotId}, which this deployment does not publish. Cost is not estimated against a different snapshot.`,
+      );
+    });
     const estimate = estimateCost(build, new Map(snapshot.items.map((i) => [i.id, i])), pricebook, {
       periodDays,
       now: this.now(),

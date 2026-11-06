@@ -16,6 +16,8 @@ import { describe, expect, it } from 'vitest';
 import { BASELINE_RULESET } from '../../src/contracts';
 import { createProviders, DataConfigError } from '../../src/data/config';
 import { createHttpProviders } from '../../src/data/http/providers';
+import { createFixtureProviders } from '../../src/data/fixture/providers';
+import type { DataProviders } from '../../src/data/types';
 import { createBuild } from '../../src/domain/build';
 import { DemoBanner } from '../../src/components/layout';
 import { DataContext } from '../../src/app/data-context';
@@ -46,6 +48,25 @@ const prov = (overrides: Partial<Parameters<typeof createHttpProviders>[0]> = {}
     fetch: staticFetch,
     ...overrides,
   });
+
+function bannerText(): string {
+  return screen.getByRole('note', { name: 'Demo mode' }).textContent ?? '';
+}
+
+function renderBanner(providers: DataProviders) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <DataContext.Provider value={providers}>
+        <MemoryRouter>
+          <ToastProvider>
+            <DemoBanner />
+          </ToastProvider>
+        </MemoryRouter>
+      </DataContext.Provider>
+    </QueryClientProvider>,
+  );
+}
 
 describe('finding 1: a new build locks the pricebook this deployment publishes', () => {
   it('exposes the configured pricebook as the new-build default', () => {
@@ -102,6 +123,40 @@ describe('finding 2: static evaluation refuses a ruleset the build did not lock'
   });
 });
 
+describe('finding 5: a foreign snapshot lock never yields a false-revision answer', () => {
+  // The report, verdict and cost are all labelled with build.locks.catalog_snapshot_id, so a build
+  // pinned elsewhere must fail rather than be answered from catalog.pilot.open-1.
+  const foreign = () => {
+    const b = createBuild({ catalogSnapshotId: SNAPSHOT, pricebookId: PRICEBOOK });
+    b.locks.catalog_snapshot_id = 'catalog.other.9';
+    return b;
+  };
+
+  it('refuses to evaluate a build pinned to an unpublished snapshot', async () => {
+    await expect(prov().compatibility.evaluate(foreign())).rejects.toThrow(
+      /does not publish|different snapshot/i,
+    );
+  });
+
+  it('refuses to propose compatible options for it', async () => {
+    await expect(prov().compatibility.compatibleOptions(foreign(), 'model')).rejects.toThrow(
+      /does not publish|different snapshot/i,
+    );
+  });
+
+  it('refuses to price it, even when the pricebook matches', async () => {
+    await expect(prov().pricing.estimate(foreign())).rejects.toThrow(
+      /does not publish|different snapshot/i,
+    );
+  });
+
+  it('still answers normally for the published snapshot', async () => {
+    const ok = createBuild({ catalogSnapshotId: SNAPSHOT, pricebookId: PRICEBOOK });
+    await expect(prov().compatibility.evaluate(ok)).resolves.toBeDefined();
+    await expect(prov().pricing.estimate(ok)).resolves.toBeDefined();
+  });
+});
+
 describe('finding 3: sourced records are not described as synthetic', () => {
   const snapshot = JSON.parse(
     readFileSync('public/v1/catalog/snapshots/catalog.pilot.open-1', 'utf8'),
@@ -124,29 +179,32 @@ describe('finding 3: sourced records are not described as synthetic', () => {
     ).toBe(true);
   });
 
-  it('shows the sourced banner, not the synthetic one', async () => {
-    const providers = prov();
-    expect(providers.mode).toBe('http');
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={client}>
-        <DataContext.Provider value={providers}>
-          <MemoryRouter>
-            <ToastProvider>
-              <DemoBanner />
-            </ToastProvider>
-          </MemoryRouter>
-        </DataContext.Provider>
-      </QueryClientProvider>,
-    );
-    await waitFor(() =>
-      expect(screen.getByRole('note', { name: 'Demo mode' }).textContent).toMatch(
-        /sourced pilot catalog/,
-      ),
-    );
-    expect(screen.getByRole('note', { name: 'Demo mode' }).textContent).not.toMatch(
-      /use synthetic illustrative demo data/,
-    );
+  it('does not claim synthetic data in fixture mode', async () => {
+    const providers = createFixtureProviders({ now: () => '2026-11-05T14:30:00Z' });
+    renderBanner(providers);
+    await waitFor(() => expect(bannerText()).toMatch(/use synthetic illustrative demo data/));
+  });
+
+  it('does not assert a sourced pilot for the full API surface', async () => {
+    // `mode: 'http'` covers both static and full. Full has no requirement to serve the pilot, so the
+    // banner must stay neutral rather than claiming provenance it has not read.
+    const full = createHttpProviders({
+      baseUrl: API,
+      catalogSnapshotId: SNAPSHOT,
+      staticMirror: false,
+      fetch: staticFetch,
+    });
+    expect(full.mode).toBe('http');
+    renderBanner(full);
+    await waitFor(() => expect(bannerText()).toMatch(/configured catalog source/));
+    expect(bannerText()).not.toMatch(/sourced pilot catalog/);
+    expect(bannerText()).not.toMatch(/use synthetic illustrative demo data/);
+  });
+
+  it('is neutral for static mode too, leaving provenance to the record level', async () => {
+    renderBanner(prov());
+    await waitFor(() => expect(bannerText()).toMatch(/configured catalog source/));
+    expect(bannerText()).not.toMatch(/sourced pilot catalog/);
   });
 });
 
