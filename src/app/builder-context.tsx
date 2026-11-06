@@ -79,6 +79,8 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
   const touched = useRef(false);
   const catalogById = catalog.byId;
   const snapshotId = catalog.data?.id;
+  // A static mirror publishes one pricebook; a new build must lock it rather than a fixture default.
+  const defaultPricebookId = catalogRepo.defaultPricebookId;
 
   // Load the current draft once the catalog is known.
   useEffect(() => {
@@ -90,7 +92,13 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
      * read as a recommendation, and "unknown is not pass" applies to a build nobody has configured.
      * Templates remain an explicit choice on /templates.
      */
-    const fresh = () => createDraft(createBuild({ catalogSnapshotId: snapshotId }));
+    const fresh = () =>
+      createDraft(
+        createBuild({
+          catalogSnapshotId: snapshotId,
+          pricebookId: defaultPricebookId,
+        }),
+      );
     (id ? builds.get(id) : Promise.reject(new Error('none')))
       .then((stored) => {
         if (cancelled || touched.current) return;
@@ -106,7 +114,7 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [builds, snapshotId, ready]);
+  }, [builds, snapshotId, ready, defaultPricebookId]);
 
   const persist = useCallback(
     async (next: BuildDraft) => {
@@ -152,8 +160,26 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
       // Claim the draft immediately so a slower initial load cannot replace it.
       touched.current = true;
       void (async () => {
-        const catalogSnapshotId = snapshotId ?? (await catalogRepo.getSnapshot()).id;
-        const base = createBuild({ catalogSnapshotId, name });
+        // Resolve the snapshot first: a starter must only carry items this build will be locked to,
+        // and the catalog query may still be loading when the click happens.
+        const snapshot = catalog.data ?? (await catalogRepo.getSnapshot());
+        const catalogSnapshotId = snapshot.id;
+        const present = new Set(snapshot.items.map((i) => i.id));
+        const base = createBuild({
+          catalogSnapshotId,
+          name,
+          pricebookId: catalogRepo.defaultPricebookId,
+        });
+        /*
+         * A starter is composed from the fixture catalog. Spreading it wholesale would also copy its
+         * locks and selections, so a static deployment would receive a build pinned to a snapshot
+         * and pricebook it does not publish, and no evaluator or estimator could analyse it.
+         * Keep this deployment's locks, and keep only selections whose items actually exist here.
+         */
+        const selections = (template?.selections ?? []).filter((s) =>
+          present.has(s.catalog_item_id),
+        );
+        const kept = new Set(selections.map((s) => s.id));
         const build: BuildSnapshot = template
           ? {
               ...template,
@@ -164,6 +190,11 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
               lifecycle: 'draft',
               owner_ref: base.owner_ref,
               name: name ?? template.name,
+              locks: base.locks,
+              selections,
+              links: (template.links ?? []).filter(
+                (l) => kept.has(l.from_selection_id) && kept.has(l.to_selection_id),
+              ),
             }
           : base;
         const next = createDraft(
@@ -178,7 +209,7 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
         void persist(next);
       })();
     },
-    [persist, snapshotId, catalogRepo],
+    [persist, catalogRepo, catalog.data],
   );
 
   const open = useCallback<BuilderApi['open']>(

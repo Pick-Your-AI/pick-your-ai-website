@@ -41,6 +41,9 @@ The website never edits research data. It reads published, immutable revisions a
 | `EvidenceProvider`         | Derived from item `provenance`                                                            | Same, since v1 has no evidence endpoint                                                                                           |
 | `ResourceEstimateProvider` | Unavailable, so VRAM rules report **Unknown**                                             | Unavailable, since v1 has no read endpoint (see gaps)                                                                             |
 
+| **Static-mirror composition** |
+| When `VITE_API_SURFACE=static`, the immutable GET artifacts stay as above, and `LocalCompatibilityEvaluator` and the local estimator consume the same published catalog, ruleset and pricebook. No dynamic endpoints are consumed. Unknowns stay unknown. |
+
 The HTTP providers also check revision scoping: an evaluation or quote for a different `build_revision` is rejected as malformed.
 
 ## 3. Configuration and feature flags
@@ -55,6 +58,8 @@ Set these at build time (Vite `VITE_*` variables, baked into the static bundle):
 | `VITE_PRICEBOOK_ID`     | pricebook id        | build lock | Optional                                                                                                 |
 | `VITE_BUILD_STORE`      | `local` \| `http`   | `local`    | Store builds on the API instead of in the browser                                                        |
 
+| `VITE_API_SURFACE` | `full` \| `static` | `full` | `static` consumes only immutable GET artifacts; compatibility and cost run locally. This is the path for published real records without deploying a dynamic API. |
+
 `dist/version.json` records `dataMode`, and the footer shows it. In `http` mode the demo banner disappears, but synthetic tags on any item still render.
 
 **Hosting change required for `http` mode.** The production CSP is `connect-src 'self'`. Pointing at an API on another origin needs that origin added to `public/.htaccess`, which operations owns. Alternatively, serve the API under the same origin, for example `https://pickyour.ai/v1`.
@@ -63,12 +68,12 @@ Set these at build time (Vite `VITE_*` variables, baked into the static bundle):
 
 1. ☐ The specific research artifacts to adopt are merged on research `main`, with required owner decisions recorded. Unmerged PRs stay provisional; a merge alone does not satisfy the remaining gates.
 2. ☐ If the contract changed (via [#40](https://github.com/Pick-Your-AI/pick-your-ai-research/issues/40)): `npm run contracts:update -- --ref <sha>`, then `npm run contracts:types`, fix any type errors, and confirm `npm test` passes, including evaluator parity against the new `reference/evaluate.py`.
-3. ☐ Publish immutable artifacts behind the API (or a static mirror for GET paths). Evaluation, cost estimates and remote build writes still need the corresponding dynamic API endpoints; a static mirror alone cannot supply the full HTTP provider.
+3. ☐ Publish immutable artifacts behind the API or as a static mirror. Set `VITE_API_SURFACE=static` to use the local compatibility evaluator and the local cost estimator against the published ruleset and pricebook. The pilot artifacts in `public/v1/` and `docs/PILOT_EVIDENCE.md` show the bounded scope, evidence and limitations. Remote build writes still need dynamic endpoints; absence of a dynamic service does not waive rights, review or validation.
 4. ☐ Validate offline: fetch each artifact and check it with `validateContract` (as `tests/unit/contracts.test.ts` does). Reject anything with fabricated fields.
 5. ☐ In the `build` job of `.github/workflows/ci.yml`, change `VITE_DATA_MODE: fixture` to `http` and add `VITE_API_BASE_URL` and `VITE_CATALOG_SNAPSHOT`. Use repository variables for these, not secrets: they end up in the public bundle.
 6. ☐ Request the CSP `connect-src` change if the API is on another origin.
 7. ☐ Run the Playwright suite against `http` mode with a recorded API, as in `tests/unit/providers.test.ts › fakeApi`.
-8. ☐ Remove or flag the synthetic `tags` path. Real items must carry `verification_status` and `source_uri` provenance.
+8. ☐ Real items must carry `verification_status` and `source_uri` provenance. `isSyntheticCatalog` uses only the explicit synthetic tag; real sourced records are labelled sourced pilot records, never synthetic simply because they remain unverified.
 9. ☐ Update `docs/RESEARCH_MAPPING.md` and `CHANGELOG.md`.
 
 ## 5. Fixture strategy
