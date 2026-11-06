@@ -542,7 +542,7 @@ export function PartList({
                 <caption>
                   {sorted.length} component{sorted.length === 1 ? '' : 's'}
                   {single ? ` · ${KIND_LABELS[single]}` : ''}{' '}
-                  {containsSynthetic ? ' · synthetic demo catalog' : ' · sourced pilot catalog'}
+                  {containsSynthetic ? ' · synthetic demo catalog' : ' · configured catalog'}
                 </caption>
                 <thead>
                   <tr>
@@ -761,8 +761,10 @@ export function PartList({
               The legend detail lives in the column headers' titles instead.
             */}
             <span className="pbar-meta">
-              {containsSynthetic ? 'Synthetic demo estimates' : 'Sourced pilot estimates'} · not a
-              quote ·{' '}
+              {containsSynthetic
+                ? 'Synthetic demo estimates'
+                : 'Estimates from the configured pricebook'}{' '}
+              · not a quote ·{' '}
               <abbr title="Free or included billing on an unverified record that the build policy admits">
                 Included*
               </abbr>{' '}

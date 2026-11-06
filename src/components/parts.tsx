@@ -252,7 +252,7 @@ export function MiniBuild({
                 : 'Not evaluated yet.'}{' '}
         {synthetic
           ? 'Estimates are synthetic demo data, not quotes.'
-          : 'Only sourced rates are included. An unknown cost is not zero or a quote.'}
+          : 'Estimates use the configured pricebook. An unknown cost is not zero or a quote.'}
       </p>
       <div style={{ padding: '0 10px 10px' }}>
         <Link className="pbtn" to="/builder" style={{ width: '100%' }}>

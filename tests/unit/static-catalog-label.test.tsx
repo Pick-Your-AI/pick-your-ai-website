@@ -48,6 +48,6 @@ describe('synthetic catalog labelling follows item provenance', () => {
         <MiniBuild {...props} synthetic={false} />
       </MemoryRouter>,
     );
-    expect(screen.getAllByText(/Only sourced rates are included/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Estimates use the configured pricebook/).length).toBeGreaterThan(0);
   });
 });

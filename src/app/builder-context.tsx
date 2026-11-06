@@ -160,12 +160,26 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
       // Claim the draft immediately so a slower initial load cannot replace it.
       touched.current = true;
       void (async () => {
-        const catalogSnapshotId = snapshotId ?? (await catalogRepo.getSnapshot()).id;
+        // Resolve the snapshot first: a starter must only carry items this build will be locked to,
+        // and the catalog query may still be loading when the click happens.
+        const snapshot = catalog.data ?? (await catalogRepo.getSnapshot());
+        const catalogSnapshotId = snapshot.id;
+        const present = new Set(snapshot.items.map((i) => i.id));
         const base = createBuild({
           catalogSnapshotId,
           name,
           pricebookId: catalogRepo.defaultPricebookId,
         });
+        /*
+         * A starter is composed from the fixture catalog. Spreading it wholesale would also copy its
+         * locks and selections, so a static deployment would receive a build pinned to a snapshot
+         * and pricebook it does not publish, and no evaluator or estimator could analyse it.
+         * Keep this deployment's locks, and keep only selections whose items actually exist here.
+         */
+        const selections = (template?.selections ?? []).filter((s) =>
+          present.has(s.catalog_item_id),
+        );
+        const kept = new Set(selections.map((s) => s.id));
         const build: BuildSnapshot = template
           ? {
               ...template,
@@ -176,6 +190,11 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
               lifecycle: 'draft',
               owner_ref: base.owner_ref,
               name: name ?? template.name,
+              locks: base.locks,
+              selections,
+              links: (template.links ?? []).filter(
+                (l) => kept.has(l.from_selection_id) && kept.has(l.to_selection_id),
+              ),
             }
           : base;
         const next = createDraft(
@@ -190,7 +209,7 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
         void persist(next);
       })();
     },
-    [persist, snapshotId, catalogRepo],
+    [persist, catalogRepo, catalog.data],
   );
 
   const open = useCallback<BuilderApi['open']>(

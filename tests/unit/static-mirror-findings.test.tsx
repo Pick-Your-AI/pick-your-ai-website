@@ -123,6 +123,41 @@ describe('finding 2: static evaluation refuses a ruleset the build did not lock'
   });
 });
 
+describe("finding 6: a starter never ships another catalog's locks", () => {
+  it('keeps the configured locks and drops selections the catalog does not contain', async () => {
+    const { STARTERS } = await import('../../src/data/fixture/starters');
+    const template = STARTERS[0]!.build();
+    expect(template.locks.catalog_snapshot_id).not.toBe(SNAPSHOT);
+
+    // The rebase the builder applies when a template is chosen in static mode.
+    const base = createBuild({ catalogSnapshotId: SNAPSHOT, pricebookId: PRICEBOOK });
+    const catalogIds = new Set(
+      JSON.parse(
+        readFileSync('public/v1/catalog/snapshots/catalog.pilot.open-1', 'utf8'),
+      ).items.map((i: { id: string }) => i.id),
+    );
+    const selections = template.selections.filter((x) => catalogIds.has(x.catalog_item_id));
+    const kept = new Set(selections.map((x) => x.id));
+    const build = {
+      ...template,
+      locks: base.locks,
+      selections,
+      links: template.links.filter(
+        (l) => kept.has(l.from_selection_id) && kept.has(l.to_selection_id),
+      ),
+    };
+
+    expect(build.locks.catalog_snapshot_id).toBe(SNAPSHOT);
+    expect(build.locks.pricebook_id).toBe(PRICEBOOK);
+    // No demo item survives, so nothing references an unpublished record.
+    expect(build.selections).toEqual([]);
+    expect(build.links).toEqual([]);
+    // And the rebased build is analysable rather than rejected.
+    await expect(prov().compatibility.evaluate(build)).resolves.toBeDefined();
+    await expect(prov().pricing.estimate(build)).resolves.toBeDefined();
+  });
+});
+
 describe('finding 5: a foreign snapshot lock never yields a false-revision answer', () => {
   // The report, verdict and cost are all labelled with build.locks.catalog_snapshot_id, so a build
   // pinned elsewhere must fail rather than be answered from catalog.pilot.open-1.
