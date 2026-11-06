@@ -126,6 +126,7 @@ describe('finding 3: sourced records are not described as synthetic', () => {
 
   it('shows the sourced banner, not the synthetic one', async () => {
     const providers = prov();
+    expect(providers.mode).toBe('http');
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>

@@ -4,8 +4,6 @@ import { CONTRACT_PROVENANCE, kindsInTier } from '../contracts';
 import { buildVersion, shortSha } from '../lib/version';
 import { useData } from '../app/data-context';
 import { useBuilder } from '../app/builder-context';
-import { useCatalog } from '../app/queries';
-import { isSyntheticCatalog } from '../lib/catalog-view';
 import { LAYERS } from '../lib/layers';
 import { Icon, IconSprite } from './icon';
 import { ToastProvider } from './feedback';
@@ -39,10 +37,10 @@ export function Brand({ className = 'brand' }: { className?: string }) {
 /** "INTERACTIVE DESIGN PREVIEW" strip: the site's standing synthetic-data disclosure. */
 export function DemoBanner() {
   const { mode } = useData();
-  // Sourced pilot records must not be described as synthetic. Absence of verification is stated
-  // separately, so neither claim stands in for the other.
-  const catalog = useCatalog();
-  const synthetic = isSyntheticCatalog(catalog.data?.items);
+  // The fixture provider is the synthetic demo catalog; an HTTP deployment serves published
+  // artifacts. Reading `mode` avoids subscribing the global banner to a catalog query, which would
+  // make every route wait on the catalog just to render its footer.
+  const synthetic = mode === 'fixture';
   return (
     <div className="demo-banner" role="note" aria-label="Demo mode">
       <strong>INTERACTIVE DESIGN PREVIEW</strong>{' '}
