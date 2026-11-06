@@ -1,12 +1,17 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { DataContext } from '../../src/app/data-context';
 import { useBuildAnalysis } from '../../src/app/queries';
 import { useBuilder } from '../../src/app/builder-context';
-import type { BuildSnapshot, CostEstimate, EvaluationReport } from '../../src/contracts';
+import type {
+  BuildSnapshot,
+  CostEstimate,
+  EvaluationReport,
+  ResourceEstimate,
+} from '../../src/contracts';
 import { createFixtureProviders } from '../../src/data/fixture/providers';
 import type { ResourceEstimateResult } from '../../src/data/types';
 import { createDraft } from '../../src/domain/build';
@@ -35,13 +40,16 @@ const deferred = <T,>() => {
   return { promise, resolve };
 };
 
-async function analysisHarness() {
+async function analysisHarness(
+  resourceFor: (build: BuildSnapshot) => ResourceEstimate = (build) =>
+    resourceEstimate(build, '8', 'calibrated'),
+) {
   const build = apiChat();
   const providers = createFixtureProviders({ now: () => NOW });
   const cost = await providers.pricing.estimate(build);
   const resources: ResourceEstimateResult = {
     status: 'available',
-    estimate: resourceEstimate(build, '8', 'calibrated'),
+    estimate: resourceFor(build),
   };
   const report = await providers.compatibility.evaluate(build, {
     costEstimate: cost,
@@ -86,6 +94,83 @@ async function analysisHarness() {
     evaluate,
   };
 }
+
+function SummaryView({ build }: { build: BuildSnapshot }) {
+  vi.mocked(useBuilder).mockReturnValue({
+    draft: createDraft(build),
+    ready: true,
+    catalogById: BY_ID,
+    lastChange: null,
+    saveState: { status: 'saved' },
+    apply: vi.fn(),
+    startNew: vi.fn(),
+    open: vi.fn(),
+    restore: vi.fn(),
+  });
+  return <BuildSummaryPage />;
+}
+
+describe('capacity evidence presentation', () => {
+  it('discloses each estimate’s assumptions as text associated with its metric', async () => {
+    const literalMarkup = '<img src="x" onerror="alert(1)">';
+    const h = await analysisHarness((build) => {
+      const estimate = resourceEstimate(build, '8', 'calibrated');
+      estimate.estimates[0] = {
+        ...estimate.estimates[0]!,
+        estimator_id: 'synthetic.weights',
+        estimator_version: '1.2-test',
+        assumptions: ['Synthetic required VRAM at a 4k context.', literalMarkup],
+      };
+      estimate.estimates[1] = {
+        ...estimate.estimates[1]!,
+        estimator_id: 'synthetic.peak',
+        estimator_version: '2.0-test',
+        assumptions: ['Synthetic peak VRAM with two workers.'],
+      };
+      return estimate;
+    });
+    const view = render(<SummaryView build={h.build} />, { wrapper: h.wrapper });
+    const capacity = await screen.findByRole('region', { name: 'Capacity evidence' });
+    const required = within(capacity).getByRole('list', {
+      name: 'Assumptions for Estimated required vram gb',
+    });
+    const peak = within(capacity).getByRole('list', {
+      name: 'Assumptions for Estimated peak per device vram gb',
+    });
+    expect(required).toHaveTextContent('Synthetic required VRAM at a 4k context.');
+    expect(required).not.toHaveTextContent('Synthetic peak VRAM with two workers.');
+    expect(peak).toHaveTextContent('Synthetic peak VRAM with two workers.');
+    expect(peak).not.toHaveTextContent('Synthetic required VRAM at a 4k context.');
+    expect(required.closest('li')).toHaveTextContent('Calibrated, synthetic.weights@1.2-test');
+    expect(peak.closest('li')).toHaveTextContent('Calibrated, synthetic.peak@2.0-test');
+    expect(within(required).getByText(literalMarkup)).toBeInTheDocument();
+    expect(capacity.querySelector('img')).toBeNull();
+    view.unmount();
+    h.unmount();
+  });
+
+  it('reports an empty supplied assumptions array without inventing an assumption', async () => {
+    const h = await analysisHarness((build) => {
+      const estimate = resourceEstimate(build, '8', 'calibrated');
+      estimate.estimates[0]!.assumptions = [];
+      return estimate;
+    });
+    const view = render(<SummaryView build={h.build} />, { wrapper: h.wrapper });
+    const capacity = await screen.findByRole('region', { name: 'Capacity evidence' });
+    const required = within(capacity).getByText('Estimated required vram gb:').closest('li');
+    expect(required).toHaveTextContent('No assumptions provided.');
+    expect(
+      within(capacity).queryByRole('list', { name: 'Assumptions for Estimated required vram gb' }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(capacity).getByRole('list', {
+        name: 'Assumptions for Estimated peak per device vram gb',
+      }),
+    ).toHaveTextContent('Synthetic test value.');
+    view.unmount();
+    h.unmount();
+  });
+});
 
 describe('build analysis identity', () => {
   it.each(['another build at the same revision', 'a new revision of the same build'])(
@@ -271,43 +356,47 @@ describe('build analysis identity', () => {
     h.unmount();
   });
 
-  it('hides another build’s capacity evidence in the summary until current resources arrive', async () => {
-    const h = await analysisHarness();
-    // The builder summary is the only summary view after the redesign, so this exercises it directly.
-    function SummaryView({ build }: { build: BuildSnapshot }) {
-      vi.mocked(useBuilder).mockReturnValue({
-        draft: createDraft(build),
-        ready: true,
-        catalogById: BY_ID,
-        lastChange: null,
-        saveState: { status: 'saved' },
-        apply: vi.fn(),
-        startNew: vi.fn(),
-        open: vi.fn(),
-        restore: vi.fn(),
+  it.each(['another build', 'a new revision'])(
+    'hides capacity values and assumptions for %s until current resources arrive',
+    async (change) => {
+      const h = await analysisHarness();
+      // The builder summary is the only summary view after the redesign, so this exercises it directly.
+      const view = render(<SummaryView build={h.build} />, { wrapper: h.wrapper });
+      await waitFor(() =>
+        expect(screen.getByRole('region', { name: 'Capacity evidence' })).toHaveTextContent('8 gb'),
+      );
+      expect(screen.getByRole('region', { name: 'Capacity evidence' })).toHaveTextContent(
+        'Synthetic test value.',
+      );
+
+      const nextBuild = {
+        ...h.build,
+        ...(change === 'another build'
+          ? { id: 'build.other' }
+          : { revision: h.build.revision + 1 }),
+      };
+      view.rerender(<SummaryView build={nextBuild} />);
+      const capacity = screen.getByRole('region', { name: 'Capacity evidence' });
+      await waitFor(() => expect(capacity).toHaveTextContent('Checking capacity evidence…'));
+      expect(capacity).not.toHaveTextContent('8 gb');
+      expect(capacity).not.toHaveTextContent('Synthetic test value.');
+
+      const current = resourceEstimate(nextBuild, '16', 'calibrated');
+      current.estimates.forEach((estimate) => {
+        estimate.assumptions = ['Synthetic current-build assumption.'];
       });
-      return <BuildSummaryPage />;
-    }
-    const view = render(<SummaryView build={h.build} />, { wrapper: h.wrapper });
-    await waitFor(() =>
-      expect(screen.getByRole('region', { name: 'Capacity evidence' })).toHaveTextContent('8 gb'),
-    );
-
-    const nextBuild = { ...h.build, id: 'build.other' };
-    view.rerender(<SummaryView build={nextBuild} />);
-    const capacity = screen.getByRole('region', { name: 'Capacity evidence' });
-    await waitFor(() => expect(capacity).toHaveTextContent('Checking capacity evidence…'));
-    expect(capacity).not.toHaveTextContent('8 gb');
-
-    await act(async () =>
-      h.nextResources.resolve({
-        status: 'available',
-        estimate: resourceEstimate(nextBuild, '16', 'calibrated'),
-      }),
-    );
-    await waitFor(() => expect(capacity).toHaveTextContent('16 gb'));
-    expect(capacity).not.toHaveTextContent('8 gb');
-    view.unmount();
-    h.unmount();
-  });
+      await act(async () =>
+        h.nextResources.resolve({
+          status: 'available',
+          estimate: current,
+        }),
+      );
+      await waitFor(() => expect(capacity).toHaveTextContent('16 gb'));
+      expect(capacity).toHaveTextContent('Synthetic current-build assumption.');
+      expect(capacity).not.toHaveTextContent('8 gb');
+      expect(capacity).not.toHaveTextContent('Synthetic test value.');
+      view.unmount();
+      h.unmount();
+    },
+  );
 });
