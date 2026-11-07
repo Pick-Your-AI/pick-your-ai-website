@@ -6,6 +6,7 @@
  */
 import { Link } from 'react-router';
 import { Icon, type IconName } from '../components/icon';
+import { ESCALATION_POLICY, ORGANIZATION_DIRECTORY_PATH } from '../lib/organization';
 
 const ORG = 'https://github.com/Pick-Your-AI';
 const SITE_REPO = `${ORG}/pickyour.ai`;
@@ -224,6 +225,24 @@ export default function AboutPage() {
                 website source
               </a>{' '}
               is open and MIT-licensed.
+            </p>
+          </details>
+          <details>
+            <summary>Who maintains what, and who do I ask?</summary>
+            <p>
+              The{' '}
+              {/* A plain anchor: /organization/ is a separate static page, not an SPA route. */}
+              <a className="text-link" href={ORGANIZATION_DIRECTORY_PATH}>
+                organization directory
+              </a>{' '}
+              lists the teams, repositories and Projects, generated and reviewed in the
+              organization&apos;s <code>.github</code> repository. It shows display groups, GitHub
+              hierarchy, access and accepted responsibility as separate things; an entity without a
+              mapping is shown as unmapped. The{' '}
+              <a className="text-link" href={ESCALATION_POLICY}>
+                canonical escalation policy
+              </a>{' '}
+              defines who to ask, in order.
             </p>
           </details>
           <details>

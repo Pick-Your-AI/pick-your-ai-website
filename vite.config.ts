@@ -14,7 +14,8 @@ export default defineConfig({
   preview: { port: 4317, strictPort: true },
   test: {
     environment: 'jsdom',
-    include: ['tests/unit/**/*.test.{ts,tsx}'],
+    // The organization bundle validator is plain ESM beside its CLI; Vitest runs its tests here.
+    include: ['tests/unit/**/*.test.{ts,tsx}', 'scripts/organization.test.mjs'],
     setupFiles: ['tests/unit/setup.ts'],
     restoreMocks: true,
   },

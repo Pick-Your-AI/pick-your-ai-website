@@ -25,6 +25,7 @@ const ROUTES = [
   '/methodology',
   '/about',
   '/legal',
+  '/organization/',
   '/shared',
   '/nope',
 ];

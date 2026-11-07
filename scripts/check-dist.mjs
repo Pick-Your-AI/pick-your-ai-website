@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // Verifies dist/ satisfies the INTERFACES.md build contract consumed by the deploy workflow.
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { verifyDist } from './organization-lib.mjs';
 
 const errors = [];
 if (!existsSync('dist/index.html')) errors.push('dist/index.html missing');
@@ -21,6 +23,9 @@ if (Number.isNaN(Date.parse(v.builtAt))) errors.push('builtAt is not ISO-8601');
 const assets = existsSync('dist/assets') ? readdirSync('dist/assets') : [];
 if (!assets.some((f) => /-[A-Za-z0-9_-]{8}\.js$/.test(f)))
   errors.push('no hashed JS asset in dist/assets');
+
+// /organization/ must carry exactly the admitted, hash-pinned bundle, or be absent when none is admitted.
+errors.push(...verifyDist(fileURLToPath(new URL('..', import.meta.url))).errors);
 
 if (errors.length) {
   console.error(`dist/ violates the build contract:\n  - ${errors.join('\n  - ')}`);
