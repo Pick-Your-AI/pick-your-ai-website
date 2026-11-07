@@ -126,8 +126,12 @@ describe('privacy notice matches supported storage and transport configurations'
 
     const notice = showNotice(providers);
     expect(notice).toHaveTextContent(/remote build saving.*complete build snapshots.*sent/i);
-    expect(notice).toHaveTextContent(/clearing.*removes browser-stored copies and preferences/i);
-    expect(notice).toHaveTextContent(/does not request deletion of API-stored builds/i);
+    expect(notice).toHaveTextContent(
+      /clearing your site data.*browser-stored copies.*local list used by My Builds/i,
+    );
+    expect(notice).toHaveTextContent(/remote-saving mode.*API-stored builds.*disappear from My Builds/i);
+    expect(notice).toHaveTextContent(/cannot be rediscovered there.*retained build ID or share link/i);
+    expect(notice).toHaveTextContent(/does not request deletion.*from the API/i);
     expect(notice).not.toHaveTextContent(/your builds stay in this browser/i);
   });
 
@@ -146,6 +150,9 @@ describe('privacy notice matches supported storage and transport configurations'
 
       const notice = showNotice(providers);
       expect(notice).toHaveTextContent(/configured API.*may use another origin/i);
+      expect(notice).toHaveTextContent(/separately operated.*API host.*observe connection and request metadata/i);
+      expect(notice).toHaveTextContent(/client IP address and requested API routes.*may log it/i);
+      expect(notice).toHaveTextContent(/does not assert a particular retention policy/i);
       expect(notice).not.toHaveTextContent(/no request to any other origin/i);
     },
   );
