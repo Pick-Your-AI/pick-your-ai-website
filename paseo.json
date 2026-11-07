@@ -1,8 +1,6 @@
 {
   "worktree": {
-    "setup": [
-      "npm ci"
-    ],
+    "setup": ["npm ci"],
     "teardown": "echo \"Setup starts no persistent services; Paseo handles worktree removal.\""
   },
   "scripts": {
