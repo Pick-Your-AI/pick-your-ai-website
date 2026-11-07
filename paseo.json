@@ -1,0 +1,26 @@
+{
+  "worktree": {
+    "setup": ["npm ci"],
+    "teardown": "echo \"Setup starts no persistent services; Paseo handles worktree removal.\""
+  },
+  "scripts": {
+    "diff-check": {
+      "command": "git diff --check"
+    },
+    "test": {
+      "command": "npm run test"
+    },
+    "build": {
+      "command": "npm run build"
+    },
+    "typecheck": {
+      "command": "npm run typecheck"
+    },
+    "lint": {
+      "command": "npm run lint"
+    },
+    "format-check": {
+      "command": "npm run format:check"
+    }
+  }
+}
