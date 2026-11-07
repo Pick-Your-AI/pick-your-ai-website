@@ -37,9 +37,9 @@ export default function LegalPage() {
               starting with <code className="mono">pyai.</code>. In API mode, build identifiers,
               revisions and analysis parameters are sent to the configured API, which may use
               another origin. When remote build saving is enabled, complete build snapshots are also
-              sent there. Clearing your site data removes browser-stored copies, preferences and the local
-              list used by My Builds. In remote-saving mode, any remaining API-stored builds will
-              disappear from My Builds and cannot be rediscovered there without a separately
+              sent there. Clearing your site data removes browser-stored copies, preferences and the
+              local list used by My Builds. In remote-saving mode, any remaining API-stored builds
+              will disappear from My Builds and cannot be rediscovered there without a separately
               retained build ID or share link. Clearing browser data does not request deletion
               of those builds from the API.
             </li>
