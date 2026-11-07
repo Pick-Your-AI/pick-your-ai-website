@@ -40,8 +40,8 @@ export default function LegalPage() {
               sent there. Clearing your site data removes browser-stored copies, preferences and the
               local list used by My Builds. In remote-saving mode, any remaining API-stored builds
               will disappear from My Builds and cannot be rediscovered there without a separately
-              retained build ID or share link. Clearing browser data does not request deletion
-              of those builds from the API.
+              retained build ID or share link. Clearing browser data does not request deletion of
+              those builds from the API.
             </li>
             <li>
               <strong>Share links carry the build in the URL fragment</strong> (the part after{' '}
@@ -51,10 +51,10 @@ export default function LegalPage() {
             <li>
               <strong>Server logs.</strong> Like most websites, the hosting provider&apos;s web
               servers may record standard request logs, such as IP address, user agent, requested
-              page and time, for operation and security. If API mode uses a separately operated
-              API host, that host can also observe connection and request metadata, including
-              the client IP address and requested API routes, and may log it. This notice does
-              not assert a particular retention policy for either host.
+              page and time, for operation and security. If API mode uses a separately operated API
+              host, that host can also observe connection and request metadata, including the client
+              IP address and requested API routes, and may log it. This notice does not assert a
+              particular retention policy for either host.
             </li>
           </ul>
         </section>
