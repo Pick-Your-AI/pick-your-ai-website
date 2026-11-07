@@ -12,7 +12,7 @@ export default function LegalPage() {
     <div className="app-page">
       <PageHeader compact breadcrumb="LEGAL" eyebrow="LEGAL" title="Privacy and terms">
         A plain-language notice for the PickYour.AI preview. Last updated{' '}
-        <time dateTime="2026-10-25">2026-10-25</time>.
+        <time dateTime="2026-11-07">2026-11-07</time>.
       </PageHeader>
       <div className="container legal-content">
         <Notice title="Preview notice.">
@@ -37,8 +37,11 @@ export default function LegalPage() {
               starting with <code className="mono">pyai.</code>. In API mode, build identifiers,
               revisions and analysis parameters are sent to the configured API, which may use
               another origin. When remote build saving is enabled, complete build snapshots are also
-              sent there. Clearing your site data removes browser-stored copies and preferences; it
-              does not request deletion of API-stored builds.
+              sent there. Clearing your site data removes browser-stored copies, preferences and the local
+              list used by My Builds. In remote-saving mode, any remaining API-stored builds will
+              disappear from My Builds and cannot be rediscovered there without a separately
+              retained build ID or share link. Clearing browser data does not request deletion
+              of those builds from the API.
             </li>
             <li>
               <strong>Share links carry the build in the URL fragment</strong> (the part after{' '}
@@ -48,7 +51,10 @@ export default function LegalPage() {
             <li>
               <strong>Server logs.</strong> Like most websites, the hosting provider&apos;s web
               servers may record standard request logs, such as IP address, user agent, requested
-              page and time, for operation and security.
+              page and time, for operation and security. If API mode uses a separately operated
+              API host, that host can also observe connection and request metadata, including
+              the client IP address and requested API routes, and may log it. This notice does
+              not assert a particular retention policy for either host.
             </li>
           </ul>
         </section>
