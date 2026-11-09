@@ -192,6 +192,33 @@ describe('finding 5: a foreign snapshot lock never yields a false-revision answe
   });
 });
 
+describe('finding 7: a foreign dependency-graph lock is refused', () => {
+  // The report carries the graph identity from the build lock while change-impact analysis reads
+  // this deployment's configured graph, so a foreign lock must not be stamped onto a report.
+  const foreign = () => {
+    const b = createBuild({ catalogSnapshotId: SNAPSHOT, pricebookId: PRICEBOOK });
+    b.locks.dependency_graph_id = 'dependencies.other.7';
+    return b;
+  };
+
+  it('refuses to evaluate against a graph it does not publish', async () => {
+    await expect(prov().compatibility.evaluate(foreign())).rejects.toThrow(
+      /different graph|does not publish/i,
+    );
+  });
+
+  it('refuses compatible options for it too', async () => {
+    await expect(prov().compatibility.compatibleOptions(foreign(), 'model')).rejects.toThrow(
+      /different graph|does not publish/i,
+    );
+  });
+
+  it('still evaluates when the graph lock matches the published one', async () => {
+    const ok = createBuild({ catalogSnapshotId: SNAPSHOT, pricebookId: PRICEBOOK });
+    await expect(prov().compatibility.evaluate(ok)).resolves.toBeDefined();
+  });
+});
+
 describe('finding 3: sourced records are not described as synthetic', () => {
   const snapshot = JSON.parse(
     readFileSync('public/v1/catalog/snapshots/catalog.pilot.open-1', 'utf8'),

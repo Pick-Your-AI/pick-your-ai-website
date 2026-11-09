@@ -373,6 +373,19 @@ export class StaticMirrorCompatibilityEvaluator implements CompatibilityEvaluato
         `Build locks catalog snapshot ${snapshotId}, which this deployment does not publish. Compatibility is not evaluated against a different snapshot.`,
       );
     });
+    /*
+     * The report also carries the graph identity from the lock, while the builder's change-impact
+     * analysis reads this deployment's configured graph. A foreign graph lock would therefore be
+     * stamped on a report whose impact was computed elsewhere, so it is refused for the same
+     * reason as a foreign snapshot.
+     */
+    const graph = await this.catalog.getDependencyGraph();
+    if (build.locks.dependency_graph_id !== graph.id) {
+      throw new DataError(
+        'unsupported',
+        `Build locks dependency graph ${build.locks.dependency_graph_id}, but this deployment publishes ${graph.id}. Compatibility is not reported against a different graph.`,
+      );
+    }
     return { snapshot, ruleset };
   }
   async evaluate(build: BuildSnapshot, evidence: EvaluationEvidence = {}) {
