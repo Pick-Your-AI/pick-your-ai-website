@@ -1,6 +1,6 @@
 /*
- * Privacy and terms. Styled with the design mock's masthead + chapter treatment; the wording is
- * the project's existing plain-language notice (no analytics, no accounts, local-only storage).
+ * Privacy and terms. The plain-language preview notice covers browser storage and the optional
+ * API configuration without assuming a deployed service or its retention policy.
  */
 import { PageHeader } from '../components/layout';
 import { Notice } from '../components/feedback';
@@ -12,7 +12,7 @@ export default function LegalPage() {
     <div className="app-page">
       <PageHeader compact breadcrumb="LEGAL" eyebrow="LEGAL" title="Privacy and terms">
         A plain-language notice for the PickYour.AI preview. Last updated{' '}
-        <time dateTime="2026-10-16">2026-10-16</time>.
+        <time dateTime="2026-11-07">2026-11-07</time>.
       </PageHeader>
       <div className="container legal-content">
         <Notice title="Preview notice.">
@@ -29,14 +29,19 @@ export default function LegalPage() {
             </li>
             <li>
               <strong>No cookies, analytics or trackers.</strong> The site loads no analytics,
-              advertising or third-party scripts. Typefaces are self-hosted, so a page load makes no
-              request to any other origin.
+              advertising or third-party scripts. Typefaces are self-hosted.
             </li>
             <li>
-              <strong>Your builds stay in this browser.</strong> Builds and preferences such as the
-              colour theme are saved in this browser&apos;s local storage under keys starting with{' '}
-              <code className="mono">pyai.</code>. They are not sent to us. Clearing your site data
-              removes them.
+              <strong>Browser storage and API requests.</strong> By default, builds are saved in
+              this browser. Preferences such as the colour theme also use browser storage under keys
+              starting with <code className="mono">pyai.</code>. In API mode, build identifiers,
+              revisions and analysis parameters are sent to the configured API, which may use
+              another origin. When remote build saving is enabled, complete build snapshots are also
+              sent there. Clearing your site data removes browser-stored copies, preferences and the
+              local list used by My Builds. In remote-saving mode, any remaining API-stored builds
+              will disappear from My Builds and cannot be rediscovered there without a separately
+              retained build ID or share link. Clearing browser data does not request deletion of
+              those builds from the API.
             </li>
             <li>
               <strong>Share links carry the build in the URL fragment</strong> (the part after{' '}
@@ -46,7 +51,10 @@ export default function LegalPage() {
             <li>
               <strong>Server logs.</strong> Like most websites, the hosting provider&apos;s web
               servers may record standard request logs, such as IP address, user agent, requested
-              page and time, for operation and security.
+              page and time, for operation and security. If API mode uses a separately operated API
+              host, that host can also observe connection and request metadata, including the client
+              IP address and requested API routes, and may log it. This notice does not assert a
+              particular retention policy for either host.
             </li>
           </ul>
         </section>
