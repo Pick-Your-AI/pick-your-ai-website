@@ -50,11 +50,10 @@
         ],
         "weight_access": "open",
         "model_formats": [
-          "safetensors",
-          "pytorch"
+          "safetensors"
         ]
       },
-      "description": "Open-weight instruction-tuned text model distributed under the Apache License 2.0. The revision is the immutable Hugging Face commit, not a consumer version label. Availability of a hosted inference service and cost are not established.",
+      "description": "Open-weight instruction-tuned text model distributed under the Apache License 2.0, published as safetensors at this immutable revision. The version is the exact Hugging Face commit, not a consumer release label. Hosted inference availability, throughput, quality and cost are not established by these sources.",
       "license": {
         "spdx_id": "Apache-2.0",
         "commercial_use_allowed": true,
@@ -62,16 +61,22 @@
       },
       "provenance": [
         {
-          "source_uri": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct",
+          "source_uri": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/blob/7ae557604adf67be50417f59c2c2f167def9a775/README.md",
           "checked_at": "2026-11-05T14:30:00Z",
           "verification_status": "unverified",
-          "notes": "Publisher model card states 'Context Length: Full 32,768 tokens and generation 8192 tokens'; model card and hub repository tag identify Apache-2.0 and an arXiv reference 2407.10671. Model card supplies weights and license identity; no independent task-quality or hosted-service measurement was performed."
+          "notes": "Publisher model card at the immutable revision states 'Context Length: Full 32,768 tokens and generation 8192 tokens'. Hub metadata for this revision lists tags transformers, safetensors and 'license:apache-2.0', and declares 494,032,768 BF16 parameters. No pytorch format is published for this revision, so only safetensors is claimed. No independent task-quality or hosted-service measurement was performed."
         },
         {
           "source_uri": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/blob/7ae557604adf67be50417f59c2c2f167def9a775/config.json",
           "checked_at": "2026-11-05T14:30:00Z",
           "verification_status": "unverified",
-          "notes": "Immutable-revision config.json reports max_position_embeddings=32768, model_type=qwen2, vocab_size=151936. The same hub revision's file listing includes safetensors weights. This is the publisher's exact artifact for that immutable revision, not an independent second reviewer."
+          "notes": "Immutable-revision config.json reports max_position_embeddings=32768, model_type=qwen2, vocab_size=151936. Same publisher as the model card, so this grounds different fields rather than providing independent corroboration."
+        },
+        {
+          "source_uri": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/blob/7ae557604adf67be50417f59c2c2f167def9a775/LICENSE",
+          "checked_at": "2026-11-05T14:30:00Z",
+          "verification_status": "unverified",
+          "notes": "Publisher-distributed LICENSE at the immutable revision is the Apache License, Version 2.0 text. This is a property of this model artifact; it establishes no provider-wide licence, hosting terms, SLA or pricing."
         }
       ],
       "updated_at": "2026-11-05T14:30:00Z"

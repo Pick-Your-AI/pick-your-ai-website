@@ -380,10 +380,15 @@ export class StaticMirrorCompatibilityEvaluator implements CompatibilityEvaluato
      * reason as a foreign snapshot.
      */
     const graph = await this.catalog.getDependencyGraph();
-    if (build.locks.dependency_graph_id !== graph.id) {
+    // A revision is a distinct immutable artifact: the same id at a different revision is not the
+    // graph the build locked, and stamping it would misattribute the report.
+    if (
+      build.locks.dependency_graph_id !== graph.id ||
+      build.locks.dependency_graph_revision !== graph.revision
+    ) {
       throw new DataError(
         'unsupported',
-        `Build locks dependency graph ${build.locks.dependency_graph_id}, but this deployment publishes ${graph.id}. Compatibility is not reported against a different graph.`,
+        `Build locks dependency graph ${build.locks.dependency_graph_id}@${build.locks.dependency_graph_revision}, but this deployment publishes ${graph.id}@${graph.revision}. Compatibility is not reported against a different graph.`,
       );
     }
     return { snapshot, ruleset };

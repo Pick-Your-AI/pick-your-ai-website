@@ -213,9 +213,49 @@ describe('finding 7: a foreign dependency-graph lock is refused', () => {
     );
   });
 
+  it('refuses the same graph id at a different revision', async () => {
+    // A revision is a distinct immutable artifact; matching only the id would stamp revision 999
+    // onto a report computed from revision 1.
+    const b = createBuild({ catalogSnapshotId: SNAPSHOT, pricebookId: PRICEBOOK });
+    b.locks.dependency_graph_revision = 999;
+    await expect(prov().compatibility.evaluate(b)).rejects.toThrow(/different graph/i);
+    await expect(prov().compatibility.compatibleOptions(b, 'model')).rejects.toThrow(
+      /different graph/i,
+    );
+  });
+
   it('still evaluates when the graph lock matches the published one', async () => {
     const ok = createBuild({ catalogSnapshotId: SNAPSHOT, pricebookId: PRICEBOOK });
     await expect(prov().compatibility.evaluate(ok)).resolves.toBeDefined();
+  });
+});
+
+describe('finding 8: the pilot licence rate does not imply a free stack', () => {
+  // The published pricebook carries one licence_month rate at 0.00. The meter is supported, but the
+  // model's billing class is unknown, so the estimate must still report unpriced coverage rather
+  // than a zero-cost total that would read as a free deployment.
+  it('reports unpriced coverage rather than a zero total', async () => {
+    const providers = prov();
+    const items = new Map((await providers.catalog.getSnapshot()).items.map((i) => [i.id, i]));
+    const model = items.get('cat.model.qwen25_05b_instruct')!;
+    const build = createBuild({ catalogSnapshotId: SNAPSHOT, pricebookId: PRICEBOOK });
+    build.selections = [
+      {
+        id: 'sel_model_1',
+        kind: 'model',
+        catalog_item_id: model.id,
+        catalog_item_version: model.version,
+        role: 'primary',
+        enabled: true,
+        settings: {},
+      },
+    ] as typeof build.selections;
+
+    const cost = await providers.pricing.estimate(build);
+    expect(cost.pricebook_id).toBe(PRICEBOOK);
+    expect(cost.unpriced_selection_ids).toContain('sel_model_1');
+    expect(cost.warnings.join(' ')).toMatch(/billing class is unknown — not zero cost/);
+    expect(cost.line_items.some((l) => l.meter === 'license_month')).toBe(false);
   });
 });
 

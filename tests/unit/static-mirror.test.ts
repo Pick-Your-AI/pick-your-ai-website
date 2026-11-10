@@ -71,7 +71,14 @@ describe('the committed pilot artifacts are contract-valid and consumable', () =
     expect(model.provenance.map((entry) => entry.verification_status)).toEqual([
       'unverified',
       'unverified',
+      'unverified',
     ]);
+    // Evidence must be pinned to the immutable revision, never a moving `main` URL.
+    expect(
+      model.provenance.every((entry) => (entry.source_uri ?? '').includes(model.version)),
+    ).toBe(true);
+    // Only safetensors is published for this revision; `pytorch` is not established by any source.
+    expect((model.spec as { model_formats?: string[] }).model_formats).toEqual(['safetensors']);
     expect(model.tags ?? []).not.toContain('synthetic');
   });
 
