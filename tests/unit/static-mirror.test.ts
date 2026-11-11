@@ -163,11 +163,15 @@ describe('the committed pilot artifacts are contract-valid and consumable', () =
         catalogSnapshotId: PILOT_SNAPSHOT,
         pricebookId: providers.catalog.defaultPricebookId,
       });
+      expect(providers.catalog.defaultPricebookId).toBe(PILOT_PRICEBOOK);
       expect(build.locks.pricebook_id).toBe(PILOT_PRICEBOOK);
       await expect(providers.pricing.estimate(build)).resolves.toMatchObject({
         pricebook_id: PILOT_PRICEBOOK,
       });
       expect(log.every((call) => call.method === 'GET')).toBe(true);
+      expect(log.filter((call) => call.url.includes('/pricebooks/'))).toEqual([
+        { method: 'GET', url: '/v1/pricebooks/prices.pilot.1' },
+      ]);
       expect(log.some((call) => call.url.includes('prices.demo.1'))).toBe(false);
     } finally {
       vi.unstubAllGlobals();
@@ -189,6 +193,58 @@ describe('the committed pilot artifacts are contract-valid and consumable', () =
       expect(configure).toThrow(DataConfigError);
       expect(configure).toThrow(/VITE_PRICEBOOK_ID.*VITE_API_SURFACE=static/);
       expect(log).toEqual([]);
+    },
+  );
+
+  it.each([' prices.pilot.1', 'prices.pilot.1 ', ' prices.pilot.1 ', '\tprices.pilot.1\n'])(
+    'rejects a padded static pricebook (%j) before requesting artifacts',
+    (pricebookId) => {
+      const fetch = vi.fn(staticFetch);
+      vi.stubGlobal('fetch', fetch);
+      try {
+        const configure = () =>
+          createProviders({
+            VITE_DATA_MODE: 'http',
+            VITE_API_BASE_URL: API_BASE,
+            VITE_CATALOG_SNAPSHOT: PILOT_SNAPSHOT,
+            VITE_PRICEBOOK_ID: pricebookId,
+            VITE_API_SURFACE: 'static',
+          });
+
+        expect(configure).toThrow(DataConfigError);
+        expect(configure).toThrow(/VITE_PRICEBOOK_ID.*leading or trailing whitespace/);
+        expect(fetch).not.toHaveBeenCalled();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    },
+  );
+
+  it('preserves the static remote-store error priority for a padded pricebook', () => {
+    expect(() =>
+      createProviders({
+        VITE_DATA_MODE: 'http',
+        VITE_API_BASE_URL: API_BASE,
+        VITE_CATALOG_SNAPSHOT: PILOT_SNAPSHOT,
+        VITE_PRICEBOOK_ID: ' prices.pilot.1 ',
+        VITE_API_SURFACE: 'static',
+        VITE_BUILD_STORE: 'http',
+      }),
+    ).toThrow(/VITE_BUILD_STORE=http cannot be combined/);
+  });
+
+  it.each([undefined, 'full'])(
+    'preserves a supplied pricebook verbatim for the full HTTP surface (%j)',
+    (surface) => {
+      expect(
+        createProviders({
+          VITE_DATA_MODE: 'http',
+          VITE_API_BASE_URL: API_BASE,
+          VITE_CATALOG_SNAPSHOT: PILOT_SNAPSHOT,
+          VITE_PRICEBOOK_ID: ' prices.pilot.1 ',
+          VITE_API_SURFACE: surface,
+        }).catalog.defaultPricebookId,
+      ).toBe(' prices.pilot.1 ');
     },
   );
 

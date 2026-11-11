@@ -50,6 +50,10 @@ export function createProviders(env: DataEnv): DataProviders {
     throw new DataConfigError(
       'VITE_PRICEBOOK_ID is required when VITE_API_SURFACE=static. Set it to a pricebook published by the mirror.',
     );
+  if (surface === 'static' && env.VITE_PRICEBOOK_ID !== env.VITE_PRICEBOOK_ID?.trim())
+    throw new DataConfigError(
+      'VITE_PRICEBOOK_ID must not contain leading or trailing whitespace when VITE_API_SURFACE=static. Set it to the exact pricebook ID published by the mirror.',
+    );
   return createHttpProviders({
     baseUrl: env.VITE_API_BASE_URL,
     catalogSnapshotId: env.VITE_CATALOG_SNAPSHOT,
