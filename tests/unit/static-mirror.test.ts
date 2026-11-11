@@ -159,9 +159,68 @@ describe('the committed pilot artifacts are contract-valid and consumable', () =
       });
       expect((await providers.catalog.getSnapshot()).id).toBe(PILOT_SNAPSHOT);
       expect(providers.mode).toBe('http');
+      const build = createBuild({
+        catalogSnapshotId: PILOT_SNAPSHOT,
+        pricebookId: providers.catalog.defaultPricebookId,
+      });
+      expect(build.locks.pricebook_id).toBe(PILOT_PRICEBOOK);
+      await expect(providers.pricing.estimate(build)).resolves.toMatchObject({
+        pricebook_id: PILOT_PRICEBOOK,
+      });
+      expect(log.every((call) => call.method === 'GET')).toBe(true);
+      expect(log.some((call) => call.url.includes('prices.demo.1'))).toBe(false);
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it.each([undefined, '', ' \t\n'])(
+    'rejects a missing static pricebook (%j) before requesting artifacts',
+    (pricebookId) => {
+      const configure = () =>
+        createProviders({
+          VITE_DATA_MODE: 'http',
+          VITE_API_BASE_URL: API_BASE,
+          VITE_CATALOG_SNAPSHOT: PILOT_SNAPSHOT,
+          VITE_PRICEBOOK_ID: pricebookId,
+          VITE_API_SURFACE: 'static',
+        });
+
+      expect(configure).toThrow(DataConfigError);
+      expect(configure).toThrow(/VITE_PRICEBOOK_ID.*VITE_API_SURFACE=static/);
+      expect(log).toEqual([]);
+    },
+  );
+
+  it.each([undefined, 'full'])(
+    'keeps the pricebook optional for the full HTTP surface (%j)',
+    (surface) => {
+      const providers = createProviders({
+        VITE_DATA_MODE: 'http',
+        VITE_API_BASE_URL: API_BASE,
+        VITE_CATALOG_SNAPSHOT: PILOT_SNAPSHOT,
+        VITE_API_SURFACE: surface,
+        VITE_BUILD_STORE: 'http',
+      });
+
+      expect(providers.mode).toBe('http');
+      expect(providers.catalog.defaultPricebookId).toBeUndefined();
+    },
+  );
+
+  it('keeps fixture defaults independent of HTTP-only settings', async () => {
+    const providers = createProviders({
+      VITE_API_SURFACE: 'static',
+      VITE_PRICEBOOK_ID: ' ',
+    });
+
+    expect(providers.mode).toBe('fixture');
+    expect(
+      createBuild({
+        catalogSnapshotId: (await providers.catalog.getSnapshot()).id,
+        pricebookId: providers.catalog.defaultPricebookId,
+      }).locks.pricebook_id,
+    ).toBe('prices.demo.1');
   });
 
   it('rejects an unusable API-surface configuration', () => {
