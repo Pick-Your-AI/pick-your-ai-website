@@ -28,7 +28,7 @@
     "fonts:subset": "node scripts/subset-fonts.mjs"
   },
   "dependencies": {
-    "@tanstack/react-query": "5.105.3",
+    "@tanstack/react-query": "5.107.1",
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1",
     "react": "19.3.1",
