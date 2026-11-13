@@ -92,6 +92,23 @@ function project(
         assumptions: ['Always-on instances.'],
       };
     }
+    /*
+     * Flat periodic fees. A monthly licence or a one-time charge has an explicit basis: one unit per
+     * month (prorated over the period) or one unit in total. That is the meter's definition, not a
+     * guessed quantity, and the assumption is recorded on the line.
+     */
+    case 'license_month':
+      return {
+        quantity: trimDecimal(periodDays / 30),
+        assumptions: [
+          `Flat licence fee for ${trimDecimal(periodDays / 30)} month(s); no minimum term, seat count or escalation modelled.`,
+        ],
+      };
+    case 'one_time':
+      return {
+        quantity: '1',
+        assumptions: ['One-time charge, not prorated over the period.'],
+      };
     case 'storage_gb_month': {
       const gb = settings.provisioned_gb;
       if (gb === undefined) return 'Set provisioned GB on the storage selection.';
@@ -133,8 +150,24 @@ export function estimateCost(
   const currency = build.objectives.currency;
   const lines: Line[] = [];
   const unpriced = new Set<string>();
+  /*
+   * The preview caveat must describe the pricebook that was actually priced. The fixture demo
+   * pricebook is synthetic; a configured pricebook is not, even though its rates may be unverified
+   * estimates. The domain cannot see build configuration, so it reads the pricebook's own identity
+   * and rate provenance instead of assuming.
+   */
+  const syntheticPricebook = pricebook.id.startsWith('prices.demo.');
+  const unverifiedRates = pricebook.rates.some(
+    (r) => r.provenance.verification_status !== 'verified',
+  );
   const warnings: string[] = [
-    'Preview estimator: synthetic demo prices and a simplified usage model. Not a quote.',
+    syntheticPricebook
+      ? 'Preview estimator: synthetic demo prices and a simplified usage model. Not a quote.'
+      : `Preview estimator over the configured pricebook ${pricebook.id} and a simplified usage model. ${
+          unverifiedRates
+            ? 'Its rates are unverified estimates, not vendor quotes.'
+            : 'Rates are source-recorded, not vendor quotes.'
+        }`,
     'Taxes, network egress, caching, retries and minimum commitments are not modelled.',
   ];
   const unverifiedBypass: string[] = [];
