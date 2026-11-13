@@ -1,6 +1,9 @@
 * text=auto eol=lf
 # Vendored contract files must stay byte-identical to upstream so SHA-256 verification works.
 contracts/** -text
+# The admitted organization bundle is vendored verbatim and pinned by SHA-256; never normalize it.
+public/organization/** -text
+tests/fixtures/organization/** -text
 *.webp binary
 *.avif binary
 *.png binary

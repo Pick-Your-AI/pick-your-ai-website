@@ -19,6 +19,8 @@
     "contracts:verify": "node scripts/contracts.mjs verify",
     "contracts:update": "node scripts/contracts.mjs update",
     "contracts:types": "node scripts/generate-contract-types.mjs",
+    "organization:verify": "node scripts/organization.mjs verify",
+    "organization:update": "node scripts/organization.mjs update",
     "test": "node --test scripts/deploy/live-admission.test.mjs && vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",

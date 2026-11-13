@@ -63,7 +63,13 @@ The website does **not** own compatibility policy. `src/domain/evaluator.ts` int
 
 ## Routes (sitemap)
 
-`/` · `/builder` · `/catalog` · `/catalog/:kind` · `/catalog/:kind/:item` · `/compare` · `/summary` · `/builds` · `/shared` · `/methodology` · `/about` · `/legal` · `*` (404). All routes are lazy-loaded.
+`/` · `/builder` · `/catalog` · `/catalog/:kind` · `/catalog/:kind/:item` · `/compare` · `/summary` · `/builds` · `/shared` · `/methodology` · `/about` · `/legal` · `/organization` · `*` (404). All routes are lazy-loaded.
+
+`/organization` is special. Once a reviewed bundle is admitted, `public/organization/index.html` exists and Apache serves that static document for `/organization/` before the SPA fallback is considered, so the route is reachable only by client-side navigation. Until then the route renders an honest "not published yet" page. Link to it with a plain `<a href="/organization/">`, never a router `Link`. See `ORGANIZATION_DIRECTORY.md`.
+
+## Organization directory
+
+The directory at `/organization/` is a vendored, hash-pinned copy of `Pick-Your-AI/.github` `docs/organization/current/`. The website has no organization renderer, registry or roster. `scripts/organization-lib.mjs` validates and admits bundles, `contracts/organization/PIN.json` records provenance and approval, and `check-dist.mjs` requires the build output to carry exactly the pinned bytes. Full contract: `ORGANIZATION_DIRECTORY.md`.
 
 ## Build output
 

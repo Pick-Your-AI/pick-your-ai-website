@@ -32,6 +32,8 @@ jobs:
       - run: npm run typecheck
       - name: Verify vendored contract against pinned upstream SHA
         run: npm run contracts:verify -- --upstream
+      - name: Verify the organization directory pin and vendored bytes
+        run: npm run organization:verify -- --upstream
       - name: Generated contract types are up to date
         run: |
           if [ -f scripts/generate-contract-types.mjs ]; then
