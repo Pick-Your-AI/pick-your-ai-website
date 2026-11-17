@@ -287,6 +287,9 @@ export function PartList({
 
   // Describe the displayed records, not an unrelated synthetic item in another kind or filter.
   const syntheticRows = sorted.filter(({ item }) => isSyntheticCatalog([item])).length;
+  // The caption already labels an entirely synthetic result set. Row badges distinguish mixed
+  // results without adding redundant badges and extra wrapping to the dense all-demo table.
+  const mixedProvenance = syntheticRows > 0 && syntheticRows < sorted.length;
   const catalogLabel =
     syntheticRows === 0
       ? 'configured catalog'
@@ -653,7 +656,9 @@ export function PartList({
                               </span>
                               <span style={{ minWidth: 0 }}>
                                 <Link to={itemPath(item)}>{item.name}</Link>
-                                {isSyntheticCatalog([item]) ? <SyntheticBadge /> : null}
+                                {mixedProvenance && isSyntheticCatalog([item]) ? (
+                                  <SyntheticBadge />
+                                ) : null}
                                 <span className="pt-sub">
                                   {rowSubtitle(item)}
                                   {picked ? ' · in your stack' : ''}
