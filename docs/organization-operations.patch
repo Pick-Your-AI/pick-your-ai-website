@@ -1,25 +1,38 @@
 diff --git a/.github/workflows/deploy-production.yml b/.github/workflows/deploy-production.yml
-index f89eac5..c880676 100644
+index f89eac5..875b4ff 100644
 --- a/.github/workflows/deploy-production.yml
 +++ b/.github/workflows/deploy-production.yml
-@@ -158,0 +159,13 @@ jobs:
+@@ -139,0 +140 @@ jobs:
++          fetch-depth: 0
+@@ -158,0 +160,24 @@ jobs:
 +      - name: Read the target release's organization pin
 +        id: pin
 +        run: |
 +          # The checkout above is main, but the release being verified is $TARGET: its /organization/
 +          # state is whatever its own pin says. A target that predates the integration has no pin.
 +          git fetch --no-tags --depth=1 origin "$TARGET"
-+          if git cat-file -e FETCH_HEAD:contracts/organization/PIN.json 2>/dev/null; then
++          entry="$(git ls-tree FETCH_HEAD -- contracts/organization/PIN.json)"
++          if [ -n "$entry" ]; then
 +            git show FETCH_HEAD:contracts/organization/PIN.json > "$RUNNER_TEMP/organization-pin.json"
 +            echo "path=$RUNNER_TEMP/organization-pin.json" >> "$GITHUB_OUTPUT"
 +          else
++            # A feature branch may add the pin before later pre-integration main releases.
++            # Find its introduction on main's first-parent history, including merge diffs.
++            introduced="$(git log --first-parent --diff-merges=first-parent --no-patch --diff-filter=A --format=%H HEAD -- contracts/organization/PIN.json)"
++            [[ "$introduced" =~ ^[0-9a-f]{40}$ ]] || { echo "cannot establish pin introduction"; exit 1; }
++            target_sha="$(git rev-parse FETCH_HEAD)"
++            main_history="$(git rev-list --first-parent "$introduced")"
++            [ "$target_sha" != "$introduced" ] &&
++              grep -Fxq "$target_sha" <<<"$main_history" || {
++                echo "missing pin is not a proven pre-integration release"; exit 1;
++              }
 +            echo "path=" >> "$GITHUB_OUTPUT"
 +          fi
 +
-@@ -160,0 +174,2 @@ jobs:
+@@ -160,0 +186,2 @@ jobs:
 +        env:
 +          ORGANIZATION_PIN: ${{ steps.pin.outputs.path }}
-diff --git b/.github/workflows/organization-update-proposal.yml b/.github/workflows/organization-update-proposal.yml
+diff --git a/.github/workflows/organization-update-proposal.yml b/.github/workflows/organization-update-proposal.yml
 new file mode 100644
 index 0000000..ccd24e8
 --- /dev/null
@@ -189,10 +202,10 @@ index 0000000..ccd24e8
 +              ;;
 +          esac
 diff --git a/docs/operations/deployment-runbook.md b/docs/operations/deployment-runbook.md
-index 215231c..ef2e5d9 100644
+index 215231c..3df3163 100644
 --- a/docs/operations/deployment-runbook.md
 +++ b/docs/operations/deployment-runbook.md
-@@ -68,0 +69,33 @@ The CPU regression suite runs in the ordinary `npm test` CI gate. Its response e
+@@ -68,0 +69,34 @@ The CPU regression suite runs in the ordinary `npm test` CI gate. Its response e
 +## Organization directory (`/organization/`)
 +
 +The site serves a vendored, hash-pinned copy of the reviewed `Pick-Your-AI/.github` organization bundle
@@ -210,7 +223,8 @@ index 215231c..ef2e5d9 100644
 +  `script-src-elem`/`-attr` not widened, only `style-src` relaxed), the `/organization` redirect, and every file's
 +  HTTP 200, MIME type and SHA-256 against the pin. If none is admitted it expects the pending SPA page and a real 404 for
 +  `/organization/directory.js`. A rollback passes the target release's pin (`ORGANIZATION_PIN`); a target that predates
-+  the integration has none and the section is skipped.
++  the integration has none and the section is skipped only after strict ancestry proves that fact. Any nonempty
++  missing, unreadable or malformed pin path fails before live requests.
 +- **Hosting gate.** The shared host currently injects its own monitoring (an inline script and an external script from
 +  the host provider's CDN) into HTML responses. The CSP blocks their execution but cannot keep the bytes identical, so
 +  the exact-bytes check on `/organization/` fails by design until the site is opted out of host-injected monitoring and
@@ -223,9 +237,16 @@ index 215231c..ef2e5d9 100644
 +  open a pull request until the owners settle a writer (the repository setting that lets Actions create pull
 +  requests is off; a separate narrowly scoped identity is the alternative) and confirm the `contrib/…` branch name,
 +  then set `ORGANIZATION_PROPOSAL_ENABLED`. Until then proposals come from an authorized human running the importer.
-+- Run the helper's tests with `node --test scripts/deploy/organization-live.test.mjs` (add it to the CI test script
-+  together with the pinned expectation in `live-admission.test.mjs`).
++- The required `npm test` CI gate runs both `organization-live.test.mjs` and `live-admission.test.mjs` before
++  Vitest; the pinned command expectation is updated in the same proposal.
 +
+diff --git a/package.json b/package.json
+index 3d5d216..119b5dc 100644
+--- a/package.json
++++ b/package.json
+@@ -24 +24 @@
+-    "test": "node --test scripts/deploy/live-admission.test.mjs && vitest run",
++    "test": "node --test scripts/deploy/live-admission.test.mjs scripts/deploy/organization-live.test.mjs && vitest run",
 diff --git a/public/.htaccess b/public/.htaccess
 index 3d18f4e..a1992db 100644
 --- a/public/.htaccess
@@ -243,12 +264,19 @@ index 3d18f4e..a1992db 100644
 +  <If "%{REQUEST_URI} =~ m#^/organization/#">
 +    Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests"
 +  </If>
-diff --git b/scripts/deploy/organization-live.mjs b/scripts/deploy/organization-live.mjs
+diff --git a/scripts/deploy/live-admission.test.mjs b/scripts/deploy/live-admission.test.mjs
+index 40bec44..a166bec 100644
+--- a/scripts/deploy/live-admission.test.mjs
++++ b/scripts/deploy/live-admission.test.mjs
+@@ -679 +679 @@ test('ordinary CI runs the CPU tests, and live workflow gates only obsolete brow
+-    'node --test scripts/deploy/live-admission.test.mjs && vitest run',
++    'node --test scripts/deploy/live-admission.test.mjs scripts/deploy/organization-live.test.mjs && vitest run',
+diff --git a/scripts/deploy/organization-live.mjs b/scripts/deploy/organization-live.mjs
 new file mode 100644
-index 0000000..7073a50
+index 0000000..4354c00
 --- /dev/null
 +++ b/scripts/deploy/organization-live.mjs
-@@ -0,0 +1,189 @@
+@@ -0,0 +1,252 @@
 +#!/usr/bin/env node
 +// Checks used by the operations proposal for the /organization/ directory (docs/ORGANIZATION_DIRECTORY.md).
 +// Pure Node, no dependencies, so verify-live.sh and the proposal workflow can call it and the tests can
@@ -263,6 +291,7 @@ index 0000000..7073a50
 +import { createHash } from 'node:crypto';
 +import { readFileSync } from 'node:fs';
 +import { fileURLToPath, pathToFileURL } from 'node:url';
++import { validatePin } from '../organization-lib.mjs';
 +
 +export const sha256 = (data) => createHash('sha256').update(data).digest('hex');
 +
@@ -275,7 +304,7 @@ index 0000000..7073a50
 +/** Parses `Content-Security-Policy` header lines from raw `curl -D` output; report-only lines are ignored. */
 +export function parsePolicies(rawHeaders) {
 +  const policies = [];
-+  for (const line of String(rawHeaders).split(/\r?\n/)) {
++  for (const line of String(rawHeaders).split(/\r\n|\n|\r/)) {
 +    const m = /^content-security-policy:\s*(.*)$/i.exec(line);
 +    if (!m) continue;
 +    // One header may carry several comma-separated policies; every one of them is enforced.
@@ -284,10 +313,12 @@ index 0000000..7073a50
 +      for (const part of policy.split(';')) {
 +        const [name, ...tokens] = part.trim().split(/\s+/);
 +        if (!name) continue;
-+        // The first occurrence of a directive wins (CSP3).
-+        if (!directives.has(name.toLowerCase())) directives.set(name.toLowerCase(), tokens);
++        // Browsers use the first occurrence; reject duplicates rather than hiding conflicting intent.
++        const key = name.toLowerCase();
++        if (directives.has(key)) directives.duplicate = true;
++        else directives.set(key, tokens);
 +      }
-+      if (directives.size) policies.push(directives);
++      policies.push(directives);
 +    }
 +  }
 +  return policies;
@@ -295,58 +326,69 @@ index 0000000..7073a50
 +
 +const show = (tokens) => (tokens === undefined ? '(absent)' : `[${tokens.join(' ')}]`);
 +
-+/**
-+ * /organization/ may relax only style-src (the canonical page has an inline <style> block). Scripts must
-+ * stay 'self' in EVERY enforced policy, including through script-src-elem / script-src-attr and the
-+ * default-src fallback; a substring match for "script-src 'self'" would also accept extra origins.
-+ */
-+export function checkOrganizationCsp(rawHeaders) {
++// Approved response-header policy from public/.htaccess. Keep every directive explicit: an absent
++// base-uri, form-action or frame-ancestors has no default-src fallback. New directives need review.
++const APPROVED = {
++  'default-src': [SELF],
++  'script-src': [SELF],
++  'style-src': [SELF],
++  'img-src': [SELF, 'data:'],
++  'font-src': [SELF],
++  'connect-src': [SELF],
++  'manifest-src': [SELF],
++  'worker-src': [SELF],
++  'object-src': ["'none'"],
++  'base-uri': [SELF],
++  'frame-ancestors': ["'none'"],
++  'form-action': [SELF],
++  'upgrade-insecure-requests': [],
++};
++
++function checkCsp(rawHeaders, organization) {
 +  const policies = parsePolicies(rawHeaders);
-+  if (!policies.length) return ['no Content-Security-Policy header on /organization/'];
++  const route = organization ? '/organization/' : '/';
++  if (!policies.length) return [`no Content-Security-Policy header on ${route}`];
++  const style = organization ? [SELF, "'unsafe-inline'"] : [SELF];
++  const approved = { ...APPROVED, 'style-src': style };
++  const overrides = {
++    'script-src-elem': [SELF],
++    'script-src-attr': ["'none'"],
++    'style-src-elem': style,
++    'style-src-attr': organization ? style : ["'none'"],
++  };
 +  const errors = [];
 +  policies.forEach((p, i) => {
-+    const at = `CSP policy ${i + 1}`;
-+    const script = p.get('script-src') ?? p.get('default-src');
-+    if (!same(script, [SELF]))
-+      errors.push(`${at}: effective script-src must be exactly 'self', got ${show(script)}`);
-+    const elem = p.get('script-src-elem');
-+    if (elem !== undefined && !same(elem, [SELF]))
-+      errors.push(`${at}: script-src-elem may not widen scripts, got ${show(elem)}`);
-+    const attr = p.get('script-src-attr');
-+    if (attr !== undefined && !same(attr, ["'none'"]))
-+      errors.push(`${at}: script-src-attr must be absent or 'none', got ${show(attr)}`);
-+    const style = p.get('style-src') ?? p.get('default-src');
-+    if (!same(style, [SELF, "'unsafe-inline'"]))
-+      errors.push(`${at}: effective style-src must be exactly 'self' 'unsafe-inline', got ${show(style)}`);
-+    for (const name of ['style-src-elem', 'style-src-attr']) {
-+      const v = p.get(name);
-+      if (v !== undefined && !same(v, [SELF, "'unsafe-inline'"]))
-+        errors.push(`${at}: ${name} must be exactly 'self' 'unsafe-inline', got ${show(v)}`);
++    const at = `CSP policy ${i + 1} on ${route}`;
++    if (p.duplicate) errors.push(`${at}: duplicate directives are not approved`);
++    for (const [name, expected] of Object.entries(approved)) {
++      if (!same(p.get(name), expected)) {
++        const reason =
++          name === 'style-src' && !organization
++            ? 'style-src was loosened or omitted'
++            : `effective ${name} must be exactly ${expected.join(' ')}`;
++        errors.push(`${at}: ${reason}, got ${show(p.get(name))}`);
++      }
++    }
++    for (const [name, value] of p) {
++      if (Object.hasOwn(approved, name)) continue;
++      if (!Object.hasOwn(overrides, name) || !same(value, overrides[name]))
++        errors.push(`${at}: ${name} has unapproved sources ${show(value)}`);
 +    }
 +  });
 +  return errors;
 +}
 +
-+/** The exception is path-scoped: the rest of the site keeps style-src 'self' with no inline relaxation. */
-+export function checkSiteCsp(rawHeaders) {
-+  const policies = parsePolicies(rawHeaders);
-+  if (!policies.length) return ['no Content-Security-Policy header on /'];
-+  const errors = [];
-+  policies.forEach((p, i) => {
-+    const style = p.get('style-src') ?? p.get('default-src');
-+    if (!same(style, [SELF])) errors.push(`CSP policy ${i + 1} on /: style-src was loosened, got ${show(style)}`);
-+    const script = p.get('script-src') ?? p.get('default-src');
-+    if (!same(script, [SELF])) errors.push(`CSP policy ${i + 1} on /: script-src must be 'self', got ${show(script)}`);
-+    for (const [name, expected] of [
-+      ['script-src-elem', [SELF]], ['script-src-attr', ["'none'"]],
-+      ['style-src-elem', [SELF]], ['style-src-attr', ["'none'"]],
-+    ]) {
-+      const value = p.get(name);
-+      if (value !== undefined && !same(value, expected))
-+        errors.push(`CSP policy ${i + 1} on /: ${name} has unexpected sources ${show(value)}`);
-+    }
-+  });
-+  return errors;
++export const checkOrganizationCsp = (rawHeaders) => checkCsp(rawHeaders, true);
++export const checkSiteCsp = (rawHeaders) => checkCsp(rawHeaders, false);
++
++// A malformed pin must never become the pending state. Only an explicit admitted:null does that.
++export function pinFiles(filename) {
++  const pin = JSON.parse(readFileSync(filename, 'utf8'));
++  const errors = validatePin(pin);
++  if (errors.length) throw new Error('invalid organization pin');
++  return pin.admitted === null
++    ? ''
++    : pin.admitted.files.map((f) => `${f.path} ${f.sha256}`).join('\n');
 +}
 +
 +/**
@@ -372,22 +414,53 @@ index 0000000..7073a50
 + * overwriting: one verified branch, one PR. Unrelated or divergent work is never touched.
 + */
 +export function planProposal({ branchExists, branchMatches, openPr }) {
-+  if (openPr && branchExists && branchMatches) return { action: 'noop', reason: 'the correct pull request is already open' };
-+  if (openPr) return { action: 'fail', reason: 'an open pull request exists but its branch is missing or differs from the verified proposal; reconcile it manually' };
-+  if (branchExists && branchMatches) return { action: 'create-pr', reason: 'the verified branch exists without a pull request (earlier run failed after pushing); create only the pull request' };
-+  if (branchExists) return { action: 'fail', reason: 'the branch exists with unrelated or different content; it is never overwritten' };
++  if (openPr && branchExists && branchMatches)
++    return { action: 'noop', reason: 'the correct pull request is already open' };
++  if (openPr)
++    return {
++      action: 'fail',
++      reason:
++        'an open pull request exists but its branch is missing or differs from the verified proposal; reconcile it manually',
++    };
++  if (branchExists && branchMatches)
++    return {
++      action: 'create-pr',
++      reason:
++        'the verified branch exists without a pull request (earlier run failed after pushing); create only the pull request',
++    };
++  if (branchExists)
++    return {
++      action: 'fail',
++      reason: 'the branch exists with unrelated or different content; it is never overwritten',
++    };
 +  return { action: 'create-branch-and-pr', reason: 'nothing exists yet' };
 +}
 +
-+const git = (args, cwd) => execFileSync('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim();
++const git = (args, cwd) =>
++  execFileSync('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
++    .toString()
++    .trim();
 +
 +/** True when `branch` is exactly one commit above `base` and its bundle paths equal `head`'s. */
-+export function branchMatches({ cwd = '.', branch, base = 'origin/main', head = 'HEAD', paths = ['public/organization', 'contracts/organization'] }) {
++export function branchMatches({
++  cwd = '.',
++  branch,
++  base = 'origin/main',
++  head = 'HEAD',
++  paths = ['public/organization', 'contracts/organization'],
++}) {
 +  try {
 +    git(['merge-base', '--is-ancestor', base, branch], cwd);
 +    if (git(['rev-list', '--count', `${base}..${branch}`], cwd) !== '1') return false;
-+    const changed = git(['diff', '--name-only', `${base}...${branch}`], cwd).split('\n').filter(Boolean);
-+    if (changed.some((name) => !paths.some((allowed) => name === allowed || name.startsWith(`${allowed}/`)))) return false;
++    const changed = git(['diff', '--name-only', `${base}...${branch}`], cwd)
++      .split('\n')
++      .filter(Boolean);
++    if (
++      changed.some(
++        (name) => !paths.some((allowed) => name === allowed || name.startsWith(`${allowed}/`)),
++      )
++    )
++      return false;
 +    git(['diff', '--quiet', head, branch, '--', ...paths], cwd);
 +    return true;
 +  } catch {
@@ -406,8 +479,17 @@ index 0000000..7073a50
 +  let errors = [];
 +  if (cmd === 'csp-organization') errors = checkOrganizationCsp(readFileSync(args[0], 'utf8'));
 +  else if (cmd === 'csp-site') errors = checkSiteCsp(readFileSync(args[0], 'utf8'));
-+  else if (cmd === 'route') errors = checkCanonicalRoute(JSON.parse(readFileSync(args[0], 'utf8')), readFileSync(args[1]));
-+  else if (cmd === 'plan') {
++  else if (cmd === 'route')
++    errors = checkCanonicalRoute(JSON.parse(readFileSync(args[0], 'utf8')), readFileSync(args[1]));
++  else if (cmd === 'pin-files') {
++    try {
++      console.log(pinFiles(args[0]));
++      return 0;
++    } catch {
++      console.error('organization pin is missing, unreadable or malformed');
++      return 1;
++    }
++  } else if (cmd === 'plan') {
 +    const plan = planProposal({
 +      branchExists: yes(option(args, '--branch-exists')),
 +      branchMatches: yes(option(args, '--branch-matches')),
@@ -420,11 +502,17 @@ index 0000000..7073a50
 +      return 0;
 +    }
 +  } else if (cmd === 'branch-matches') {
-+    const ok = branchMatches({ branch: option(args, '--branch'), base: option(args, '--base') ?? 'origin/main', head: option(args, '--head') ?? 'HEAD' });
++    const ok = branchMatches({
++      branch: option(args, '--branch'),
++      base: option(args, '--base') ?? 'origin/main',
++      head: option(args, '--head') ?? 'HEAD',
++    });
 +    console.log(ok ? 'yes' : 'no');
 +    return 0;
 +  } else {
-+    console.error('usage: organization-live.mjs csp-organization|csp-site|route|plan|branch-matches ...');
++    console.error(
++      'usage: organization-live.mjs csp-organization|csp-site|route|plan|branch-matches ...',
++    );
 +    return 2;
 +  }
 +  if (errors.length) {
@@ -435,20 +523,23 @@ index 0000000..7073a50
 +  return 0;
 +}
 +
-+if (process.argv[1] && import.meta.url === pathToFileURL(fileURLToPath(pathToFileURL(process.argv[1]))).href) {
++if (
++  process.argv[1] &&
++  import.meta.url === pathToFileURL(fileURLToPath(pathToFileURL(process.argv[1]))).href
++) {
 +  process.exitCode = main(process.argv.slice(2));
 +}
-diff --git b/scripts/deploy/organization-live.test.mjs b/scripts/deploy/organization-live.test.mjs
+diff --git a/scripts/deploy/organization-live.test.mjs b/scripts/deploy/organization-live.test.mjs
 new file mode 100644
-index 0000000..02eecef
+index 0000000..22df2c2
 --- /dev/null
 +++ b/scripts/deploy/organization-live.test.mjs
-@@ -0,0 +1,227 @@
+@@ -0,0 +1,625 @@
 +// Reproducible checks for the /organization/ operations proposal: strict CSP, canonical-route byte
 +// identity, and recovery/reuse of one proposal branch and PR. Run: node --test scripts/deploy/organization-live.test.mjs
 +import assert from 'node:assert/strict';
-+import { execFileSync } from 'node:child_process';
-+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
++import { execFileSync, spawnSync } from 'node:child_process';
++import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 +import { tmpdir } from 'node:os';
 +import { join } from 'node:path';
 +import test from 'node:test';
@@ -458,15 +549,21 @@ index 0000000..02eecef
 +  checkOrganizationCsp,
 +  checkSiteCsp,
 +  parsePolicies,
++  pinFiles,
 +  planProposal,
 +  sha256,
 +} from './organization-live.mjs';
 +
 +const ORG_CSP =
-+  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'";
++  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests";
 +const SITE_CSP = ORG_CSP.replace("style-src 'self' 'unsafe-inline'", "style-src 'self'");
 +const headers = (...policies) =>
-+  ['HTTP/2 200', 'content-type: text/html', ...policies.map((p) => `Content-Security-Policy: ${p}`), ''].join('\r\n');
++  [
++    'HTTP/2 200',
++    'content-type: text/html',
++    ...policies.map((p) => `Content-Security-Policy: ${p}`),
++    '',
++  ].join('\r\n');
 +
 +test('CSP: the intended /organization/ policy passes', () => {
 +  assert.deepEqual(checkOrganizationCsp(headers(ORG_CSP)), []);
@@ -484,17 +581,21 @@ index 0000000..02eecef
 +  ];
 +  for (const csp of widened) {
 +    const errors = checkOrganizationCsp(headers(csp));
-+    assert.ok(errors.some((e) => /effective script-src must be exactly 'self'/.test(e)), csp);
++    assert.ok(
++      errors.some((e) => /effective script-src must be exactly 'self'/.test(e)),
++      csp,
++    );
 +  }
 +  // The previous check, grep "script-src 'self'" and no "unsafe", accepts the remote origin:
-+  const substring = (csp) => csp.includes("script-src 'self'") && !/script-src[^;]*unsafe/.test(csp);
++  const substring = (csp) =>
++    csp.includes("script-src 'self'") && !/script-src[^;]*unsafe/.test(csp);
 +  assert.equal(substring(widened[0]), true, 'the old substring check would have accepted this');
 +});
 +
 +test('CSP: script-src-elem and script-src-attr may not override script-src', () => {
 +  for (const extra of [
 +    "script-src-elem 'self' https://evil.example",
-+    "script-src-elem https://evil.example",
++    'script-src-elem https://evil.example',
 +    "script-src-elem 'unsafe-inline'",
 +    "script-src-attr 'unsafe-inline'",
 +    "script-src-attr 'self'",
@@ -510,43 +611,132 @@ index 0000000..02eecef
 +  const fallbackOk = "default-src 'self' 'unsafe-inline'";
 +  // style 'self' 'unsafe-inline' via default-src would also open scripts: refused.
 +  assert.ok(checkOrganizationCsp(headers(fallbackOk)).length > 0);
-+  const noScriptSrc = ORG_CSP.replace("script-src 'self'; ", "").replace("default-src 'self'", "default-src 'self' https://cdn.example");
++  const noScriptSrc = ORG_CSP.replace("script-src 'self'; ", '').replace(
++    "default-src 'self'",
++    "default-src 'self' https://cdn.example",
++  );
 +  assert.ok(checkOrganizationCsp(headers(noScriptSrc)).length > 0);
 +  // Two header lines, one widened: the intersection is enforced, but each must individually be safe.
-+  const errors = checkOrganizationCsp(headers(ORG_CSP, ORG_CSP.replace("script-src 'self'", "script-src 'self' https://x.example")));
++  const errors = checkOrganizationCsp(
++    headers(ORG_CSP, ORG_CSP.replace("script-src 'self'", "script-src 'self' https://x.example")),
++  );
 +  assert.ok(errors.some((e) => e.startsWith('CSP policy 2')));
 +  assert.deepEqual(checkOrganizationCsp(headers(ORG_CSP, ORG_CSP)), []);
 +  // A comma-separated pair in one header is two policies.
 +  assert.equal(parsePolicies(headers(`${ORG_CSP}, ${SITE_CSP}`)).length, 2);
-+  assert.ok(checkOrganizationCsp(headers(`${ORG_CSP}, ${SITE_CSP}`)).some((e) => /policy 2.*style-src/.test(e)));
++  assert.ok(
++    checkOrganizationCsp(headers(`${ORG_CSP}, ${SITE_CSP}`)).some((e) =>
++      /policy 2.*style-src/.test(e),
++    ),
++  );
 +});
 +
 +test('CSP: the style exception must really be present, report-only is ignored, absence fails', () => {
 +  assert.ok(checkOrganizationCsp(headers(SITE_CSP)).some((e) => /effective style-src/.test(e)));
 +  assert.ok(
-+    checkOrganizationCsp(headers(ORG_CSP.replace("style-src 'self' 'unsafe-inline'", "style-src 'self' 'unsafe-inline' https://fonts.example"))).some((e) => /style-src/.test(e)),
++    checkOrganizationCsp(
++      headers(
++        ORG_CSP.replace(
++          "style-src 'self' 'unsafe-inline'",
++          "style-src 'self' 'unsafe-inline' https://fonts.example",
++        ),
++      ),
++    ).some((e) => /style-src/.test(e)),
 +  );
-+  assert.ok(checkOrganizationCsp(headers(`${ORG_CSP}; style-src-elem 'self'`)).some((e) => /style-src-elem/.test(e)));
-+  assert.deepEqual(checkOrganizationCsp(`HTTP/2 200\r\nContent-Security-Policy-Report-Only: ${ORG_CSP}\r\n`), ['no Content-Security-Policy header on /organization/']);
-+  assert.deepEqual(checkOrganizationCsp('HTTP/2 200\r\n'), ['no Content-Security-Policy header on /organization/']);
++  assert.ok(
++    checkOrganizationCsp(headers(`${ORG_CSP}; style-src-elem 'self'`)).some((e) =>
++      /style-src-elem/.test(e),
++    ),
++  );
++  assert.deepEqual(
++    checkOrganizationCsp(`HTTP/2 200\r\nContent-Security-Policy-Report-Only: ${ORG_CSP}\r\n`),
++    ['no Content-Security-Policy header on /organization/'],
++  );
++  assert.deepEqual(checkOrganizationCsp('HTTP/2 200\r\n'), [
++    'no Content-Security-Policy header on /organization/',
++  ]);
 +});
 +
 +test('CSP: the exception stays path-scoped (the rest of the site keeps style-src self)', () => {
 +  assert.deepEqual(checkSiteCsp(headers(SITE_CSP)), []);
 +  assert.ok(checkSiteCsp(headers(ORG_CSP)).some((e) => /style-src was loosened/.test(e)));
-+  assert.ok(checkSiteCsp(headers(SITE_CSP.replace("script-src 'self'", "script-src 'self' https://x.example"))).length > 0);
++  assert.ok(
++    checkSiteCsp(
++      headers(SITE_CSP.replace("script-src 'self'", "script-src 'self' https://x.example")),
++    ).length > 0,
++  );
 +});
 +
 +test('CSP: element and attribute directives cannot add remote sources', () => {
-+  assert.ok(checkOrganizationCsp(headers(`${ORG_CSP}; style-src-elem 'unsafe-inline' https://example.invalid`)).length);
-+  assert.ok(checkOrganizationCsp(headers(`${ORG_CSP}; style-src-attr 'self' 'unsafe-inline' https://example.invalid`)).length);
-+  for (const directive of ['script-src-elem', 'script-src-attr', 'style-src-elem', 'style-src-attr']) {
-+    assert.ok(checkSiteCsp(headers(`${SITE_CSP}; ${directive} https://example.invalid`)).length, directive);
++  assert.ok(
++    checkOrganizationCsp(
++      headers(`${ORG_CSP}; style-src-elem 'unsafe-inline' https://example.invalid`),
++    ).length,
++  );
++  assert.ok(
++    checkOrganizationCsp(
++      headers(`${ORG_CSP}; style-src-attr 'self' 'unsafe-inline' https://example.invalid`),
++    ).length,
++  );
++  for (const directive of [
++    'script-src-elem',
++    'script-src-attr',
++    'style-src-elem',
++    'style-src-attr',
++  ]) {
++    assert.ok(
++      checkSiteCsp(headers(`${SITE_CSP}; ${directive} https://example.invalid`)).length,
++      directive,
++    );
 +  }
-+  assert.deepEqual(checkOrganizationCsp(headers(`${ORG_CSP}; style-src-elem 'self' 'unsafe-inline'`)), []);
++  assert.deepEqual(
++    checkOrganizationCsp(headers(`${ORG_CSP}; style-src-elem 'self' 'unsafe-inline'`)),
++    [],
++  );
 +});
 +
-+const INDEX = Buffer.from('<!doctype html><html lang="en"><title>Current organization</title><main id="directory"></main></html>\n');
++test('CSP: all approved header directives are required unchanged in every policy', () => {
++  const htaccess = readFileSync(new URL('../../public/.htaccess', import.meta.url), 'utf8');
++  const configured = [
++    ...htaccess.matchAll(/Header always set Content-Security-Policy "([^"]+)"/g),
++  ].map((m) => m[1]);
++  assert.deepEqual(
++    configured,
++    [SITE_CSP, ORG_CSP],
++    'fixtures must match the actual proposed Apache policies',
++  );
++  for (const [check, policy] of [
++    [checkSiteCsp, SITE_CSP],
++    [checkOrganizationCsp, ORG_CSP],
++  ]) {
++    for (const directive of policy.split('; ')) {
++      const name = directive.split(' ')[0];
++      const absent = policy
++        .split('; ')
++        .filter((part) => part !== directive)
++        .join('; ');
++      const widened = policy.replace(directive, `${directive} https://unapproved.invalid`);
++      for (const bad of [absent, widened]) {
++        assert.ok(check(headers(bad)).length, `${name}: ${bad}`);
++        assert.ok(check(headers(policy, bad)).length, `second policy: ${name}`);
++      }
++      assert.ok(check(headers(`${policy}; ${directive}`)).length, `duplicate ${name}`);
++      assert.ok(
++        check(headers(`${policy}; ${name.toUpperCase()} *`)).length,
++        `case duplicate ${name}`,
++      );
++    }
++    for (const override of ['frame-src *', 'child-src *', 'media-src *', 'sandbox allow-scripts'])
++      assert.ok(check(headers(`${policy}; ${override}`)).length, override);
++    for (const empty of ['', `${policy},`, `,${policy}`])
++      assert.ok(check(headers(empty)).length, 'empty enforced policies fail closed');
++    assert.ok(check(headers('', policy)).length);
++  }
++});
++
++const INDEX = Buffer.from(
++  '<!doctype html><html lang="en"><title>Current organization</title><main id="directory"></main></html>\n',
++);
 +const pin = (index = INDEX) => ({
 +  admitted: { files: [{ path: 'index.html', sha256: sha256(index), bytes: index.length }] },
 +});
@@ -554,7 +744,9 @@ index 0000000..02eecef
 +test('canonical route: the actual /organization/ response must equal the pinned index.html', () => {
 +  assert.deepEqual(checkCanonicalRoute(pin(), INDEX), []);
 +  // A marker alone (id="directory") would accept all of these.
-+  const stale = Buffer.from(INDEX.toString().replace('Current organization', 'Previous organization'));
++  const stale = Buffer.from(
++    INDEX.toString().replace('Current organization', 'Previous organization'),
++  );
 +  const spa = Buffer.from('<!doctype html><html><div id="root"></div></html>');
 +  for (const body of [stale, spa, Buffer.alloc(0), Buffer.concat([INDEX, Buffer.from('\n')])]) {
 +    const errors = checkCanonicalRoute(pin(), body);
@@ -565,17 +757,23 @@ index 0000000..02eecef
 +
 +test('canonical route: host-injected content fails by design and is never stripped or ignored', () => {
 +  const injected = Buffer.from(
-+    INDEX.toString().replace('</html>', '<script>/* host monitoring */</script><script src="https://cdn.example/monitor.js"></script></html>'),
++    INDEX.toString().replace(
++      '</html>',
++      '<script>/* host monitoring */</script><script src="https://cdn.example/monitor.js"></script></html>',
++    ),
 +  );
 +  assert.ok(injected.toString().includes('id="directory"'), 'the marker is still present');
 +  const errors = checkCanonicalRoute(pin(), injected);
 +  assert.equal(errors.length, 1);
 +  assert.match(errors[0], /host-injected content breaks byte identity by design/);
-+  assert.deepEqual(checkCanonicalRoute({ admitted: null }, INDEX), ['no bundle is admitted in the pin']);
++  assert.deepEqual(checkCanonicalRoute({ admitted: null }, INDEX), [
++    'no bundle is admitted in the pin',
++  ]);
 +});
 +
 +test('proposal plan: reuse one verified branch/PR, recover a partial run, never overwrite', () => {
-+  const plan = (branchExists, branchMatches, openPr) => planProposal({ branchExists, branchMatches, openPr }).action;
++  const plan = (branchExists, branchMatches, openPr) =>
++    planProposal({ branchExists, branchMatches, openPr }).action;
 +  assert.equal(plan(false, false, false), 'create-branch-and-pr');
 +  // Pushed, then PR creation failed: a re-run creates only the PR.
 +  assert.equal(plan(true, true, false), 'create-pr');
@@ -587,81 +785,123 @@ index 0000000..02eecef
 +  assert.equal(plan(false, false, true), 'fail');
 +});
 +
-+const env = { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.invalid', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.invalid' };
-+const git = (cwd, ...args) => execFileSync('git', args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim();
++const env = {
++  ...process.env,
++  GIT_AUTHOR_NAME: 't',
++  GIT_AUTHOR_EMAIL: 't@example.invalid',
++  GIT_COMMITTER_NAME: 't',
++  GIT_COMMITTER_EMAIL: 't@example.invalid',
++};
++const git = (cwd, ...args) =>
++  execFileSync('git', args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] })
++    .toString()
++    .trim();
 +
-+test('branch match: exactly one commit with identical bundle paths is the verified proposal', { timeout: 60_000 }, () => {
-+  const repo = mkdtempSync(join(tmpdir(), 'pyai-ops-branch-'));
-+  try {
-+    git(repo, 'init', '-q', '-b', 'main');
-+    writeFileSync(join(repo, 'a.txt'), 'base');
-+    git(repo, 'add', '-A');
-+    git(repo, 'commit', '-q', '-m', 'base');
-+    git(repo, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
-+    const write = (content) => {
-+      mkdirSync(join(repo, 'public/organization'), { recursive: true });
-+      mkdirSync(join(repo, 'contracts/organization'), { recursive: true });
-+      writeFileSync(join(repo, 'public/organization/index.html'), content);
-+      writeFileSync(join(repo, 'contracts/organization/PIN.json'), `{"v":"${content}"}`);
-+    };
-+    const commit = (message) => {
++test(
++  'branch match: exactly one commit with identical bundle paths is the verified proposal',
++  { timeout: 60_000 },
++  () => {
++    const repo = mkdtempSync(join(tmpdir(), 'pyai-ops-branch-'));
++    try {
++      git(repo, 'init', '-q', '-b', 'main');
++      writeFileSync(join(repo, 'a.txt'), 'base');
 +      git(repo, 'add', '-A');
-+      git(repo, 'commit', '-q', '-m', message);
-+    };
-+    // The importer's result, committed locally (what the workflow compares against).
-+    git(repo, 'switch', '-q', '-c', 'proposal-local');
-+    write('v1');
-+    commit('proposal');
-+    const proposal = git(repo, 'rev-parse', 'HEAD');
-+    const remote = (name, sha) => git(repo, 'update-ref', `refs/remotes/origin/${name}`, sha);
++      git(repo, 'commit', '-q', '-m', 'base');
++      git(repo, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
++      const write = (content) => {
++        mkdirSync(join(repo, 'public/organization'), { recursive: true });
++        mkdirSync(join(repo, 'contracts/organization'), { recursive: true });
++        writeFileSync(join(repo, 'public/organization/index.html'), content);
++        writeFileSync(join(repo, 'contracts/organization/PIN.json'), `{"v":"${content}"}`);
++      };
++      const commit = (message) => {
++        git(repo, 'add', '-A');
++        git(repo, 'commit', '-q', '-m', message);
++      };
++      // The importer's result, committed locally (what the workflow compares against).
++      git(repo, 'switch', '-q', '-c', 'proposal-local');
++      write('v1');
++      commit('proposal');
++      const proposal = git(repo, 'rev-parse', 'HEAD');
++      const remote = (name, sha) => git(repo, 'update-ref', `refs/remotes/origin/${name}`, sha);
 +
-+    // Identical single-commit branch (earlier run pushed, then PR creation failed): matches.
-+    remote('good', proposal);
-+    assert.equal(branchMatches({ cwd: repo, branch: 'origin/good', head: 'proposal-local' }), true);
++      // Identical single-commit branch (earlier run pushed, then PR creation failed): matches.
++      remote('good', proposal);
++      assert.equal(
++        branchMatches({ cwd: repo, branch: 'origin/good', head: 'proposal-local' }),
++        true,
++      );
 +
-+    // Same bundle plus unrelated work in the SAME commit must also be rejected.
-+    git(repo, 'switch', '-q', '-c', 'same-commit-extra', 'origin/main');
-+    write('v1');
-+    writeFileSync(join(repo, 'unrelated-in-same-commit.txt'), 'someone else');
-+    commit('bundle with unrelated work');
-+    remote('same-commit-extra', git(repo, 'rev-parse', 'HEAD'));
-+    assert.equal(branchMatches({ cwd: repo, branch: 'origin/same-commit-extra', head: 'proposal-local' }), false);
-+    git(repo, 'switch', '-q', 'proposal-local');
++      // Same bundle plus unrelated work in the SAME commit must also be rejected.
++      git(repo, 'switch', '-q', '-c', 'same-commit-extra', 'origin/main');
++      write('v1');
++      writeFileSync(join(repo, 'unrelated-in-same-commit.txt'), 'someone else');
++      commit('bundle with unrelated work');
++      remote('same-commit-extra', git(repo, 'rev-parse', 'HEAD'));
++      assert.equal(
++        branchMatches({ cwd: repo, branch: 'origin/same-commit-extra', head: 'proposal-local' }),
++        false,
++      );
++      git(repo, 'switch', '-q', 'proposal-local');
 +
-+    // Extra unrelated commit on top: not the verified proposal, must not be reused or overwritten.
-+    git(repo, 'switch', '-q', '-c', 'extra');
-+    writeFileSync(join(repo, 'unrelated.txt'), 'someone else');
-+    commit('unrelated work');
-+    remote('extra', git(repo, 'rev-parse', 'HEAD'));
-+    assert.equal(branchMatches({ cwd: repo, branch: 'origin/extra', head: 'proposal-local' }), false);
++      // Extra unrelated commit on top: not the verified proposal, must not be reused or overwritten.
++      git(repo, 'switch', '-q', '-c', 'extra');
++      writeFileSync(join(repo, 'unrelated.txt'), 'someone else');
++      commit('unrelated work');
++      remote('extra', git(repo, 'rev-parse', 'HEAD'));
++      assert.equal(
++        branchMatches({ cwd: repo, branch: 'origin/extra', head: 'proposal-local' }),
++        false,
++      );
 +
-+    // Different bundle content.
-+    git(repo, 'switch', '-q', 'proposal-local');
-+    git(repo, 'switch', '-q', '-c', 'other');
-+    write('v2');
-+    commit('different bundle');
-+    remote('other', git(repo, 'rev-parse', 'HEAD'));
-+    assert.equal(branchMatches({ cwd: repo, branch: 'origin/other', head: 'proposal-local' }), false);
++      // Different bundle content.
++      git(repo, 'switch', '-q', 'proposal-local');
++      git(repo, 'switch', '-q', '-c', 'other');
++      write('v2');
++      commit('different bundle');
++      remote('other', git(repo, 'rev-parse', 'HEAD'));
++      assert.equal(
++        branchMatches({ cwd: repo, branch: 'origin/other', head: 'proposal-local' }),
++        false,
++      );
 +
-+    // A branch with no commits above main.
-+    remote('empty', git(repo, 'rev-parse', 'origin/main'));
-+    assert.equal(branchMatches({ cwd: repo, branch: 'origin/empty', head: 'proposal-local' }), false);
++      // A branch with no commits above main.
++      remote('empty', git(repo, 'rev-parse', 'origin/main'));
++      assert.equal(
++        branchMatches({ cwd: repo, branch: 'origin/empty', head: 'proposal-local' }),
++        false,
++      );
 +
-+    // Missing ref.
-+    assert.equal(branchMatches({ cwd: repo, branch: 'origin/missing', head: 'proposal-local' }), false);
-+  } finally {
-+    rmSync(repo, { recursive: true, force: true });
-+  }
-+});
++      // Missing ref.
++      assert.equal(
++        branchMatches({ cwd: repo, branch: 'origin/missing', head: 'proposal-local' }),
++        false,
++      );
++    } finally {
++      rmSync(repo, { recursive: true, force: true });
++    }
++  },
++);
 +
 +test('shell and workflow wiring: the strict checks are actually used, nothing weaker remains', () => {
 +  const verify = readFileSync(new URL('./verify-live.sh', import.meta.url), 'utf8');
 +  assert.match(verify, /organization-live\.mjs route "\$PIN" \/tmp\/pyai-org-index\.html/);
 +  assert.match(verify, /organization-live\.mjs csp-organization/);
 +  assert.match(verify, /organization-live\.mjs csp-site/);
-+  assert.doesNotMatch(verify, /grep -q 'id="directory"'/, 'a marker must not decide the canonical route');
-+  assert.doesNotMatch(verify, /script-src[^\n]*grep|grep[^\n]*script-src 'self'/, 'no substring CSP check');
-+  const workflow = readFileSync(new URL('../../.github/workflows/organization-update-proposal.yml', import.meta.url), 'utf8');
++  assert.doesNotMatch(
++    verify,
++    /grep -q 'id="directory"'/,
++    'a marker must not decide the canonical route',
++  );
++  assert.doesNotMatch(
++    verify,
++    /script-src[^\n]*grep|grep[^\n]*script-src 'self'/,
++    'no substring CSP check',
++  );
++  const workflow = readFileSync(
++    new URL('../../.github/workflows/organization-update-proposal.yml', import.meta.url),
++    'utf8',
++  );
 +  assert.match(workflow, /ORGANIZATION_PROPOSAL_ENABLED == 'true'/);
 +  assert.match(workflow, /MISSING OWNER GATES/);
 +  assert.match(workflow, /contrib\/github-actions\/organization-/);
@@ -671,29 +911,281 @@ index 0000000..02eecef
 +  assert.doesNotMatch(workflow, /--force|push -f|--basis|owner-accepted/);
 +  assert.doesNotMatch(workflow, /schedule:|pull_request_target|repository_dispatch/);
 +});
++
++// Synthetic pin and responses only. Execute the actual shell preflight and organization section with
++// c() replaced by a local response fixture; no curl, host, credentials or deployment is involved.
++test('release pin shell: only explicit empty is legacy; invalid paths and pins fail closed', () => {
++  const dir = mkdtempSync(join(tmpdir(), 'pyai-pin-offline-'));
++  try {
++    cpSync(new URL('..', import.meta.url), join(dir, 'scripts'), { recursive: true });
++    const pending = JSON.parse(
++      readFileSync(new URL('../../contracts/organization/PIN.json', import.meta.url), 'utf8'),
++    );
++    const admitted = {
++      ...pending,
++      candidate: null,
++      admitted: {
++        sourceSha: 'a'.repeat(40),
++        observedAt: '2026-01-01T00:00:00Z',
++        basis: 'merged-main',
++        ancestorOfMain: true,
++        approval: {
++          pullRequest: 'https://github.com/Pick-Your-AI/.github/pull/1',
++          humanReviewUrl: 'https://github.com/Pick-Your-AI/.github/pull/1#pullrequestreview-1',
++          humanReviewer: 'synthetic-reviewer',
++        },
++        files: [{ path: 'index.html', sha256: sha256(INDEX), bytes: INDEX.length }],
++      },
++    };
++    const pinPath = join(dir, 'pin.json');
++    const calls = join(dir, 'calls');
++    const mock = join(dir, 'response.mjs');
++    writeFileSync(
++      mock,
++      `
++      import { appendFileSync, writeFileSync } from 'node:fs';
++      const a = process.argv.slice(2), url = new URL(a.at(-1));
++      appendFileSync(process.env.CALLS, url.pathname + '\\n');
++      const admitted = process.env.ADMITTED === 'yes';
++      let code = 200, body = '<div id="root"></div>', redirect = '';
++      if (url.pathname === '/organization') { code = 301; redirect = 'https://offline.invalid/organization/'; }
++      else if (url.pathname.endsWith('directory.js') || url.pathname.includes('does-not-exist')) code = 404;
++      else if (admitted) body = ${JSON.stringify('REPLACE_INDEX')};
++      if (a.includes('-o') && a[a.indexOf('-o') + 1] !== '/dev/null') writeFileSync(a[a.indexOf('-o') + 1], body);
++      if (a.includes('-D')) process.stdout.write('HTTP/2 ' + code + '\\r\\ncontent-type: text/html\\r\\ncache-control: no-cache\\r\\nContent-Security-Policy: ' + ${JSON.stringify('REPLACE_CSP')} + '\\r\\n');
++      else if (a.includes('-w')) process.stdout.write(a[a.indexOf('-w') + 1].replace('%{http_code}', String(code)).replace('%{redirect_url}', redirect));
++    `
++        .replace(JSON.stringify('REPLACE_INDEX'), JSON.stringify(INDEX.toString()))
++        .replace(JSON.stringify('REPLACE_CSP'), JSON.stringify(ORG_CSP)),
++    );
++    const verify = readFileSync(new URL('./verify-live.sh', import.meta.url), 'utf8');
++    const preflight = verify.slice(
++      verify.indexOf('# Empty is reserved'),
++      verify.indexOf('echo "Verifying'),
++    );
++    const section = verify.slice(
++      verify.indexOf('# 7. Organization'),
++      verify.indexOf('if [ "$fail" -ne 0 ]'),
++    );
++    const shell = `set -uo pipefail
++fail=0
++ok() { echo "ok $*"; }
++bad() { echo "FAIL $*"; fail=1; }
++c() { node "$MOCK_CURL" "$@"; }
++BASE=https://offline.invalid
++SHA=synthetic
++hdr="$SITE_HEADERS"
++${preflight}
++${section}
++exit "$fail"
++`.replaceAll('/tmp/pyai-', `${dir}/pyai-`);
++    const run = (pin, admittedState = false) => {
++      writeFileSync(calls, '');
++      const env = {
++        ...process.env,
++        MOCK_CURL: mock,
++        CALLS: calls,
++        ADMITTED: admittedState ? 'yes' : 'no',
++        SITE_HEADERS: headers(SITE_CSP),
++      };
++      delete env.ORGANIZATION_PIN;
++      if (pin !== undefined) env.ORGANIZATION_PIN = pin;
++      return spawnSync('bash', ['-c', shell], { cwd: dir, env, encoding: 'utf8' });
++    };
++    const legacy = run('');
++    assert.equal(legacy.status, 0, legacy.stderr + legacy.stdout);
++    assert.match(legacy.stdout, /explicitly verified pre-integration/);
++    assert.equal(readFileSync(calls, 'utf8'), '');
++    for (const missing of [undefined, join(dir, 'missing.json'), dir]) {
++      const result = run(missing);
++      assert.equal(result.status, 1, result.stdout);
++      assert.match(result.stdout, /pin is missing, unreadable or malformed/);
++      assert.equal(readFileSync(calls, 'utf8'), '', 'invalid pin stops before any request');
++    }
++    for (const invalid of [
++      '{',
++      '{}',
++      JSON.stringify({ ...pending, admitted: false }),
++      JSON.stringify({ ...admitted, admitted: { ...admitted.admitted, files: [] } }),
++    ]) {
++      writeFileSync(pinPath, invalid);
++      assert.throws(() => pinFiles(pinPath));
++      assert.equal(run(pinPath).status, 1);
++      assert.equal(readFileSync(calls, 'utf8'), '');
++    }
++    writeFileSync(pinPath, JSON.stringify(pending));
++    const waiting = run(pinPath);
++    assert.equal(waiting.status, 0, waiting.stderr + waiting.stdout);
++    assert.match(waiting.stdout, /pending SPA page/);
++    assert.equal(readFileSync(calls, 'utf8'), '/organization/\n/organization/directory.js\n');
++    writeFileSync(pinPath, JSON.stringify(admitted));
++    const published = run(pinPath, true);
++    assert.equal(published.status, 0, published.stderr + published.stdout);
++    assert.match(published.stdout, /byte-identical to the pinned index.html/);
++    assert.match(readFileSync(calls, 'utf8'), /organization\/index.html/);
++    assert.doesNotMatch(published.stdout, /pending SPA page|not verified/);
++  } finally {
++    rmSync(dir, { recursive: true, force: true });
++  }
++});
++
++test('rollback sentinel: local history must prove a target strictly predates pin introduction', () => {
++  const dir = mkdtempSync(join(tmpdir(), 'pyai-rollback-offline-'));
++  try {
++    git(dir, 'init', '-q', '-b', 'main');
++    writeFileSync(join(dir, 'base.txt'), 'synthetic');
++    git(dir, 'add', '-A');
++    git(dir, 'commit', '-q', '-m', 'pre-integration');
++    const before = git(dir, 'rev-parse', 'HEAD');
++    mkdirSync(join(dir, 'contracts/organization'), { recursive: true });
++    writeFileSync(join(dir, 'contracts/organization/PIN.json'), '{"admitted":null}');
++    git(dir, 'add', '-A');
++    git(dir, 'commit', '-q', '-m', 'introduce pin');
++    const introduced = git(dir, 'rev-parse', 'HEAD');
++    git(dir, 'rm', 'contracts/organization/PIN.json');
++    git(dir, 'commit', '-q', '-m', 'synthetic missing pin after integration');
++    const after = git(dir, 'rev-parse', 'HEAD');
++    const workflow = readFileSync(
++      new URL('../../.github/workflows/deploy-production.yml', import.meta.url),
++      'utf8',
++    );
++    const step = workflow
++      .split("      - name: Read the target release's organization pin\n")[1]
++      .split('\n      - name:')[0];
++    const script = step
++      .split('        run: |\n')[1]
++      .split('\n')
++      .map((line) => line.slice(10))
++      .join('\n');
++    for (const [target, status, output] of [
++      [before, 0, 'path=\n'],
++      [introduced, 0, `path=${dir}/organization-pin.json\n`],
++      [after, 1, ''],
++    ]) {
++      const out = join(dir, 'output');
++      writeFileSync(out, '');
++      // Replace only fetch with a local ref update. All history/tree/ancestry checks run real git.
++      const result = spawnSync(
++        'bash',
++        [
++          '-ec',
++          `git() { if [ "$1" = fetch ]; then printf '%s\\n' "$TARGET" > .git/FETCH_HEAD; else command git "$@"; fi; }\n${script}`,
++        ],
++        {
++          cwd: dir,
++          env: { ...env, TARGET: target, RUNNER_TEMP: dir, GITHUB_OUTPUT: out },
++          encoding: 'utf8',
++        },
++      );
++      assert.equal(result.status, status, result.stderr + result.stdout);
++      assert.equal(readFileSync(out, 'utf8'), output);
++    }
++  } finally {
++    rmSync(dir, { recursive: true, force: true });
++  }
++});
++
++test('rollback sentinel: a main release after the feature fork still predates integration', () => {
++  const dir = mkdtempSync(join(tmpdir(), 'pyai-rollback-offline-'));
++  try {
++    git(dir, 'init', '-q', '-b', 'main');
++    writeFileSync(join(dir, 'base.txt'), 'synthetic');
++    git(dir, 'add', '-A');
++    git(dir, 'commit', '-q', '-m', 'pre-integration');
++    const fork = git(dir, 'rev-parse', 'HEAD');
++    git(dir, 'switch', '-q', '-c', 'pin-feature');
++    writeFileSync(join(dir, 'feature.txt'), 'synthetic unmerged feature commit');
++    git(dir, 'add', '-A');
++    git(dir, 'commit', '-q', '-m', 'feature before pin');
++    const featureBefore = git(dir, 'rev-parse', 'HEAD');
++    mkdirSync(join(dir, 'contracts/organization'), { recursive: true });
++    writeFileSync(join(dir, 'contracts/organization/PIN.json'), '{"admitted":null}');
++    git(dir, 'add', '-A');
++    git(dir, 'commit', '-q', '-m', 'introduce pin');
++    git(dir, 'switch', '-q', 'main');
++    writeFileSync(join(dir, 'release.txt'), 'synthetic main release after feature fork');
++    git(dir, 'add', '-A');
++    git(dir, 'commit', '-q', '-m', 'main release before integration');
++    const before = git(dir, 'rev-parse', 'HEAD');
++    git(dir, 'merge', '--no-ff', '-m', 'integrate pin', 'pin-feature');
++    const introduced = git(dir, 'rev-parse', 'HEAD');
++    git(dir, 'switch', '-q', '-c', 'unrelated', fork);
++    writeFileSync(join(dir, 'unrelated.txt'), 'synthetic unrelated branch');
++    git(dir, 'add', '-A');
++    git(dir, 'commit', '-q', '-m', 'unrelated missing pin');
++    const unrelated = git(dir, 'rev-parse', 'HEAD');
++    git(dir, 'switch', '-q', 'main');
++    git(dir, 'rm', 'contracts/organization/PIN.json');
++    git(dir, 'commit', '-q', '-m', 'synthetic missing pin after integration');
++    const after = git(dir, 'rev-parse', 'HEAD');
++    const workflow = readFileSync(
++      new URL('../../.github/workflows/deploy-production.yml', import.meta.url),
++      'utf8',
++    );
++    const step = workflow
++      .split("      - name: Read the target release's organization pin\n")[1]
++      .split('\n      - name:')[0];
++    const script = step
++      .split('        run: |\n')[1]
++      .split('\n')
++      .map((line) => line.slice(10))
++      .join('\n');
++    for (const [target, status, output] of [
++      [fork, 0, 'path=\n'],
++      [before, 0, 'path=\n'],
++      [unrelated, 1, ''],
++      [featureBefore, 1, ''],
++      [introduced, 0, `path=${dir}/organization-pin.json\n`],
++      [after, 1, ''],
++    ]) {
++      const out = join(dir, 'output');
++      writeFileSync(out, '');
++      // Replace only fetch with a local ref update. All history/tree/ancestry checks run real git.
++      const result = spawnSync(
++        'bash',
++        [
++          '-ec',
++          `git() { if [ "$1" = fetch ]; then printf '%s\\n' "$TARGET" > .git/FETCH_HEAD; else command git "$@"; fi; }\n${script}`,
++        ],
++        {
++          cwd: dir,
++          env: { ...env, TARGET: target, RUNNER_TEMP: dir, GITHUB_OUTPUT: out },
++          encoding: 'utf8',
++        },
++      );
++      assert.equal(result.status, status, result.stderr + result.stdout);
++      assert.equal(readFileSync(out, 'utf8'), output);
++    }
++  } finally {
++    rmSync(dir, { recursive: true, force: true });
++  }
++});
 diff --git a/scripts/deploy/verify-live.sh b/scripts/deploy/verify-live.sh
-index dd06bb1..6fc2064 100644
+index dd06bb1..6ac9ef2 100644
 --- a/scripts/deploy/verify-live.sh
 +++ b/scripts/deploy/verify-live.sh
-@@ -70,0 +71,63 @@ if [ "$wk" != "200" ] || ! grep -q 'id="root"' /tmp/pyai-wk; then ok "/.well-kno
+@@ -19,0 +20,11 @@ bad() { echo "  FAIL $*"; fail=1; }
++# Empty is reserved for a rollback whose history positively establishes a pre-integration release.
++# Every nonempty path (including the default) must be readable, parseable and schema-valid.
++PIN="${ORGANIZATION_PIN-contracts/organization/PIN.json}"
++org_files=""
++if [ -n "$PIN" ]; then
++  org_files="$(node scripts/deploy/organization-live.mjs pin-files "$PIN")" || {
++    bad "organization pin is missing, unreadable or malformed"
++    exit 1
++  }
++fi
++
+@@ -70,0 +82,54 @@ if [ "$wk" != "200" ] || ! grep -q 'id="root"' /tmp/pyai-wk; then ok "/.well-kno
 +# 7. Organization directory (/organization/). The expected state comes from the pin of the release being
 +#    verified: the deploy job's checkout is that commit; the rollback job passes the target release's
 +#    pin in ORGANIZATION_PIN (set but empty = that release predates the integration).
-+PIN="${ORGANIZATION_PIN-contracts/organization/PIN.json}"
-+if [ -z "$PIN" ] || [ ! -f "$PIN" ]; then
-+  echo "  --   no organization pin for this release; /organization/ not verified"
++if [ -z "$PIN" ]; then
++  echo "  --   explicitly verified pre-integration release; /organization/ not verified"
 +else
-+  org_files="$(python3 - "$PIN" <<'PY'
-+import json, sys
-+admitted = json.load(open(sys.argv[1]))["admitted"]
-+if admitted:
-+    for f in admitted["files"]:
-+        print(f["path"], f["sha256"])
-+PY
-+)" || { bad "organization pin is unreadable"; org_files=""; }
 +  if [ -n "$org_files" ]; then
 +    ohdr="$(c -o /tmp/pyai-org-index.html -D - --max-time 15 "$BASE/organization/?v=$SHA")"
-+    ocode="$(printf '%s' "$ohdr" | head -1 | awk '{print $2}')"
++    ocode="$(printf '%s' "$ohdr" | head -1 | awk '{print $2}' | tr -d '\r')"
 +    [ "$ocode" = "200" ] && ok "GET /organization/ → 200" || bad "GET /organization/ → $ocode"
 +    grep -qi '^content-type: text/html' <<<"$ohdr" && ok "/organization/ is text/html" || bad "/organization/ content-type"
 +    grep -qi '^cache-control:.*no-cache' <<<"$ohdr" && ok "/organization/ Cache-Control no-cache" || bad "/organization/ missing Cache-Control no-cache"
@@ -711,7 +1203,7 @@ index dd06bb1..6fc2064 100644
 +    while read -r name want; do
 +      [ -n "$name" ] || continue
 +      fhdr="$(c -o /tmp/pyai-org-file -D - --max-time 20 "$BASE/organization/$name?v=$SHA")"
-+      fcode="$(printf '%s' "$fhdr" | head -1 | awk '{print $2}')"
++      fcode="$(printf '%s' "$fhdr" | head -1 | awk '{print $2}' | tr -d '\r')"
 +      got="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' /tmp/pyai-org-file)"
 +      case "$name" in
 +        *.html) want_type='text/html' ;;

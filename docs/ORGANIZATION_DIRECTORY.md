@@ -1,19 +1,36 @@
 # Organization directory (`/organization/`)
 
-This describes how the website will serve the organization's current directory at `/organization/`. **It does
-not serve one yet:** today `https://pickyour.ai/organization/` falls through to the site's home page, and
-No organization directory is published until a reviewed bundle is admitted and deployed. The directory is
+This describes how the website will serve the organization's current directory at `/organization/`. No
+organization directory is admitted in this integration: its build serves an explicit pending page until a
+reviewed bundle is admitted and deployed. The directory is
 **generated and reviewed in `Pick-Your-AI/.github`** (`docs/organization/current/`). The website ingests that
 bundle byte for byte and never renders, extends or duplicates it: there is no second renderer, no second
 registry and no roster or private state here.
 
-> **Status (2026-10-30): no bundle is admitted.** `contracts/organization/PIN.json` records
-> candidate `9abadb5fe22115da900dd86483c7428bc8b44b0e` (head of unmerged `.github` PR #24) as
-> **eligibility: pending**. It has no recorded independent human approval and is not an ancestor of
+> **Historical candidate evidence (2026-10-30): no bundle was admitted.** `contracts/organization/PIN.json` records
+> candidate `9abadb5fe22115da900dd86483c7428bc8b44b0e` (then the head of unmerged `.github` PR #24) as
+> **eligibility: pending**. At that check it had no recorded independent human approval and was not an ancestor of
 > `.github` `main` (checked against `main` at `88c3cc229cb4`, which has no `docs/organization/` at all).
 > It is not approved and not deployable. Until a reviewed commit is admitted, `/organization` shows a plain
 > "not published yet" page with no organization data. Nothing in this repository is marked human-approved or
 > deployed.
+
+**Source-receiving checkpoint (2026-11-17):** upstream [PR #22](https://github.com/Pick-Your-AI/.github/pull/22)
+and [PR #23](https://github.com/Pick-Your-AI/.github/pull/23) are merged. The
+[canonical tracker](https://github.com/Pick-Your-AI/.github/issues/17#issuecomment-6957449076) follows consolidated
+[PR #26](https://github.com/Pick-Your-AI/.github/pull/26), which
+supersedes closed, unmerged #24 and remains open and unmerged at
+[`8d98e4f840de571860b132d75bc1ab6a17a9fbb3`](https://github.com/Pick-Your-AI/.github/commit/8d98e4f840de571860b132d75bc1ab6a17a9fbb3).
+Its [final technical review comment](https://github.com/Pick-Your-AI/.github/pull/26#issuecomment-6963691909)
+records independent model correctness/security APPROVE verdicts, 111 Python tests, 3 Node tests and three
+successful hosted checks at that exact head. These are historical upstream results, not website validation
+or admission evidence. The [GitHub review submissions](https://api.github.com/repos/Pick-Your-AI/.github/pulls/26/reviews)
+contain three `COMMENTED` reviews and no `APPROVED` review at this checkpoint; eligible independent human
+approval and merged ancestry on `.github` `main` remain required before website source-pin approval.
+The older `9abadb5` candidate remains historical evidence; `admitted: null` is unchanged. Operations-owner
+acceptance of the prepared proposal, a separate publication identity, disposition of host-injected monitoring,
+and an actual deployed public/manual/scheduled cycle remain open gates. Technical review and hosted checks
+do not establish human approval, source admission, operations acceptance or publication.
 
 ## What is pinned
 
@@ -69,8 +86,10 @@ There is **one** admission path: the commit is already an **ancestor of `.github
 `git merge-base --is-ancestor` after fetching `main`), and the pin records the merged pull request, the URL of
 the independent **human** review, and the reviewer's login. Automatic review, bot reactions and check results
 are not approval. The importer cannot verify a review by itself; the website PR review is the control. There
-is no path for an unmerged commit or an owner-granted exception, and `.github` PRs #22 → #23 → #24 must merge,
-in that order, with genuine human approval before any bundle can be admitted.
+is no path for an unmerged commit or an owner-granted exception. The next source gate is independent human
+approval and the normal merge of consolidated `.github` PR #26 (which supersedes #24); #22 and #23 have
+already merged. Source approval/merge precedes website source-pin approval, which precedes publication.
+Recheck the exact reviewed source revision and its recorded approval before admission.
 
 `npm run organization:verify -- --upstream` (run in CI) re-fetches the pinned commit, compares every byte,
 re-validates the full bundle and re-checks ancestry. A pin whose commit is not on `main` fails.
@@ -107,7 +126,7 @@ rollback machinery work unchanged.
 
 ### Automatic propagation is not available
 
-A proposal workflow is **prepared for the operations owner in `ops-proposal.patch` but is not installed and
+A proposal workflow is **prepared for the operations owner in `docs/organization-operations.patch` but is not installed and
 cannot work today**. It needs a writer that may create a branch and open a PR here, and that is a missing
 owner gate: the repository's Actions setting for creating pull requests is off (so the workflow token cannot
 open one), the contributor-boundary rules apply to `feat/*` branches (the prepared workflow therefore uses a
@@ -129,12 +148,22 @@ The static page works only if the host cooperates:
   CSP says `style-src 'self'`. Measured in Chromium with the current header: the page loses its styling and an
   opened SVG logs hundreds of CSP errors; with `style-src 'self' 'unsafe-inline'` scoped to `/organization/`
   both render. `script-src 'self'` is unchanged, and live verification parses the effective policy strictly
-  (`script-src` must be only `'self'`; `script-src-elem` and `script-src-attr` may not widen it). The durable
+  (every directive must match the approved header in `public/.htaccess`, including default, object,
+  base, frame, form, image, font, connection, manifest and worker restrictions and HTTPS upgrading).
+  Duplicate directives, missing directives and unapproved overrides fail closed in each enforced policy. The durable
   fix is for the generator to emit an external stylesheet; then the exception is removed.
 - **MIME.** `.mmd` has no default type; with `nosniff` that is a blank download. Serve it as `text/plain`.
 - **Live verification.** Must check that the actual `/organization/` response is **byte-identical to the
   pinned `index.html`** (a marker is not enough: it could accept a stale or wrong canonical route), plus every
   file's bytes and MIME type, the redirect from `/organization`, and the CSP.
+- **Release pins.** A nonempty `ORGANIZATION_PIN`, including the default path, must be readable and pass the
+  existing pin validator before any live requests. Malformed pins never become pending releases. Only an
+  explicit empty sentinel skips this section, reserved for a rollback on main's first-parent history strictly
+  before pin integration (including integration by merge). A feature branch's earlier pin addition is not
+  the deployment boundary; unrelated targets and missing pins after integration fail.
+- **Required gate.** Applying the complete proposal wires `organization-live.test.mjs` into `npm test`
+  before Vitest and updates `live-admission.test.mjs`'s pinned command expectation in the same patch.
+  The added regression coverage uses local fixtures and mocked responses, not a deployed host.
 - **Cache.** The existing `no-cache, must-revalidate` outside `/assets/` already applies.
 
 ### Hosting gate: host-injected monitoring (verified 2026-10-30)
