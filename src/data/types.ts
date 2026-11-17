@@ -36,6 +36,8 @@ export interface SavedBuildSummary {
 }
 
 export interface BuildRepository {
+  /** Where saves persist; omitted by custom repositories whose storage is not declared. */
+  readonly storageKind?: 'local' | 'http';
   list(): Promise<SavedBuildSummary[]>;
   /** Returns the head revision and the retained revision history (oldest first). */
   get(buildId: string): Promise<StoredBuild>;

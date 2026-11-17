@@ -98,6 +98,7 @@ export function parseStoredBuild(raw: string): StoredBuild {
 }
 
 export class LocalBuildRepository implements BuildRepository {
+  readonly storageKind = 'local' as const;
   private readonly storage: KeyValueStorage;
   constructor(storage: KeyValueStorage = defaultStorage()) {
     this.storage = storage;

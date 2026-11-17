@@ -378,7 +378,13 @@ export default function BuildSummaryPage() {
         <div className="summary-split">
           <section className="panel" aria-labelledby="capacity-heading">
             <h2 id="capacity-heading">Capacity evidence</h2>
-            {!resources ? (
+            {analysis.resourcesQuery.isError ? (
+              <ErrorState
+                title="Capacity evidence unavailable"
+                error={analysis.resourcesQuery.error}
+                onRetry={() => void analysis.resourcesQuery.refetch()}
+              />
+            ) : !resources ? (
               <Loading label="Checking capacity evidence…" />
             ) : resources.status === 'available' ? (
               <>

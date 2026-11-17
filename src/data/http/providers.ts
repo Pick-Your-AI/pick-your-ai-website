@@ -254,6 +254,7 @@ export class HttpResourceEstimateProvider implements ResourceEstimateProvider {
 
 /** Remote builds per openapi: POST creates revision 1; PUT with If-Match replaces atomically. */
 export class HttpBuildRepository implements BuildRepository {
+  readonly storageKind = 'http' as const;
   private readonly client: ContractHttpClient;
   private readonly local: LocalBuildRepository;
   constructor(client: ContractHttpClient, local = new LocalBuildRepository()) {

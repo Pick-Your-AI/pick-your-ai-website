@@ -1,8 +1,8 @@
 /*
  * My Builds (mock: `#buildsScreen` + `renderBuildsPage()` and the `data-saved-action` handlers).
  *
- * Builds live in this browser's localStorage only: nothing is synced or uploaded. The page keeps
- * the safety rules of the previous implementation — every destructive action has an inline confirm
+ * Build storage comes from the configured repository; HTTP builds retain a browser-local index.
+ * The page keeps the safety rules of the previous implementation — every destructive action has an inline confirm
  * step (never a native confirm), records that cannot be read are explained rather than hidden, and
  * export is blocked with a reason when the build is not yet a contract-valid snapshot.
  */
@@ -13,7 +13,7 @@ import type { BuildSnapshot, CostEstimate } from '../contracts';
 import { kindDef } from '../contracts';
 import { createDraft, newBuildId } from '../domain/build';
 import { canExport, exportBuild, exportFileName, importBuild } from '../domain/share';
-import type { SavedBuildSummary } from '../data/types';
+import type { BuildRepository, SavedBuildSummary } from '../data/types';
 import { isDataError } from '../data/errors';
 import { useBuilder } from '../app/builder-context';
 import { useData } from '../app/data-context';
@@ -70,6 +70,7 @@ const formatDate = (iso: string) =>
 
 export default function MyBuildsPage() {
   const { builds, mode, pricing, compatibility } = useData();
+  const storage = builds.storageKind;
   const { draft, open, startNew } = useBuilder();
   const navigate = useNavigate();
   const toast = useToast();
@@ -175,7 +176,13 @@ export default function MyBuildsPage() {
     await builds.remove(summary.id);
     if (summary.id === draft?.build.id) startNew();
     await invalidate();
-    toast('Saved build deleted.');
+    toast(
+      storage === 'http'
+        ? 'Build forgotten in this browser. The API-stored build was not deleted.'
+        : storage === 'local'
+          ? 'Saved build deleted from this browser.'
+          : 'Build removed using the configured storage provider.',
+    );
   };
 
   const sorted = [...summaries].sort((a, b) => {
@@ -249,16 +256,40 @@ export default function MyBuildsPage() {
           </div>
         }
       >
-        Explore iterations, duplicate your ideas, or pick up right where you left off. Stored in
-        your browser for this preview.
+        Explore iterations, duplicate your ideas, or pick up right where you left off.{' '}
+        {storage === 'local'
+          ? 'Stored in your browser for this preview.'
+          : storage === 'http'
+            ? 'Build snapshots are saved to the configured API.'
+            : 'Build storage is managed by the configured provider.'}
       </PageHeader>
 
       <div className="container saved-layout">
         <div className="local-note">
           <Icon name="info" />
           <span>
-            <strong>Local workspace.</strong> Your saved configurations live in this browser&apos;s
-            storage. They are not synchronized or backed up. Export JSON to keep a portable copy.
+            {storage === 'http' ? (
+              <>
+                <strong>API-backed workspace.</strong> Complete build snapshots are sent to the
+                configured API. My Builds uses a browser-stored list, so clearing site data or
+                forgetting a build removes its browser copy and list entry, without requesting
+                deletion from the API. Retain the build ID or an exported copy: this list cannot
+                rediscover forgotten API-stored builds. The API&apos;s retention policy is not
+                specified here.
+              </>
+            ) : storage === 'local' ? (
+              <>
+                <strong>Local workspace.</strong> Your saved configurations live in this
+                browser&apos;s storage. They are not synchronized or backed up. Export JSON to keep
+                a portable copy.
+              </>
+            ) : (
+              <>
+                <strong>Configured workspace.</strong> The storage provider manages saving and
+                removal. This page does not establish where it stores builds or how long it retains
+                them. Export JSON to keep a portable copy.
+              </>
+            )}
           </span>
         </div>
 
@@ -367,6 +398,7 @@ export default function MyBuildsPage() {
                 summary={summary}
                 detail={details.data?.get(summary.id)}
                 current={summary.id === draft?.build.id}
+                storage={storage}
                 onOpen={async () => {
                   await open(summary.id);
                   void navigate('/builder');
@@ -394,6 +426,7 @@ function SavedCard({
   summary,
   detail,
   current,
+  storage,
   onOpen,
   onDuplicate,
   onExport,
@@ -402,6 +435,7 @@ function SavedCard({
   summary: SavedBuildSummary;
   detail: BuildDetail | undefined;
   current: boolean;
+  storage: BuildRepository['storageKind'];
   onOpen: () => Promise<void>;
   onDuplicate: () => Promise<void>;
   onExport: () => Promise<void>;
@@ -414,6 +448,7 @@ function SavedCard({
   const cancelRef = useRef<HTMLButtonElement>(null);
   const unreadable = isUnreadable(summary);
   const label = unreadable ? 'this unreadable build' : `“${summary.name}”`;
+  const removalLabel = storage === 'http' ? 'Forget' : storage === 'local' ? 'Delete' : 'Remove';
   const exportProblem =
     detail && detail.build.selections.length < 2
       ? 'Add at least 2 components before exporting.'
@@ -516,8 +551,8 @@ function SavedCard({
         <button
           ref={deleteRef}
           type="button"
-          aria-label={`Delete ${unreadable ? 'unreadable saved build' : summary.name}`}
-          title="Delete"
+          aria-label={`${removalLabel} ${unreadable ? 'unreadable saved build' : summary.name}`}
+          title={removalLabel}
           disabled={Boolean(busy)}
           onClick={() => setConfirming(true)}
         >
@@ -528,11 +563,18 @@ function SavedCard({
       {exportProblem ? <p className="hint-text">JSON export: {exportProblem}</p> : null}
 
       {confirming ? (
-        <div className="notice-error" role="group" aria-label="Confirm delete">
+        <div
+          className="notice-error"
+          role="group"
+          aria-label={`Confirm ${removalLabel.toLowerCase()}`}
+        >
           <p>
-            Delete {label} from this browser? This cannot be undone
-            {current ? '; a new empty build will become your current draft' : ''}. Export it first
-            if you need a backup.
+            {storage === 'http'
+              ? `Forget ${label} in this browser? The API-stored build will not be deleted. Its browser copy and entry in My Builds will be removed; retain its ID or export it first to access it again.`
+              : storage === 'local'
+                ? `Delete ${label} from this browser? This cannot be undone. Export it first if you need a backup.`
+                : `Remove ${label} using the configured storage provider? Export it first if you need a backup.`}
+            {current ? ' A new empty build will become your current draft.' : ''}
           </p>
           <p>
             <button
@@ -545,7 +587,7 @@ function SavedCard({
                 })
               }
             >
-              Yes, delete
+              Yes, {removalLabel.toLowerCase()}
             </button>{' '}
             <button
               ref={cancelRef}
