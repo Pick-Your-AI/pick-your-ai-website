@@ -18,7 +18,10 @@ describe('synthetic catalog labelling follows item provenance', () => {
 
   it('does not label the real pilot records as synthetic', () => {
     const raw = JSON.parse(
-      readFileSync('public/v1/catalog/snapshots/catalog.pilot.open-1', 'utf8'),
+      readFileSync(
+        'tests/fixtures/static-mirror/v1/catalog/snapshots/catalog.pilot.open-1',
+        'utf8',
+      ),
     );
     expect(isSyntheticCatalog(raw.items)).toBe(false);
   });

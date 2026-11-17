@@ -4,8 +4,9 @@
  * on the existing contract GET endpoints, and runs evaluation and cost estimation locally, which
  * is how the fixtures already work.
  *
- * These tests read the committed artifacts from public/v1 rather than an in-memory mock, so they
- * prove both that the files satisfy the frozen schemas and that the providers can consume them.
+ * These tests use an offline mocked GET transport: unadmitted pilot candidates are read from
+ * tests/fixtures/static-mirror/v1, and baseline graph/ruleset artifacts remain in public/v1.
+ * They prove schema validity and provider consumption, not publication or production admission.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -34,7 +35,11 @@ function staticFetch(url: string, init?: RequestInit): Promise<Response> {
     );
   }
   try {
-    const content = readFileSync(join(process.cwd(), 'public', API_BASE, path));
+    const root =
+      path === `/catalog/snapshots/${PILOT_SNAPSHOT}` || path === `/pricebooks/${PILOT_PRICEBOOK}`
+        ? 'tests/fixtures/static-mirror'
+        : 'public';
+    const content = readFileSync(join(process.cwd(), root, API_BASE, path));
     return Promise.resolve(new Response(content));
   } catch {
     return Promise.resolve(

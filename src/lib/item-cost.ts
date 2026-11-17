@@ -14,7 +14,7 @@
  *    unpriced unless the build policy allows unverified catalog items, so the row is derived from
  *    the estimator's admission decision instead of short-circuiting it.
  *
- * Amounts are synthetic (see methodology → pricing).
+ * Fixture amounts are synthetic (see methodology → pricing).
  */
 import type { BuildSnapshot, CatalogItem, CostEstimate, Pricebook, Selection } from '../contracts';
 import { estimateCost } from '../domain/cost';
@@ -39,7 +39,7 @@ const UNKNOWN: ItemPrice = {
   amount: null,
   currency: 'USD',
   label: 'Unknown',
-  note: 'No applicable demo rate',
+  note: 'No applicable rate',
   partial: false,
   included: false,
 };
@@ -135,7 +135,7 @@ export function itemPrice(
       label: verified ? 'Included' : 'Included*',
       note: verified
         ? `Free or included billing, verified by recorded provenance.`
-        : 'Free or included billing (unverified demo data; the build policy allows unverified items).',
+        : 'Free or included billing (unverified catalog data; the build policy allows unverified items).',
       partial: false,
       included: true,
     };

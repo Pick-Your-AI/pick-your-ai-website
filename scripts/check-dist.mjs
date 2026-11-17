@@ -5,6 +5,17 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 const errors = [];
 if (!existsSync('dist/index.html')) errors.push('dist/index.html missing');
 
+// These immutable IDs identify unadmitted offline candidates, not publishable artifacts.
+// Fixture data mode does not stop Vite from copying public assets into a deployment.
+for (const candidate of [
+  'v1/catalog/snapshots/catalog.pilot.open-1',
+  'v1/pricebooks/prices.pilot.1',
+]) {
+  if (existsSync(`dist/${candidate}`)) {
+    errors.push(`unadmitted pilot artifact in deployment output: ${candidate}`);
+  }
+}
+
 const v = JSON.parse(readFileSync('dist/version.json', 'utf8'));
 const keys = Object.keys(v).sort().join(',');
 if (keys !== 'builtAt,commit,contractSourceSha,contractVersion,dataMode') {

@@ -19,7 +19,9 @@ vi.mock('../../src/app/builder-context', () => ({ useBuilder: vi.fn() }));
 
 const pilot = assertContract(
   'CatalogSnapshot',
-  JSON.parse(readFileSync('public/v1/catalog/snapshots/catalog.pilot.open-1', 'utf8')),
+  JSON.parse(
+    readFileSync('tests/fixtures/static-mirror/v1/catalog/snapshots/catalog.pilot.open-1', 'utf8'),
+  ),
 );
 const mixed: CatalogSnapshot = {
   ...DEMO_CATALOG,

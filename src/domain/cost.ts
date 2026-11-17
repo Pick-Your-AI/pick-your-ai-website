@@ -7,6 +7,10 @@
  *    explicitly allows unverified catalog items (then a warning is recorded);
  *  - rates must match item id + version, be currently valid, match region when set, and use the
  *    build currency (no conversion is invented);
+ *  - contract rates and rates with conditions stay unpriced: v1 has no admitted evidence that a
+ *    build is eligible for a contract or satisfies a rate's free-text conditions;
+ *  - simultaneously applicable rates for the same meter stay unpriced rather than
+ *    summing alternative quotes or choosing a rate without a conflict-resolution policy;
  *  - coverage is `complete` only if nothing billable is left unpriced.
  */
 import type { BuildSnapshot, CatalogItem, CostEstimate, Pricebook, Selection } from '../contracts';
@@ -125,6 +129,12 @@ function rateApplies(
   if (r.unit_price.currency !== build.objectives.currency) {
     return `currency ${r.unit_price.currency} ≠ ${build.objectives.currency} (no conversion policy)`;
   }
+  if (r.price_type === 'contract') {
+    return 'contract eligibility cannot be established from v1 build evidence';
+  }
+  if (r.conditions?.length) {
+    return 'rate conditions cannot be established from v1 build evidence';
+  }
   return null;
 }
 
@@ -197,11 +207,24 @@ export function estimateCost(
       warnings.push(`${sel.id}: no rate for ${item.name} in pricebook ${pricebook.id}.`);
       continue;
     }
-    for (const r of candidates) {
-      const problem = rateApplies(r, sel, build, now);
+    const applicability = candidates.map((rate) => ({
+      rate,
+      problem: rateApplies(rate, sel, build, now),
+    }));
+    for (const { rate: r, problem } of applicability) {
       if (problem) {
         unpriced.add(sel.id);
         warnings.push(`${sel.id}: rate ${r.id} not applicable (${problem}).`);
+        continue;
+      }
+      const conflicting = applicability.filter(
+        (candidate) => candidate.problem === null && candidate.rate.meter === r.meter,
+      );
+      if (conflicting.length > 1) {
+        unpriced.add(sel.id);
+        warnings.push(
+          `${sel.id}: rate ${r.id} left unpriced: multiple applicable rates for meter ${r.meter}, including any overlapping global and matching-region rates; v1 build evidence supplies no precedence or stacking basis.`,
+        );
         continue;
       }
       const p = project(r.meter, sel, item, build, periodDays);

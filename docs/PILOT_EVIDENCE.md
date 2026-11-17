@@ -1,6 +1,6 @@
 # Bounded real-data pilot: evidence and limits
 
-This pilot replaces the synthetic fixture with **sourced** records for one open-weight model and its publisher. It is a bounded evidence exercise, not a claim that the production catalog, rights review or publication eligibility is done.
+This offline pilot exercises **sourced** candidate records for one open-weight model and its publisher. It is a bounded evidence exercise. The candidates are unadmitted: source/rights review, an admitted pricebook and receiving-owner acceptance remain absent, so they are excluded from deployable output. The default website continues to use its synthetic fixtures.
 
 ## Inventory
 
@@ -11,6 +11,19 @@ This pilot replaces the synthetic fixture with **sourced** records for one open-
 | Candidate rate (unadmitted) | `rate.license.qwen25_05b_instruct` in `prices.pilot.1` | same immutable model revision                                  |
 
 There is no hosted-service admission, SLA or independent quality comparison. `billing_class: unknown` is intentional. No model weights are downloaded; only public model metadata and the publisher's license text were read.
+
+## Offline fixture boundary
+
+The exact candidate bytes are retained only at:
+
+- `tests/fixtures/static-mirror/v1/catalog/snapshots/catalog.pilot.open-1`
+- `tests/fixtures/static-mirror/v1/pricebooks/prices.pilot.1`
+
+These files are outside `public/` and are not imported by application code. They are not deployable mirror routes and are absent from `npm run build` output. Keeping `VITE_DATA_MODE=fixture` alone would not provide that boundary: Vite copies files in `public/` to `dist/` regardless of the selected provider mode.
+
+The unit tests read these offline fixtures through mocked GET transports while preserving the logical `/v1/catalog/snapshots/catalog.pilot.open-1` and `/v1/pricebooks/prices.pilot.1` endpoints. The existing baseline graph and ruleset still come from `public/v1/`; their bytes and compatibility semantics are unchanged. Schema-valid mocked responses establish provider behavior only. They do not establish source rights, artifact admission, publication, a live API or production readiness.
+
+Any future publication requires the exact-artifact review and receiving checklist in `DATA_INTEGRATION.md` §4, including the outstanding source/rights and pricing owner decisions. This quarantine supplies neither admission nor a production-enablement command for these candidates.
 
 ## Primary-source checks, 2026-11-05
 
@@ -40,7 +53,7 @@ The two listed sources are two artifacts from the same publisher, not two indepe
 
 **Quantitative pilot pricing is deferred.** The publisher's license supports a qualitative royalty-free licensing fact. It does not publish a USD/month schedule, a licence count, an occurrence count, or a proration rule. Turning that fact into a monthly quantity of one would invent a usage basis. This campaign therefore keeps the model's `billing_class: unknown` and does not claim that issue #15's published-pricebook acceptance criterion is met.
 
-The existing `prices.pilot.1` candidate retains its provisional `0.00`/`license_month` record only to exercise schema validation, identity locks and the static provider's loading path. Its conditions and provenance explicitly mark it as **unadmitted for quantitative pricing**. The v1 schema requires at least one rate; an empty pricebook would not be a valid substitute. This candidate must not be promoted as an authoritative rate or a demonstrated cost projection. A source-supported pricebook from the pricing/research owner is still required before publication.
+The existing `prices.pilot.1` candidate retains its provisional `0.00`/`license_month` record only to exercise schema validation, identity locks and the static provider's loading path under offline mocks. Its conditions and provenance explicitly mark it as **unadmitted for quantitative pricing**. The v1 schema requires at least one rate; an empty pricebook would not be a valid substitute. This candidate must not be promoted as an authoritative rate or a demonstrated cost projection. A source-supported pricebook from the pricing/research owner is still required before publication.
 
 The estimator leaves both `license_month` and `one_time` unpriced unless a supported quantity model is added through the contract/usage-model process. It reports incomplete coverage and a warning instead of assuming a single licence, prorating across a period, or assuming a single charge. Existing token, GPU-hour and storage projections are unchanged. The actual pilot model also remains unpriced because its billing classification is unknown; a zero-valued provisional rate does not turn that into free hosting.
 

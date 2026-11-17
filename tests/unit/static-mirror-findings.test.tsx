@@ -1,7 +1,8 @@
 /*
  * Regressions for the four source findings in review 5779787725 / 5781685065 on PR #343.
  *
- * Each case fails on the reviewed head `e26eda2` and passes after the corrections:
+ * The historical findings below are reproduced using offline candidate fixtures and mocked GETs,
+ * not a deployed pilot. Each case fails on the reviewed head `e26eda2` and passes after the corrections:
  *  1. a brand-new build locked `prices.demo.1` while the static mirror publishes `prices.pilot.1`;
  *  2. static compatibility returned a verdict for a build locked to a different ruleset;
  *  3. the shared banner called a sourced pilot catalog synthetic, and the publisher record carried
@@ -33,7 +34,11 @@ function staticFetch(url: string, init?: RequestInit): Promise<Response> {
   const path = url.slice(API.length).split('?')[0] ?? '';
   if (method !== 'GET') return Promise.resolve(new Response('{}', { status: 405 }));
   try {
-    return Promise.resolve(new Response(readFileSync(join(process.cwd(), 'public', API, path))));
+    const root =
+      path === `/catalog/snapshots/${SNAPSHOT}` || path === `/pricebooks/${PRICEBOOK}`
+        ? 'tests/fixtures/static-mirror'
+        : 'public';
+    return Promise.resolve(new Response(readFileSync(join(process.cwd(), root, API, path))));
   } catch {
     return Promise.resolve(new Response('{}', { status: 404 }));
   }
@@ -133,7 +138,10 @@ describe("finding 6: a starter never ships another catalog's locks", () => {
     const base = createBuild({ catalogSnapshotId: SNAPSHOT, pricebookId: PRICEBOOK });
     const catalogIds = new Set(
       JSON.parse(
-        readFileSync('public/v1/catalog/snapshots/catalog.pilot.open-1', 'utf8'),
+        readFileSync(
+          'tests/fixtures/static-mirror/v1/catalog/snapshots/catalog.pilot.open-1',
+          'utf8',
+        ),
       ).items.map((i: { id: string }) => i.id),
     );
     const selections = template.selections.filter((x) => catalogIds.has(x.catalog_item_id));
@@ -276,7 +284,7 @@ describe('finding 8: the pilot licence rate does not imply a free stack', () => 
 
 describe('finding 3: sourced records are not described as synthetic', () => {
   const snapshot = JSON.parse(
-    readFileSync('public/v1/catalog/snapshots/catalog.pilot.open-1', 'utf8'),
+    readFileSync('tests/fixtures/static-mirror/v1/catalog/snapshots/catalog.pilot.open-1', 'utf8'),
   );
 
   it('does not give the publisher a provider-wide license inferred from one model', () => {
