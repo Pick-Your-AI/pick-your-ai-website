@@ -206,7 +206,7 @@ export function MiniBuild({
   unknown: number;
   /** Presence-only incompleteness (#294): a missing required pick is not an incompatibility. */
   incomplete?: { chosen: number; total: number; remediation: string } | undefined;
-  /** Whether the catalog being presented is the synthetic fixture. Real sourced records say so. */
+  /** Whether the locked pricebook is a synthetic fixture; independent of catalog provenance. */
   synthetic?: boolean;
 }) {
   // An empty stack has no cost yet — `$0.00` would read as a measured zero.

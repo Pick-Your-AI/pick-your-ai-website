@@ -50,8 +50,12 @@ interface BuilderApi {
     summary: string,
     changedKinds: ComponentKind[],
   ) => void;
-  /** Start a new build (optionally from a template build) and make it current. */
-  startNew: (template?: BuildSnapshot, name?: string) => void;
+  /** Copy a snapshot without migrating its locked evidence; rebasing is only for explicit starters. */
+  startNew: (
+    template?: BuildSnapshot,
+    name?: string,
+    options?: { rebaseStarter?: boolean },
+  ) => void;
   open: (buildId: string) => Promise<void>;
   /** Restore an older revision's content as a new revision. */
   restore: (revision: number) => void;
@@ -195,50 +199,47 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
   );
 
   const startNew = useCallback<BuilderApi['startNew']>(
-    (template, name) => {
+    (template, name, options) => {
       // Claim the draft immediately so a slower initial load cannot replace it.
       touched.current = true;
       const request = ++navigation.current;
       void (async () => {
-        /*
-         * Resolve the snapshot first: a starter must only carry items this build will be locked to,
-         * and the catalog query may still be loading when the click happens. The build is also
-         * created with this deployment's configured pricebook rather than a fixture default.
-         */
-        const snapshot = catalog.data ?? (await catalogRepo.getSnapshot());
+        // Imported, shared and copied builds keep their original evidence locks even when this
+        // deployment cannot resolve them. Only an explicitly chosen fixture starter may be rebased.
+        const rebaseStarter = Boolean(template && options?.rebaseStarter);
+        const snapshot =
+          !template || rebaseStarter
+            ? (catalog.data ?? (await catalogRepo.getSnapshot()))
+            : undefined;
         if (request !== navigation.current) return;
-        const catalogSnapshotId = snapshot.id;
-        const present = new Set(snapshot.items.map((i) => i.id));
         const base = createBuild({
-          catalogSnapshotId,
+          catalogSnapshotId: snapshot?.id ?? template!.locks.catalog_snapshot_id,
           name,
           pricebookId: catalogRepo.defaultPricebookId,
         });
-        /*
-         * A starter is composed from the fixture catalog. Spreading it wholesale would also copy its
-         * locks and selections, so a static deployment would receive a build pinned to a snapshot
-         * and pricebook it does not publish, and no evaluator or estimator could analyse it.
-         * Keep this deployment's locks, and keep only selections whose items actually exist here.
-         */
-        const selections = (template?.selections ?? []).filter((s) =>
-          present.has(s.catalog_item_id),
-        );
-        const kept = new Set(selections.map((s) => s.id));
-        const build: BuildSnapshot = template
+        const source = template ? structuredClone(template) : undefined;
+        if (source && rebaseStarter && snapshot) {
+          const present = new Map(snapshot.items.map((item) => [item.id, item]));
+          source.selections = source.selections.filter((selection) => {
+            const item = present.get(selection.catalog_item_id);
+            return item?.version === selection.catalog_item_version && item.kind === selection.kind;
+          });
+          const kept = new Set(source.selections.map((selection) => selection.id));
+          source.links = (source.links ?? []).filter(
+            (link) => kept.has(link.from_selection_id) && kept.has(link.to_selection_id),
+          );
+          source.locks = base.locks;
+        }
+        const build: BuildSnapshot = source
           ? {
-              ...template,
+              ...source,
               id: base.id,
               revision: 1,
               created_at: base.created_at,
               updated_at: base.updated_at,
               lifecycle: 'draft',
               owner_ref: base.owner_ref,
-              name: name ?? template.name,
-              locks: base.locks,
-              selections,
-              links: (template.links ?? []).filter(
-                (l) => kept.has(l.from_selection_id) && kept.has(l.to_selection_id),
-              ),
+              name: name ?? source.name,
             }
           : base;
         const next = createDraft(

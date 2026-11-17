@@ -620,7 +620,11 @@ function CostBreakdown({
       {cost.line_items.length ? (
         <div className="table-scroll" tabIndex={0} role="region" aria-label="Scrollable table">
           <table className="data-table">
-            <caption>Synthetic demo prices — not a quote</caption>
+            <caption>
+              {cost.pricebook_id.startsWith('prices.demo.')
+                ? 'Synthetic demo prices — not a quote'
+                : 'Estimated prices from the locked pricebook — not a quote'}
+            </caption>
             <thead>
               <tr>
                 <th scope="col">Selection</th>

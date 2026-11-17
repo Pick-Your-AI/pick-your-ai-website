@@ -132,7 +132,7 @@ function StarterCard({ starter, index }: { starter: Starter; index: number }) {
         type="button"
         className="starter-open"
         onClick={() => {
-          startNew(starter.build(), starter.title);
+          startNew(starter.build(), starter.title, { rebaseStarter: true });
           void navigate('/builder');
         }}
       >

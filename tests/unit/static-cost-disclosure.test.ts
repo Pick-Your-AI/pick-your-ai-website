@@ -1,10 +1,8 @@
 /*
- * Flat periodic meters and pricebook-scoped caveats.
- *
- * Review finding: a published `license_month` rate produced no cost line item, because the meter
- * fell through to the generic "no usage basis" branch. A pricebook may legitimately declare a flat
- * licence or one-time charge, so the estimator must support it with an explicit basis rather than
- * dropping the rate silently.
+ * Meter names alone do not establish licence quantities, event counts or proration rights.
+ * These regressions replace the candidate's invented one-unit expectations with fail-closed
+ * assertions: the selected metered item must remain unpriced, with an actionable warning.
+ * The configured-pricebook caveats remain independently covered below.
  */
 import { describe, expect, it } from 'vitest';
 import type { Pricebook } from '../../src/contracts';
@@ -32,30 +30,39 @@ function meteredBuild() {
   return build;
 }
 
-describe('flat periodic meters produce an explicit line rather than vanishing', () => {
-  it('prices a monthly licence by month, not by a guessed unit count', () => {
+function expectUnsupported(estimate: ReturnType<typeof estimateCost>, meter: string) {
+  expect(estimate.line_items.some((line) => line.meter === meter)).toBe(false);
+  expect(estimate.unpriced_selection_ids).toContain('sel_compute_profile');
+  expect(estimate.coverage).not.toBe('complete');
+  expect(estimate.warnings.join(' ')).toContain(
+    `No supported quantity or proration basis for meter "${meter}"`,
+  );
+}
+
+describe('unsupported flat meters preserve incomplete coverage', () => {
+  it('does not assume one monthly licence for a metered selection', () => {
     const book = pricebookWith('prices.configured.1', 'license_month');
     const estimate = estimateCost(meteredBuild(), BY_ID, book, { periodDays: 30, now: NOW });
-    const line = estimate.line_items.find((l) => l.meter === 'license_month');
-    expect(line).toBeDefined();
-    expect(line!.quantity).toBe('1');
-    expect(line!.assumptions.join(' ')).toMatch(/Flat licence fee/);
+    expectUnsupported(estimate, 'license_month');
   });
 
-  it('prorates a monthly licence across a longer period', () => {
+  it('does not invent a licence proration rule for a longer period', () => {
     const book = pricebookWith('prices.configured.1', 'license_month');
     const estimate = estimateCost(meteredBuild(), BY_ID, book, { periodDays: 90, now: NOW });
-    const line = estimate.line_items.find((l) => l.meter === 'license_month');
-    expect(line!.quantity).toBe('3');
+    expectUnsupported(estimate, 'license_month');
   });
 
-  it('treats one_time as a single, unprorated charge', () => {
+  it('does not infer a one-time occurrence count from the meter name', () => {
     const book = pricebookWith('prices.configured.1', 'one_time');
     const estimate = estimateCost(meteredBuild(), BY_ID, book, { periodDays: 90, now: NOW });
-    const line = estimate.line_items.find((l) => l.meter === 'one_time');
-    expect(line).toBeDefined();
-    expect(line!.quantity).toBe('1');
-    expect(line!.assumptions.join(' ')).toMatch(/not prorated/i);
+    expectUnsupported(estimate, 'one_time');
+  });
+
+  it('does not treat a zero unit price as evidence for a quantity', () => {
+    const book = pricebookWith('prices.configured.1', 'license_month');
+    book.rates[0]!.unit_price = { ...book.rates[0]!.unit_price, amount: '0.00' };
+    const estimate = estimateCost(meteredBuild(), BY_ID, book, { now: NOW });
+    expectUnsupported(estimate, 'license_month');
   });
 });
 

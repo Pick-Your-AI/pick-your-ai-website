@@ -27,6 +27,7 @@ import { addOrReplace, replaceSelection } from '../../domain/build';
 import { useBuilder } from '../../app/builder-context';
 import { useBuildAnalysis, useCatalog, usePricebook, useRuleset } from '../../app/queries';
 import { Icon } from '../../components/icon';
+import { SyntheticBadge } from '../../components/status';
 import {
   ActiveFilters,
   Box,
@@ -82,10 +83,6 @@ export function PartList({
   const [params, setParams] = useSearchParams();
   const { draft, apply } = useBuilder();
   const catalog = useCatalog();
-  // Items carry 'synthetic' explicitly. The synthetic fixture label must not describe real sourced
-  // items, and removing it must not invent an independent-verification claim.
-  const containsSynthetic =
-    catalog.data === undefined ? true : isSyntheticCatalog(catalog.data.items);
   const pricebook = usePricebook(draft?.build.locks.pricebook_id);
   const analysis = useBuildAnalysis(draft?.build);
   const ruleset = useRuleset();
@@ -288,6 +285,17 @@ export function PartList({
     return cmp;
   });
 
+  // Describe the displayed records, not an unrelated synthetic item in another kind or filter.
+  const syntheticRows = sorted.filter(({ item }) => isSyntheticCatalog([item])).length;
+  const catalogLabel =
+    syntheticRows === 0
+      ? 'configured catalog'
+      : syntheticRows === sorted.length
+        ? 'synthetic demo catalog'
+        : 'mixed catalog; synthetic records are labelled';
+  // Catalog provenance does not establish the provenance of an independently locked pricebook.
+  const syntheticPrices = pricebook.data?.id.startsWith('prices.demo.') ?? false;
+
   const onSort = (key: string) => {
     if (sort === key) update({ sort: key, dir: dir === 'asc' ? 'desc' : 'asc' });
     else update({ sort: key, dir: 'asc' });
@@ -416,7 +424,7 @@ export function PartList({
             conflicts={report?.summary.failed ?? 0}
             unknown={report?.summary.unknown ?? 0}
             incomplete={incompleteBuild(build, report, ruleset.data) ?? undefined}
-            synthetic={containsSynthetic}
+            synthetic={syntheticPrices}
           />
 
           <CompatFilter
@@ -541,8 +549,7 @@ export function PartList({
               <table className="pt">
                 <caption>
                   {sorted.length} component{sorted.length === 1 ? '' : 's'}
-                  {single ? ` · ${KIND_LABELS[single]}` : ''}{' '}
-                  {containsSynthetic ? ' · synthetic demo catalog' : ' · configured catalog'}
+                  {single ? ` · ${KIND_LABELS[single]}` : ''} {` · ${catalogLabel}`}
                 </caption>
                 <thead>
                   <tr>
@@ -646,6 +653,7 @@ export function PartList({
                               </span>
                               <span style={{ minWidth: 0 }}>
                                 <Link to={itemPath(item)}>{item.name}</Link>
+                                {isSyntheticCatalog([item]) ? <SyntheticBadge /> : null}
                                 <span className="pt-sub">
                                   {rowSubtitle(item)}
                                   {picked ? ' · in your stack' : ''}
@@ -761,7 +769,7 @@ export function PartList({
               The legend detail lives in the column headers' titles instead.
             */}
             <span className="pbar-meta">
-              {containsSynthetic
+              {syntheticPrices
                 ? 'Synthetic demo estimates'
                 : 'Estimates from the configured pricebook'}{' '}
               · not a quote ·{' '}

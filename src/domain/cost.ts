@@ -92,23 +92,12 @@ function project(
         assumptions: ['Always-on instances.'],
       };
     }
-    /*
-     * Flat periodic fees. A monthly licence or a one-time charge has an explicit basis: one unit per
-     * month (prorated over the period) or one unit in total. That is the meter's definition, not a
-     * guessed quantity, and the assumption is recorded on the line.
-     */
+    // These meter names do not define seats, occurrences, licence quantities or proration rights.
+    // The v1 settings have no admitted usage basis for them; a guessed unit could falsely turn
+    // an incomplete estimate into complete coverage.
     case 'license_month':
-      return {
-        quantity: trimDecimal(periodDays / 30),
-        assumptions: [
-          `Flat licence fee for ${trimDecimal(periodDays / 30)} month(s); no minimum term, seat count or escalation modelled.`,
-        ],
-      };
     case 'one_time':
-      return {
-        quantity: '1',
-        assumptions: ['One-time charge, not prorated over the period.'],
-      };
+      return `No supported quantity or proration basis for meter "${meter}"; left unpriced rather than assuming one unit.`;
     case 'storage_gb_month': {
       const gb = settings.provisioned_gb;
       if (gb === undefined) return 'Set provisioned GB on the storage selection.';

@@ -96,7 +96,7 @@ function TemplateCard({ starter, index }: { starter: Starter; index: number }) {
           className="btn btn-primary btn-small"
           type="button"
           onClick={() => {
-            startNew(starter.build(), starter.title);
+            startNew(starter.build(), starter.title, { rebaseStarter: true });
             void navigate('/builder');
             toast(`${displayTitle(starter)} loaded. Swap any component to customize.`);
           }}

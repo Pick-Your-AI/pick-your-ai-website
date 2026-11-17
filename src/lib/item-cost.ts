@@ -232,7 +232,7 @@ export function costShort(cost: CostEstimate | undefined): CostShort {
     return {
       text: total,
       qualifier: `per ${cost.period_days} days`,
-      note: `Complete coverage over ${cost.period_days} days — synthetic estimate, not a quote.`,
+      note: `Complete coverage over ${cost.period_days} days — ${cost.pricebook_id.startsWith('prices.demo.') ? 'synthetic estimate' : 'configured pricebook estimate'}, not a quote.`,
       complete: true,
     };
   }

@@ -231,8 +231,21 @@ describe('finding 7: a foreign dependency-graph lock is refused', () => {
 });
 
 describe('finding 8: the pilot licence rate does not imply a free stack', () => {
-  // The published pricebook carries one licence_month rate at 0.00. The meter is supported, but the
-  // model's billing class is unknown, so the estimate must still report unpriced coverage rather
+  it('pins the provisional licence citation to the selected model revision', async () => {
+    const providers = prov();
+    const model = await providers.catalog.getItem('cat.model.qwen25_05b_instruct');
+    const book = await providers.pricing.getPricebook(PRICEBOOK);
+    const rate = book.rates[0]!;
+    expect(rate.catalog_item_version).toBe(model.version);
+    expect(rate.provenance.source_uri).toBe(
+      `https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/blob/${model.version}/LICENSE`,
+    );
+    expect(rate.conditions?.join(' ')).toContain('not admitted for quantitative pricing');
+    expect(model.billing_class).toBe('unknown');
+  });
+
+  // The provisional candidate carries one license_month rate at 0.00 with no admitted quantity
+  // basis. The model's billing class is unknown, so the estimate must report unpriced coverage rather
   // than a zero-cost total that would read as a free deployment.
   it('reports unpriced coverage rather than a zero total', async () => {
     const providers = prov();
@@ -254,6 +267,8 @@ describe('finding 8: the pilot licence rate does not imply a free stack', () => 
     const cost = await providers.pricing.estimate(build);
     expect(cost.pricebook_id).toBe(PRICEBOOK);
     expect(cost.unpriced_selection_ids).toContain('sel_model_1');
+    expect(cost.coverage).toBe('unknown');
+    expect(cost.total.amount).toBe('0.00'); // No priced lines, never evidence of a free selection.
     expect(cost.warnings.join(' ')).toMatch(/billing class is unknown — not zero cost/);
     expect(cost.line_items.some((l) => l.meter === 'license_month')).toBe(false);
   });
