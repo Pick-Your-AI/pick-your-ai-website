@@ -57,10 +57,17 @@ takes no options and fails closed on:
   file is refused (including any extra `.html`, `.js`, `.json`, `.md` or an unknown chart stem), because
   everything in the bundle is copied to the host. Flat, reviewed names only; no symlinks; size limits.
 - **A reviewed script, by hash.** `directory.js` runs in visitors' browsers. Production admission requires its
-  SHA-256 to be in `REVIEWED_DIRECTORY_SCRIPT_SHA256`, currently the single canonical script
-  (`8d0bf2a1…f813`, byte-equal in `.github` `governance/directory.js` and the candidate bundle). No flag,
-  option, pin field or environment variable can add to that list; **a new script revision needs an explicit
-  website code-review change to that constant.** The pattern scan that also runs on the script (network,
+  SHA-256 to be in `REVIEWED_DIRECTORY_SCRIPT_SHA256`, which currently contains only
+  `8d0bf2a17fc7fd1ed9bdf32ebd992425f42afdaa85c6d328bae370e60589f813`, the script from the historical
+  `9abadb5fe22115da900dd86483c7428bc8b44b0e` candidate. It does not cover the current PR #26 script:
+  [`docs/organization/current/directory.js` at `8d98e4f840de571860b132d75bc1ab6a17a9fbb3`](https://github.com/Pick-Your-AI/.github/blob/8d98e4f840de571860b132d75bc1ab6a17a9fbb3/docs/organization/current/directory.js)
+  is 1,468 bytes, with SHA-256 `e7e88ecf8d2a2847a6a89a3c0849ff5fe73876b98df7d0ef17bcb0d7f1075552`
+  and Git blob `4d9b9fb020216c2d458891316f876abd47ac8481`. **That script is not allowlisted.** These
+  identifiers establish byte identity only, not script-behaviour review or approval. No flag, option, pin
+  field or environment variable can add to the list; **a new script revision needs explicit website review
+  of its exact bytes and hash and a code-review change to that constant.** Future admission also requires
+  independently human-approved upstream source merged on `.github` `main`, followed by the existing
+  website source-pin, operations and publication gates. The pattern scan that also runs on the script (network,
   storage, dynamic-code and navigation APIs) is **supplementary, not a proof of behaviour**: computed access such as
   `globalThis["fetch"](…)` defeats any such scan, which is exactly why the hash is the control.
 - **Same revision.** The observation time, source revision, policy revision and mapping revision shown in
