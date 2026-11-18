@@ -328,10 +328,13 @@ describe('build analysis identity', () => {
 
     const updatedEstimate = { ...estimate, id: 'resources.updated' };
     act(() =>
-      client.setQueryData(['resources', build.id, build.revision], {
-        status: 'available',
-        estimate: updatedEstimate,
-      }),
+      client.setQueriesData(
+        { queryKey: ['resources', build.id, build.revision] },
+        {
+          status: 'available',
+          estimate: updatedEstimate,
+        },
+      ),
     );
     await waitFor(() => expect(evaluate).toHaveBeenCalledTimes(3));
     expect(evaluate).toHaveBeenLastCalledWith(build, {
@@ -345,7 +348,7 @@ describe('build analysis identity', () => {
     await waitFor(() => expect(h.result.current.reportIsCurrent).toBe(true));
 
     const updatedCost = { ...h.result.current.cost!, id: 'cost.updated' };
-    act(() => client.setQueryData(['cost', build.id, build.revision], updatedCost));
+    act(() => client.setQueriesData({ queryKey: ['cost', build.id, build.revision] }, updatedCost));
     await waitFor(() => expect(evaluate).toHaveBeenCalledTimes(4));
     expect(evaluate).toHaveBeenLastCalledWith(build, {
       costEstimate: updatedCost,

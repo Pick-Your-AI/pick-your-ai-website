@@ -31,6 +31,7 @@ import { KIND_LABELS, TIERS, TIER_LABELS, kindsInTier, labelInSentence } from '.
 import { addOrReplace } from '../domain/build';
 import { evidenceDateLabel, itemFreshness } from '../domain/freshness';
 import { useBuilder } from '../app/builder-context';
+import { buildQueryKey } from '../app/build-query-key';
 import { useData } from '../app/data-context';
 import { useCatalog, useCompatibleOptions, usePricebook } from '../app/queries';
 import { BILLING_LABELS, idToSlug, slugToId } from '../lib/catalog-view';
@@ -717,7 +718,8 @@ function SavedBuildsCompare({ ids }: { ids: string[] }) {
 }
 
 function RevisionCompare({ revisions }: { revisions: number[] }) {
-  const { draft, ready } = useBuilder();
+  const { draft, ready, loadError, retryLoad } = useBuilder();
+  if (loadError != null) return <ErrorState error={loadError} onRetry={retryLoad} />;
   if (!ready || !draft) return <Loading label="Loading your current build…" />;
   if (revisions.length !== 2)
     return <BadParams>Revision comparison needs exactly two revision numbers.</BadParams>;
@@ -759,11 +761,11 @@ function BadParams({ children }: { children: ReactNode }) {
 function useSideAnalysis(build: BuildSnapshot) {
   const { compatibility, pricing } = useData();
   const evaluation = useQuery({
-    queryKey: ['compare', 'evaluation', build.id, build.revision],
+    queryKey: ['compare', 'evaluation', ...buildQueryKey(build)],
     queryFn: () => compatibility.evaluate(build),
   });
   const cost = useQuery({
-    queryKey: ['compare', 'cost', build.id, build.revision],
+    queryKey: ['compare', 'cost', ...buildQueryKey(build)],
     queryFn: () => pricing.estimate(build),
   });
   return { evaluation, cost };
@@ -1354,7 +1356,7 @@ function PickTwo({
 
 function CompareStart() {
   const navigate = useNavigate();
-  const { draft } = useBuilder();
+  const { draft, loadError, retryLoad } = useBuilder();
   const { builds } = useData();
   const saved = useQuery({ queryKey: ['builds', 'list'], queryFn: () => builds.list() });
   const readable = (saved.data ?? []).filter((s) => s.revision > 0);
@@ -1419,7 +1421,9 @@ function CompareStart() {
             <h2 id="rev-heading" className="parts-h2">
               Revisions of your current build
             </h2>
-            {!draft ? (
+            {loadError != null ? (
+              <ErrorState error={loadError} onRetry={retryLoad} />
+            ) : !draft ? (
               <Loading label="Loading your current build…" />
             ) : draft.revisions.length < 2 ? (
               <p className="pbox-note">

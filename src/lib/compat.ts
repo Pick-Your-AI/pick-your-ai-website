@@ -11,6 +11,7 @@ import { kindDef, type BuildSnapshot, type ComponentKind } from '../contracts';
 import { nextRole } from '../domain/build';
 import type { CompatibleOption } from '../data/types';
 import { useData } from '../app/data-context';
+import { buildQueryKey } from '../app/build-query-key';
 
 export type CompatOption = CompatibleOption;
 export type VerdictMap = ReadonlyMap<string, CompatOption>;
@@ -34,13 +35,14 @@ export function useCompatByKind(
   );
   const queries = useQueries({
     queries: unique.map((kind, index) => ({
-      queryKey: ['compat-kind', build?.id ?? 'none', build?.revision ?? 0, kind, roles[index]],
+      queryKey: ['compat-kind', ...buildQueryKey(build), kind, roles[index]],
       queryFn: () => compatibility.compatibleOptions(build!, kind, roles[index]),
       enabled: Boolean(build),
     })),
   });
   const map = new Map<string, CompatOption>();
   queries.forEach((query, index) => {
+    if (query.isError) return;
     for (const option of query.data ?? []) {
       map.set(verdictKey(unique[index]!, option.catalog_item_id), option);
     }

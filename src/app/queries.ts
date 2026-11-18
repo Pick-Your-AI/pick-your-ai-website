@@ -1,11 +1,12 @@
 /*
- * TanStack Query hooks. Every key that depends on a build includes (build id, revision), so results
- * for another build or revision are never shown as current. Previous cost/report data is kept as
- * an explicitly flagged stale placeholder; capacity evidence is hidden until it is current.
+ * TanStack Query hooks. Build-dependent keys include id, revision and snapshot content, so an
+ * edited staged draft cannot reuse another snapshot's results. Previous cost/report data stays
+ * an explicitly flagged placeholder; capacity evidence awaits current results.
  */
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import type { BuildSnapshot, CatalogItem, ComponentKind } from '../contracts';
+import { buildQueryKey } from './build-query-key';
 import { useData } from './data-context';
 
 export function useCatalog() {
@@ -49,31 +50,34 @@ export function usePricebook(id?: string) {
   });
 }
 
-const buildKey = (b: BuildSnapshot | null | undefined) =>
-  [b?.id ?? 'none', b?.revision ?? 0] as const;
-
-/** Cost → resources → evaluation for the exact build revision. */
+/** Cost → resources → evaluation for the exact build snapshot. */
 export function useBuildAnalysis(build: BuildSnapshot | null | undefined) {
   const data = useData();
   const enabled = Boolean(build);
   const cost = useQuery({
-    queryKey: ['cost', ...buildKey(build)],
+    queryKey: ['cost', ...buildQueryKey(build)],
     queryFn: () => data.pricing.estimate(build!),
     enabled,
     placeholderData: keepPreviousData,
     retry: 1,
   });
   const resources = useQuery({
-    queryKey: ['resources', ...buildKey(build)],
+    queryKey: ['resources', ...buildQueryKey(build)],
     queryFn: () => data.resources.estimate(build!),
     enabled,
     placeholderData: keepPreviousData,
     retry: 1,
   });
   const costReady =
-    build && cost.data?.build_id === build.id && cost.data.build_revision === build.revision;
+    build &&
+    !cost.isError &&
+    !cost.isPlaceholderData &&
+    cost.data?.build_id === build.id &&
+    cost.data.build_revision === build.revision;
   const resourceEstimate =
     build &&
+    !resources.isError &&
+    !resources.isPlaceholderData &&
     resources.data?.status === 'available' &&
     resources.data.estimate.build_id === build.id &&
     resources.data.estimate.build_revision === build.revision
@@ -82,9 +86,10 @@ export function useBuildAnalysis(build: BuildSnapshot | null | undefined) {
   const evaluation = useQuery({
     queryKey: [
       'evaluation',
-      ...buildKey(build),
-      costReady ? cost.data?.id : null,
-      resourceEstimate?.id ?? null,
+      ...buildQueryKey(build),
+      // Changed evidence must not reuse an earlier report merely by retaining its ID.
+      costReady ? cost.data : null,
+      resourceEstimate,
     ],
     queryFn: () =>
       data.compatibility.evaluate(build!, {
@@ -98,6 +103,9 @@ export function useBuildAnalysis(build: BuildSnapshot | null | undefined) {
   const report = evaluation.data;
   const reportIsCurrent = Boolean(
     !evaluation.isPlaceholderData &&
+    !evaluation.isError &&
+    !cost.isFetching &&
+    (!resources.isFetching || !resourceEstimate) &&
     report &&
     build &&
     report.build_id === build.id &&
@@ -114,6 +122,7 @@ export function useBuildAnalysis(build: BuildSnapshot | null | undefined) {
     resources:
       build &&
       !resources.isPlaceholderData &&
+      !resources.isError &&
       (resources.data?.status === 'unavailable' || resourceEstimate)
         ? resources.data
         : undefined,
@@ -128,7 +137,7 @@ export function useCompatibleOptions(
 ) {
   const { compatibility } = useData();
   return useQuery({
-    queryKey: ['options', ...buildKey(build), kind, role],
+    queryKey: ['options', ...buildQueryKey(build), kind, role],
     queryFn: () => compatibility.compatibleOptions(build!, kind, role),
     enabled: Boolean(build),
     placeholderData: keepPreviousData,

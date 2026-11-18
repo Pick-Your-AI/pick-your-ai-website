@@ -13,12 +13,15 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { BuildSnapshot, CatalogItem, ComponentKind } from '../contracts';
+import { validateContract, validatorsReady } from '../contracts';
 import { buildContext } from '../domain/activation';
 import { type BuildDraft, commit, createBuild, createDraft } from '../domain/build';
 import { affectedByChange, type InvalidationResult } from '../domain/invalidation';
 import { isDataError } from '../data/errors';
 import { useData } from './data-context';
+import { buildQueryKey } from './build-query-key';
 import { useCatalog, useGraph } from './queries';
 
 const CURRENT_KEY = 'pyai.currentBuildId';
@@ -31,6 +34,10 @@ export interface LastChange extends InvalidationResult {
 type SaveState = { status: 'idle' | 'saving' | 'saved' } | { status: 'error'; message: string };
 
 interface SaveSession {
+  /** Only an HTTP draft with no dispatched creation may coalesce edits at revision 1. */
+  preCreate: boolean;
+  /** Invalid current content is staged outside the immutable write queue. */
+  stagedError: Extract<SaveState, { status: 'error' }> | null;
   revision: number | null;
   queue: BuildDraft[];
   running: boolean;
@@ -78,6 +85,7 @@ function writeCurrentId(id: string) {
 }
 
 export function BuilderProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const { builds, catalog: catalogRepo } = useData();
   const catalog = useCatalog();
   const graph = useGraph();
@@ -95,12 +103,23 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
   const catalogById = catalog.byId;
   const snapshotId = catalog.data?.id;
 
-  const activate = useCallback((next: BuildDraft, revision: number | null) => {
-    saveSession.current = { revision, queue: [], running: false, conflict: false, error: null };
-    draftRef.current = next;
-    setDraft(next);
-    setLoadError(null);
-  }, []);
+  const activate = useCallback(
+    (next: BuildDraft, revision: number | null) => {
+      saveSession.current = {
+        preCreate: builds.storageKind === 'http' && revision === null,
+        stagedError: null,
+        revision,
+        queue: [],
+        running: false,
+        conflict: false,
+        error: null,
+      };
+      draftRef.current = next;
+      setDraft(next);
+      setLoadError(null);
+    },
+    [builds.storageKind],
+  );
 
   // Load the current draft once the catalog is known.
   useEffect(() => {
@@ -115,6 +134,10 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
     const fresh = () => createDraft(createBuild({ catalogSnapshotId: snapshotId }));
     void (async () => {
       try {
+        // Once an HTTP draft is editable, every edit can be gated synchronously without
+        // collapsing separate valid revisions while a lazy validator or a write is pending.
+        if (builds.storageKind === 'http') await validatorsReady;
+        if (cancelled || touched.current) return;
         const stored = await (id ? builds.get(id) : Promise.resolve(null));
         if (cancelled || touched.current) return;
         if (!id) activate(fresh(), null);
@@ -147,6 +170,18 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
     (next: BuildDraft) => {
       const session = saveSession.current;
       if (!session) return;
+      if (builds.storageKind === 'http') {
+        const result = validateContract('BuildSnapshot', next.build);
+        if (!result.ok) {
+          session.stagedError = { status: 'error', message: result.summary };
+          setSaveState(session.error ?? session.stagedError);
+          return;
+        }
+        session.stagedError = null;
+        // From this point the valid revision is immutable, even if an earlier write is
+        // still pending or this request fails. Only invalid, unqueued content may coalesce.
+        session.preCreate = false;
+      }
       session.queue.push(next);
       if (session.conflict) {
         setSaveState(session.error!);
@@ -165,6 +200,23 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
             await builds.save(pending, session.revision);
             session.revision = pending.build.revision;
             session.queue.shift();
+            if (builds.storageKind === 'http') {
+              // Pre-save reads may already have failed or still be resolving a missing revision.
+              // Reset cancels those reads before refreshing this exact acknowledged snapshot;
+              // later queued/staged content has its own key and is never reset here.
+              const key = buildQueryKey(pending.build);
+              for (const queryKey of [
+                ['cost', ...key],
+                ['resources', ...key],
+                ['evaluation', ...key],
+                ['options', ...key],
+                ['compat-kind', ...key],
+                ['compare', 'cost', ...key],
+                ['compare', 'evaluation', ...key],
+              ]) {
+                void queryClient.resetQueries({ queryKey });
+              }
+            }
             if (saveSession.current === session) writeCurrentId(pending.build.id);
           }
         } catch (e) {
@@ -176,12 +228,12 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
         } finally {
           session.running = false;
           if (saveSession.current === session) {
-            setSaveState(session.error ?? { status: 'saved' });
+            setSaveState(session.error ?? session.stagedError ?? { status: 'saved' });
           }
         }
       })();
     },
-    [builds],
+    [builds, queryClient],
   );
 
   const apply = useCallback<BuilderApi['apply']>(
@@ -189,7 +241,22 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
       const current = draftRef.current;
       if (!current) return;
       touched.current = true;
-      const next = commit(current, change, summary, changedKinds);
+      const committed = commit(current, change, summary, changedKinds);
+      const session = saveSession.current;
+      const replaceStaged = session?.preCreate || session?.stagedError;
+      const build = replaceStaged
+        ? { ...committed.build, revision: current.build.revision }
+        : committed.build;
+      const next: BuildDraft = replaceStaged
+        ? {
+            build,
+            revisions: [...current.revisions.slice(0, -1), build],
+            changes: [
+              ...current.changes.slice(0, -1),
+              { revision: build.revision, at: build.updated_at, summary, changedKinds },
+            ],
+          }
+        : committed;
       if (graph.data) {
         const before = buildContext(current.build, catalogById);
         const after = buildContext(next.build, catalogById);
@@ -213,6 +280,16 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
       touched.current = true;
       const request = ++navigation.current;
       void (async () => {
+        try {
+          if (builds.storageKind === 'http') await validatorsReady;
+        } catch (error) {
+          if (request !== navigation.current) return;
+          setLoadError(error ?? new Error('Could not load build validators.'));
+          setReady(true);
+          setSaveState({ status: 'error', message: 'Could not load build validators.' });
+          return;
+        }
+        if (request !== navigation.current) return;
         const catalogSnapshotId = snapshotId ?? (await catalogRepo.getSnapshot()).id;
         if (request !== navigation.current) return;
         const base = createBuild({ catalogSnapshotId, name });
@@ -239,12 +316,14 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
         void persist(next);
       })();
     },
-    [activate, persist, snapshotId, catalogRepo],
+    [activate, persist, snapshotId, catalogRepo, builds.storageKind],
   );
 
   const open = useCallback<BuilderApi['open']>(
     async (buildId) => {
       const request = ++navigation.current;
+      if (builds.storageKind === 'http') await validatorsReady;
+      if (request !== navigation.current) return;
       const stored = await builds.get(buildId);
       if (request !== navigation.current) return;
       touched.current = true;
