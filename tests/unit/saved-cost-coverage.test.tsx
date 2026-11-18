@@ -26,6 +26,8 @@ function mockBuilder(draft: BuildSnapshot | null) {
   vi.mocked(useBuilder).mockReturnValue({
     draft: draft ? createDraft(draft) : null,
     ready: true,
+    loadError: null,
+    retryLoad: vi.fn(),
     catalogById: new Map(),
     lastChange: null,
     saveState: { status: 'saved' },

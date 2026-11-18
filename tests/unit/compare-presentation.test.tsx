@@ -76,6 +76,8 @@ function show(path: string, omitFirstDescription = false, customLicenseCompariso
   vi.mocked(useBuilder).mockReturnValue({
     draft,
     ready: true,
+    loadError: null,
+    retryLoad: vi.fn(),
     catalogById: BY_ID,
     lastChange: null,
     saveState: { status: 'saved' },

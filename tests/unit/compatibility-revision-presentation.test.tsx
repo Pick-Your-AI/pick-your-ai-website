@@ -33,6 +33,8 @@ for (const detail of [false, true]) {
     vi.mocked(useBuilder).mockImplementation(() => ({
       draft: current,
       ready: true,
+      loadError: null,
+      retryLoad: vi.fn(),
       catalogById: BY_ID,
       lastChange: null,
       saveState: { status: 'saved' },

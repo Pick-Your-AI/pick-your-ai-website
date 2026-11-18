@@ -19,6 +19,8 @@ describe('component detail compatibility presentation', () => {
       vi.mocked(useBuilder).mockReturnValue({
         draft: createDraft(apiChat()),
         ready: true,
+        loadError: null,
+        retryLoad: vi.fn(),
         catalogById: BY_ID,
         lastChange: null,
         saveState: { status: 'saved' },

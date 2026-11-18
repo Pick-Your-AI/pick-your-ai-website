@@ -25,6 +25,8 @@ function apiFor(build: BuildSnapshot) {
   vi.mocked(useBuilder).mockReturnValue({
     draft: createDraft(build),
     ready: true,
+    loadError: null,
+    retryLoad: vi.fn(),
     catalogById: BY_ID,
     lastChange: null,
     saveState: { status: 'saved' },

@@ -41,6 +41,9 @@ interface SaveSession {
 interface BuilderApi {
   draft: BuildDraft | null;
   ready: boolean;
+  loadError: unknown | null;
+  /** Retry loading the remembered build after a recoverable failure. */
+  retryLoad: () => void;
   catalogById: ReadonlyMap<string, CatalogItem>;
   lastChange: LastChange | null;
   saveState: SaveState;
@@ -80,11 +83,13 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
   const graph = useGraph();
   const [draft, setDraft] = useState<BuildDraft | null>(null);
   const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState<unknown | null>(null);
   const [lastChange, setLastChange] = useState<LastChange | null>(null);
   const [saveState, setSaveState] = useState<SaveState>({ status: 'idle' });
   const draftRef = useRef<BuildDraft | null>(null);
   const saveSession = useRef<SaveSession | null>(null);
   const navigation = useRef(0);
+  const rememberedBuild = useRef<{ id: string | null } | null>(null);
   // Set once the user starts, opens or changes a build, so a slow initial load never overwrites it.
   const touched = useRef(false);
   const catalogById = catalog.byId;
@@ -94,33 +99,49 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
     saveSession.current = { revision, queue: [], running: false, conflict: false, error: null };
     draftRef.current = next;
     setDraft(next);
+    setLoadError(null);
   }, []);
 
   // Load the current draft once the catalog is known.
   useEffect(() => {
     if (!snapshotId || ready) return;
     let cancelled = false;
-    const id = readCurrentId();
+    const { id } = (rememberedBuild.current ??= { id: readCurrentId() });
     /*
      * The first visit opens an empty canvas, not a prefilled stack: a preselected demo stack would
      * read as a recommendation, and "unknown is not pass" applies to a build nobody has configured.
      * Templates remain an explicit choice on /templates.
      */
     const fresh = () => createDraft(createBuild({ catalogSnapshotId: snapshotId }));
-    (id ? builds.get(id) : Promise.reject(new Error('none')))
-      .then((stored) => {
+    void (async () => {
+      try {
+        const stored = await (id ? builds.get(id) : Promise.resolve(null));
         if (cancelled || touched.current) return;
-        activate(stored, stored.build.revision);
-      })
-      .catch(() => {
+        if (!id) activate(fresh(), null);
+        else if (stored) activate(stored, stored.build.revision);
+        else throw new Error('Could not read the current build.');
+      } catch (error) {
         if (cancelled || touched.current) return;
-        activate(fresh(), null);
-      })
-      .finally(() => !cancelled && setReady(true));
+        if (isDataError(error) && error.kind === 'not_found') {
+          activate(fresh(), null);
+        } else {
+          // Keep the remembered ID and leave the editor empty until this same build can load.
+          setLoadError(error ?? new Error('Could not load the current build.'));
+        }
+      } finally {
+        if (!cancelled) setReady(true);
+      }
+    })();
     return () => {
       cancelled = true;
     };
   }, [activate, builds, snapshotId, ready]);
+
+  const retryLoad = useCallback(() => {
+    if (loadError === null || touched.current) return;
+    setLoadError(null);
+    setReady(false);
+  }, [loadError]);
 
   const persist = useCallback(
     (next: BuildDraft) => {
@@ -229,6 +250,7 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
       touched.current = true;
       setLastChange(null);
       activate(stored, stored.build.revision);
+      setReady(true);
       writeCurrentId(buildId);
       setSaveState({ status: 'saved' });
     },
@@ -256,8 +278,32 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<BuilderApi>(
-    () => ({ draft, ready, catalogById, lastChange, saveState, apply, startNew, open, restore }),
-    [draft, ready, catalogById, lastChange, saveState, apply, startNew, open, restore],
+    () => ({
+      draft,
+      ready,
+      loadError,
+      retryLoad,
+      catalogById,
+      lastChange,
+      saveState,
+      apply,
+      startNew,
+      open,
+      restore,
+    }),
+    [
+      draft,
+      ready,
+      loadError,
+      retryLoad,
+      catalogById,
+      lastChange,
+      saveState,
+      apply,
+      startNew,
+      open,
+      restore,
+    ],
   );
   return <BuilderContext.Provider value={value}>{children}</BuilderContext.Provider>;
 }

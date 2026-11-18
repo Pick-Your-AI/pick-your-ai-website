@@ -17,6 +17,8 @@ async function showBuild(build: BuildSnapshot, current = false) {
   vi.mocked(useBuilder).mockReturnValue({
     draft: current ? createDraft(build) : null,
     ready: true,
+    loadError: null,
+    retryLoad: vi.fn(),
     catalogById: new Map(),
     lastChange: null,
     saveState: { status: 'saved' },
@@ -102,6 +104,8 @@ it.each(['loading', 'pricing failure', 'evaluation failure'])(
     vi.mocked(useBuilder).mockReturnValue({
       draft: null,
       ready: true,
+      loadError: null,
+      retryLoad: vi.fn(),
       catalogById: new Map(),
       lastChange: null,
       saveState: { status: 'saved' },

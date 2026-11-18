@@ -281,7 +281,8 @@ function EmptyRow({ kind, onChoose }: { kind: ComponentKind; onChoose: () => voi
 export default function BuilderPage() {
   const navigate = useNavigate();
   const toast = useToast();
-  const { draft, ready, apply, startNew, restore, saveState, lastChange } = useBuilder();
+  const { draft, ready, loadError, retryLoad, apply, startNew, restore, saveState, lastChange } =
+    useBuilder();
   const { mode } = useData();
   const catalog = useCatalog();
   const pricebook = usePricebook(draft?.build.locks.pricebook_id);
@@ -312,6 +313,14 @@ export default function BuilderPage() {
       <div className="app-page parts-page">
         <div className="container">
           <ErrorState error={catalog.error} onRetry={() => void catalog.refetch()} />
+        </div>
+      </div>
+    );
+  if (loadError != null)
+    return (
+      <div className="app-page parts-page">
+        <div className="container">
+          <ErrorState error={loadError} onRetry={retryLoad} />
         </div>
       </div>
     );

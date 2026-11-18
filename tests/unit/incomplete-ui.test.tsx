@@ -17,6 +17,8 @@ function show(build = buildWith([]), revisions = [build]) {
   vi.mocked(useBuilder).mockReturnValue({
     draft: { ...createDraft(build), revisions },
     ready: true,
+    loadError: null,
+    retryLoad: vi.fn(),
     catalogById: BY_ID,
     lastChange: null,
     saveState: { status: 'saved' },

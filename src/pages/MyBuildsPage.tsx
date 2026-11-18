@@ -6,7 +6,7 @@
  * step (never a native confirm), records that cannot be read are explained rather than hidden, and
  * export is blocked with a reason when the build is not yet a contract-valid snapshot.
  */
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import type { BuildSnapshot, CostEstimate } from '../contracts';
@@ -71,7 +71,7 @@ const formatDate = (iso: string) =>
 export default function MyBuildsPage() {
   const { builds, mode, pricing, compatibility } = useData();
   const storage = builds.storageKind;
-  const { draft, open, startNew } = useBuilder();
+  const { draft, open, startNew, loadError, retryLoad } = useBuilder();
   const navigate = useNavigate();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -87,34 +87,53 @@ export default function MyBuildsPage() {
   );
 
   const summaries = list.data ?? [];
-  const detailsKey = summaries.map((s) => `${s.id}@${s.revision}`).join('|');
-
-  // One batch load of the saved builds so the library can show real estimates and sort by cost.
-  const details = useQuery({
-    queryKey: ['builds', 'details', detailsKey],
-    enabled: summaries.length > 0,
-    queryFn: async () => {
-      const map = new Map<string, BuildDetail>();
-      await Promise.all(
-        summaries.map(async (summary) => {
-          if (isUnreadable(summary)) return;
-          try {
-            const stored = await builds.get(summary.id);
-            const cost = await pricing.estimate(stored.build);
-            const report = await compatibility.evaluate(stored.build, { costEstimate: cost });
-            map.set(summary.id, {
-              build: stored.build,
-              cost,
-              conflicts: report.summary.failed,
-              unknown: report.summary.unknown,
-            });
-          } catch {
-            /* Left out of the map: the card falls back to the summary and stays deletable. */
+  // The list can be a browser index. Read each head independently so its current metadata is
+  // available even while another build or its analysis is still loading.
+  const heads = useQueries({
+    queries: summaries.map((summary) => ({
+      queryKey: ['builds', 'head', summary.id, summary.revision],
+      enabled: !isUnreadable(summary),
+      queryFn: async () => (await builds.get(summary.id)).build,
+    })),
+  });
+  const details = useQueries({
+    queries: summaries.map((summary, index) => {
+      const head = heads[index];
+      const build = head?.data;
+      return {
+        queryKey: ['builds', 'details', summary.id, build?.revision],
+        enabled: Boolean(build) && !head?.isError,
+        queryFn: async (): Promise<BuildDetail> => {
+          if (!build) throw new Error('Saved build has not been read.');
+          const cost = await pricing.estimate(build);
+          const report = await compatibility.evaluate(build, { costEstimate: cost });
+          return {
+            build,
+            cost,
+            conflicts: report.summary.failed,
+            unknown: report.summary.unknown,
+          };
+        },
+      };
+    }),
+  });
+  const cards = summaries.map((summary, index) => {
+    const head = heads[index];
+    const build = head?.data;
+    return {
+      summary: build
+        ? {
+            id: summary.id,
+            name: build.name,
+            revision: build.revision,
+            updatedAt: build.updated_at,
+            selectionCount: build.selections.length,
           }
-        }),
-      );
-      return map;
-    },
+        : summary,
+      build,
+      detail: !head?.isError && !details[index]?.isError ? details[index]?.data : undefined,
+      refreshFailed: Boolean(head?.isError),
+    };
   });
 
   // The draft is persisted asynchronously; refresh the library whenever the current build changes.
@@ -185,12 +204,12 @@ export default function MyBuildsPage() {
     );
   };
 
-  const sorted = [...summaries].sort((a, b) => {
-    if (sort === 'name') return a.name.localeCompare(b.name);
+  const sorted = [...cards].sort((a, b) => {
+    if (sort === 'name') return a.summary.name.localeCompare(b.summary.name);
     if (sort === 'cost') {
-      const ca = details.data?.get(a.id)?.cost;
-      const cb = details.data?.get(b.id)?.cost;
-      if (!ca && !cb) return b.updatedAt.localeCompare(a.updatedAt);
+      const ca = a.detail?.cost;
+      const cb = b.detail?.cost;
+      if (!ca && !cb) return b.summary.updatedAt.localeCompare(a.summary.updatedAt);
       if (!ca) return 1;
       if (!cb) return -1;
       // Rank by coverage first: a lower bound is not "cheaper" than a complete total.
@@ -200,7 +219,7 @@ export default function MyBuildsPage() {
       if (byCoverage) return byCoverage;
       return Number(ca.total.amount) - Number(cb.total.amount);
     }
-    return b.updatedAt.localeCompare(a.updatedAt);
+    return b.summary.updatedAt.localeCompare(a.summary.updatedAt);
   });
 
   const workingTotal = analysis.costIsCurrent ? analysis.cost : undefined;
@@ -313,7 +332,11 @@ export default function MyBuildsPage() {
         </div>
 
         {!draft ? (
-          <Loading label="Loading your working build…" />
+          loadError != null ? (
+            <ErrorState error={loadError} onRetry={retryLoad} />
+          ) : (
+            <Loading label="Loading your working build…" />
+          )
         ) : (
           <div className="working-card">
             <div className="working-symbol">
@@ -392,11 +415,13 @@ export default function MyBuildsPage() {
               </button>
             </div>
           ) : (
-            sorted.map((summary) => (
+            sorted.map(({ summary, build, detail, refreshFailed }) => (
               <SavedCard
                 key={summary.id}
                 summary={summary}
-                detail={details.data?.get(summary.id)}
+                build={build}
+                detail={detail}
+                refreshFailed={refreshFailed}
                 current={summary.id === draft?.build.id}
                 storage={storage}
                 onOpen={async () => {
@@ -424,7 +449,9 @@ export default function MyBuildsPage() {
 
 function SavedCard({
   summary,
+  build,
   detail,
+  refreshFailed,
   current,
   storage,
   onOpen,
@@ -433,7 +460,9 @@ function SavedCard({
   onDelete,
 }: {
   summary: SavedBuildSummary;
+  build: BuildSnapshot | undefined;
   detail: BuildDetail | undefined;
+  refreshFailed: boolean;
   current: boolean;
   storage: BuildRepository['storageKind'];
   onOpen: () => Promise<void>;
@@ -450,9 +479,7 @@ function SavedCard({
   const label = unreadable ? 'this unreadable build' : `“${summary.name}”`;
   const removalLabel = storage === 'http' ? 'Forget' : storage === 'local' ? 'Delete' : 'Remove';
   const exportProblem =
-    detail && detail.build.selections.length < 2
-      ? 'Add at least 2 components before exporting.'
-      : null;
+    build && build.selections.length < 2 ? 'Add at least 2 components before exporting.' : null;
 
   useEffect(() => {
     if (confirming) cancelRef.current?.focus();
@@ -492,7 +519,7 @@ function SavedCard({
           </p>
         ) : (
           <p>
-            Edited {formatDate(summary.updatedAt)} ·{' '}
+            Edited {formatDate(summary.updatedAt)} · Revision {summary.revision} ·{' '}
             {layers === null
               ? `${summary.selectionCount} selection${summary.selectionCount === 1 ? '' : 's'}`
               : `${layers} of ${LAYERS.length} layers configured`}
@@ -559,6 +586,13 @@ function SavedCard({
           <Icon name="x" />
         </button>
       </div>
+
+      {refreshFailed ? (
+        <p className="notice-error" role="alert">
+          Could not refresh this saved build. Showing its last known details; current analysis is
+          unavailable. You can try opening it again or {removalLabel.toLowerCase()} its entry.
+        </p>
+      ) : null}
 
       {exportProblem ? <p className="hint-text">JSON export: {exportProblem}</p> : null}
 
