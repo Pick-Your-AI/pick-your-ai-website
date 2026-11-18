@@ -111,7 +111,9 @@ describe('current report presentation', () => {
       holding = true;
       evaluateRequest.mockClear();
       if (change === 'replacement evidence') {
-        act(() => client.setQueryData(['cost', current.id, current.revision], currentCost));
+        act(() =>
+          client.setQueriesData({ queryKey: ['cost', current.id, current.revision] }, currentCost),
+        );
       } else {
         showBuild(current);
         view.rerender(<BuilderPage />);

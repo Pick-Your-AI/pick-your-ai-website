@@ -31,6 +31,7 @@ import { KIND_LABELS, TIERS, TIER_LABELS, kindsInTier, labelInSentence } from '.
 import { addOrReplace } from '../domain/build';
 import { evidenceDateLabel, itemFreshness } from '../domain/freshness';
 import { useBuilder } from '../app/builder-context';
+import { buildQueryKey } from '../app/build-query-key';
 import { useData } from '../app/data-context';
 import { useCatalog, useCompatibleOptions, usePricebook } from '../app/queries';
 import { BILLING_LABELS, idToSlug, slugToId } from '../lib/catalog-view';
@@ -755,15 +756,15 @@ function BadParams({ children }: { children: ReactNode }) {
   );
 }
 
-/** Evaluation and cost for one exact build revision (no evidence passed: like-for-like on both sides). */
+/** Evaluation and cost for one exact snapshot (no evidence passed: like-for-like on both sides). */
 function useSideAnalysis(build: BuildSnapshot) {
   const { compatibility, pricing } = useData();
   const evaluation = useQuery({
-    queryKey: ['compare', 'evaluation', build.id, build.revision],
+    queryKey: ['compare', 'evaluation', ...buildQueryKey(build)],
     queryFn: () => compatibility.evaluate(build),
   });
   const cost = useQuery({
-    queryKey: ['compare', 'cost', build.id, build.revision],
+    queryKey: ['compare', 'cost', ...buildQueryKey(build)],
     queryFn: () => pricing.estimate(build),
   });
   return { evaluation, cost };

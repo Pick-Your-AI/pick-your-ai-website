@@ -1,12 +1,13 @@
 /*
- * TanStack Query hooks. Every key that depends on a build includes (build id, revision), so results
- * for another build or revision are never shown as current. Previous cost/report data is kept as
- * an explicitly flagged stale placeholder; capacity evidence is hidden until it is current.
+ * TanStack Query hooks. Build-dependent keys include id, revision and snapshot content, so a
+ * different preview payload cannot reuse another build's results. Previous cost/report data is
+ * kept as an explicitly flagged stale placeholder; capacity evidence awaits current results.
  */
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import type { BuildSnapshot, CatalogItem, ComponentKind } from '../contracts';
 import { hasConsistentCostCurrency } from '../domain/cost-evidence';
+import { buildQueryKey } from './build-query-key';
 import { useData } from './data-context';
 
 export function useCatalog() {
@@ -50,22 +51,19 @@ export function usePricebook(id?: string) {
   });
 }
 
-const buildKey = (b: BuildSnapshot | null | undefined) =>
-  [b?.id ?? 'none', b?.revision ?? 0] as const;
-
-/** Cost → resources → evaluation for the exact build revision. */
+/** Cost → resources → evaluation for the exact build snapshot. */
 export function useBuildAnalysis(build: BuildSnapshot | null | undefined) {
   const data = useData();
   const enabled = Boolean(build);
   const cost = useQuery({
-    queryKey: ['cost', ...buildKey(build)],
+    queryKey: ['cost', ...buildQueryKey(build)],
     queryFn: () => data.pricing.estimate(build!),
     enabled,
     placeholderData: keepPreviousData,
     retry: 1,
   });
   const resources = useQuery({
-    queryKey: ['resources', ...buildKey(build)],
+    queryKey: ['resources', ...buildQueryKey(build)],
     queryFn: () => data.resources.estimate(build!),
     enabled,
     placeholderData: keepPreviousData,
@@ -93,7 +91,7 @@ export function useBuildAnalysis(build: BuildSnapshot | null | undefined) {
   const evaluation = useQuery({
     queryKey: [
       'evaluation',
-      ...buildKey(build),
+      ...buildQueryKey(build),
       // Local preview estimates can retain an ID while expiry changes their contents.
       // Key by admitted evidence so replaced cost/capacity data cannot reuse an old verdict.
       costReady ? cost.data : null,
@@ -145,7 +143,7 @@ export function useCompatibleOptions(
 ) {
   const { compatibility } = useData();
   return useQuery({
-    queryKey: ['options', ...buildKey(build), kind, role],
+    queryKey: ['options', ...buildQueryKey(build), kind, role],
     queryFn: () => compatibility.compatibleOptions(build!, kind, role),
     enabled: Boolean(build),
     placeholderData: keepPreviousData,

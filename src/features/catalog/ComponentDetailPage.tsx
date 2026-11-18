@@ -75,12 +75,13 @@ export default function ComponentDetailPage() {
   const verification = strongestVerification(item);
   const inStack = Boolean(build?.selections.some((s) => s.catalog_item_id === item.id));
 
-  const verdict = options.isPlaceholderData
-    ? undefined
-    : options.data?.find(
-        (option) =>
-          option.catalog_item_id === item.id && option.catalog_item_version === item.version,
-      );
+  const verdict =
+    options.isPlaceholderData || options.isError
+      ? undefined
+      : options.data?.find(
+          (option) =>
+            option.catalog_item_id === item.id && option.catalog_item_version === item.version,
+        );
   const conflicts = verdict?.verdict === 'incompatible' ? Math.max(verdict.rule_ids.length, 1) : 0;
   const unknown = !verdict || verdict.verdict === 'unknown';
 
@@ -146,8 +147,9 @@ export default function ComponentDetailPage() {
     },
     {
       label: 'Demo compatibility',
-      value:
-        conflicts > 0
+      value: options.isError
+        ? 'Unavailable — compatibility could not be refreshed'
+        : conflicts > 0
           ? `${conflicts} detected conflict${conflicts === 1 ? '' : 's'} in current demo choices`
           : unknown
             ? 'Unknown — the demo rules cannot decide this item yet'
@@ -186,6 +188,13 @@ export default function ComponentDetailPage() {
               </div>
             </div>
             <h2 className="detail-subhead">At a glance</h2>
+            {options.isError ? (
+              <ErrorState
+                title="Compatibility unavailable"
+                error={options.error}
+                onRetry={() => void options.refetch()}
+              />
+            ) : null}
             <div className="detail-table">
               {glance.map((row) => (
                 <div key={row.label}>
@@ -269,11 +278,13 @@ export default function ComponentDetailPage() {
               </Link>
               <div className={`status-bar${conflicts ? ' issue' : unknown ? ' neutral' : ''}`}>
                 <Icon name={conflicts ? 'x-circle' : unknown ? 'alert' : 'check-circle'} />
-                {conflicts
-                  ? `${conflicts} demo conflict${conflicts === 1 ? '' : 's'} to review`
-                  : unknown
-                    ? 'Unknown in demo rules — not treated as compatible'
-                    : 'No conflicts in demo rules'}
+                {options.isError
+                  ? 'Compatibility unavailable — retry the check'
+                  : conflicts
+                    ? `${conflicts} demo conflict${conflicts === 1 ? '' : 's'} to review`
+                    : unknown
+                      ? 'Unknown in demo rules — not treated as compatible'
+                      : 'No conflicts in demo rules'}
               </div>
             </div>
             <div className="detail-related">

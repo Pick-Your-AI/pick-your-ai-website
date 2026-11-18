@@ -15,7 +15,7 @@ Vite 8 · React 19 · TypeScript 6 (strict, `noUncheckedIndexedAccess`) · plain
 | Layer             | Path                                                     | Responsibility                                                                                                                                                                        |
 | ----------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Presentation      | `src/pages`, `src/features/*`, `src/components`          | Pages, builder UI, catalog UI, primitives (`status.tsx`, `feedback.tsx`, `layout.tsx`, `icon.tsx`) and the view helpers `lib/layers.ts`, `lib/item-cost.ts`, `lib/compat.ts`          |
-| Application       | `src/app`                                                | Routing, `BuilderProvider` (current draft, commit, persistence, invalidation), TanStack Query hooks keyed by build id and revision                                                    |
+| Application       | `src/app`                                                | Routing, `BuilderProvider` (current draft, commit, persistence, invalidation), TanStack Query hooks keyed by build id, revision and snapshot content                                  |
 | Domain / contract | `src/contracts`, `src/domain`                            | Generated types and validators, registry, baseline graph and ruleset, evaluator (port of `reference/evaluate.py`), activation, invalidation, build operations, cost, freshness, share |
 | Data access       | `src/data`                                               | Provider interfaces (`types.ts`), HTTP client and providers, local build repository, configuration (`config.ts`), `DataError`                                                         |
 | Fixtures          | `src/data/fixture`                                       | Synthetic catalog, pricebook, starter stacks, fixture providers                                                                                                                       |
@@ -35,14 +35,14 @@ user action (Add / Replace / Configure / Remove / Objectives)
       BuildRepository.save(draft, expectedRevision)  (compare-and-swap; 409 on stale writer)
   → React re-render with the new revision
       useBuildAnalysis(build):
-        ['cost', id, rev]       PricingProvider.estimate
-        ['resources', id, rev]  ResourceEstimateProvider.estimate
-        ['evaluation', id, rev, costEvidence, resourceEvidence] CompatibilityEvaluator.evaluate(build, {cost, resources})
+        ['cost', id, rev, snapshot]       PricingProvider.estimate
+        ['resources', id, rev, snapshot]  ResourceEstimateProvider.estimate
+        ['evaluation', id, rev, snapshot, costEvidence, resourceEvidence] CompatibilityEvaluator.evaluate(build, {cost, resources})
       prior-evaluation metadata is labelled stale; findings, verdicts, counts and readiness await the current report
   → current-report aria-live announcement: "Revision N evaluated: X failing, Y unknown"
 ```
 
-Build-derived results are keyed by `(build id, revision)`, and evaluation also includes the admitted cost and resource evidence content. Replacement evidence can reuse an ID, so content changes still trigger reevaluation. The query layer excludes evidence from another build or revision, cost evidence from a different locked or configured default pricebook, and retained data from failed refreshes. Reports remain stale while admitted evidence refreshes. The builder withholds previous findings, summary outcomes, counts, readiness and screen-reader announcements until the current report is available.
+Build-derived results are keyed by `(build id, revision, snapshot content)`, and evaluation also includes the admitted cost and resource evidence content. Imported previews can declare the same id and revision while containing different selections, locks or objectives; their content must therefore distinguish the queries. Structurally equal snapshots share a key, regardless of object property order. This client cache identity does not establish a stored server snapshot or alter the frozen API contract. Replacement evidence can reuse an ID, so content changes still trigger reevaluation. The query layer excludes evidence from another build or revision, cost evidence from a different locked or configured default pricebook, and retained data from failed refreshes. Reports remain stale while admitted evidence refreshes. The builder withholds previous findings, summary outcomes, counts, readiness and screen-reader announcements until the current report is available.
 
 ## Contracts and versioning
 
@@ -56,7 +56,7 @@ The website does **not** own compatibility policy. `src/domain/evaluator.ts` int
 
 ## State management
 
-- **Server/data state** lives in TanStack Query. Catalog, graph, ruleset and pricebook use `staleTime: Infinity` because they are immutable. Build-derived queries are keyed by revision.
+- **Server/data state** lives in TanStack Query. Catalog, graph, ruleset and pricebook use `staleTime: Infinity` because they are immutable. Build-derived queries include the full snapshot content as well as id and revision.
 - **Current draft** lives in `BuilderProvider` (React state). The `pyai.currentBuildId` key points at the draft in `LocalBuildRepository` (`pyai.build.<id>`, `pyai.builds.index`).
 - **URL state** holds selection-page filters, sort, compatibility bucket and compare list (query string), compare targets (`?ids=`, `?builds=`, `?revisions=`) and share payloads (`/shared#b1.<base64url>`, never sent to the server).
 - **Theme** uses `pyai.theme`, applied before first paint by `public/theme-init.js`.

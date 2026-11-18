@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router';
 import type { BuildSnapshot, CatalogItem } from '../contracts';
 import { kindDef } from '../contracts';
 import { useBuilder } from '../app/builder-context';
+import { buildQueryKey } from '../app/build-query-key';
 import { useData } from '../app/data-context';
 import { useCatalog } from '../app/queries';
 import { STARTERS, type Starter } from '../data/fixture/starters';
@@ -52,7 +53,7 @@ function TemplateCard({ starter, index }: { starter: Starter; index: number }) {
   const build = useMemo(() => starter.build(), [starter]);
   // The real preview estimator, not a hand-summed list of card prices.
   const cost = useQuery({
-    queryKey: ['cost', build.id, build.revision],
+    queryKey: ['cost', ...buildQueryKey(build)],
     queryFn: () => pricing.estimate(build),
     staleTime: Infinity,
   });
