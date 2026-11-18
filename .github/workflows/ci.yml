@@ -81,6 +81,38 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  static-receiving:
+    name: synthetic static receiving browser tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Build static client for intercepted synthetic responses
+        run: npm run build
+        env:
+          VITE_DATA_MODE: http
+          VITE_API_SURFACE: static
+          VITE_API_BASE_URL: /v1
+          VITE_CATALOG_SNAPSHOT: catalog.demo.1
+          VITE_PRICEBOOK_ID: prices.demo.1
+          VITE_BUILD_STORE: local
+      - run: node scripts/check-dist.mjs
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e -- --config=playwright.static.config.ts
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: static-receiving-report
+          path: playwright-report/
+          retention-days: 7
+
   e2e:
     name: browser smoke & accessibility
     needs: build
@@ -174,7 +206,8 @@ jobs:
   ci-required:
     name: ci-required
     if: always()
-    needs: [quality, unit, build, e2e, visual-performance, audit, dependency-review]
+    needs:
+      [quality, unit, build, static-receiving, e2e, visual-performance, audit, dependency-review]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:

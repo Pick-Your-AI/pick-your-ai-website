@@ -19,8 +19,10 @@
   "include": [
     "vite.config.ts",
     "playwright.config.ts",
+    "playwright.static.config.ts",
     "scripts/**/*.ts",
     "tests/e2e/**/*.ts",
+    "tests/e2e-static/**/*.ts",
     "playwright.visual.config.ts",
     "tests/visual/**/*.ts"
   ]

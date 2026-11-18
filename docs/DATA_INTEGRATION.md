@@ -72,7 +72,7 @@ Set these at build time (Vite `VITE_*` variables, baked into the static bundle):
 4. ☐ Validate offline: fetch each artifact and check it with `validateContract` (as `tests/unit/contracts.test.ts` does). Reject anything with fabricated fields.
 5. ☐ In the `build` job of `.github/workflows/ci.yml`, change `VITE_DATA_MODE: fixture` to `http` and add `VITE_API_BASE_URL` and `VITE_CATALOG_SNAPSHOT`. Use repository variables for these, not secrets: they end up in the public bundle.
 6. ☐ Request the CSP `connect-src` change if the API is on another origin.
-7. ☐ Run the Playwright suite against `http` mode with a recorded API, as in `tests/unit/providers.test.ts › fakeApi`.
+7. ☐ Run the dedicated static receiving browser suite described below, then validate the accepted artifacts with recorded responses and the receiving-owner checklist. The ordinary fixture browser suite does not establish HTTP-mode acceptance.
 8. ☐ Real items must carry `verification_status` and `source_uri` provenance. `isSyntheticCatalog` uses only the explicit synthetic tag; real sourced records are labelled sourced pilot records, never synthetic simply because they remain unverified.
 9. ☐ Update `docs/RESEARCH_MAPPING.md` and `CHANGELOG.md`.
 
@@ -83,6 +83,22 @@ Set these at build time (Vite `VITE_*` variables, baked into the static bundle):
 - `src/data/fixture/starters.ts` holds four demo starter stacks, labelled "(demo)".
 - Fixtures go through the same validators as live responses (`assertContract`), and tests validate them against the schemas.
 - The upstream `contracts/v1/examples/*` are used only in tests, as golden references.
+
+### Synthetic static receiving browser checks
+
+`tests/e2e-static/static-receiving.spec.ts` exercises the built HTTP/static client on desktop and mobile. It intercepts same-origin API reads with the explicitly synthetic demo catalog and pricebook plus the frozen baseline graph and ruleset. Unknown paths, mutations and external requests are rejected. It does not copy candidate artifacts into deployable assets or contact a provider.
+
+Build-time configuration selects the provider; setting these variables only when starting Playwright cannot change an existing bundle:
+
+```sh
+VITE_DATA_MODE=http VITE_API_SURFACE=static VITE_API_BASE_URL=/v1 \
+  VITE_CATALOG_SNAPSHOT=catalog.demo.1 VITE_PRICEBOOK_ID=prices.demo.1 \
+  VITE_BUILD_STORE=local VITE_ART_DIRECTION= npm run build
+node scripts/check-dist.mjs
+CI=1 npm run test:e2e -- --config=playwright.static.config.ts
+```
+
+The `static-receiving` CI job runs this configuration and is required by `ci-required`. Browser success demonstrates synthetic client receiving behavior only. Source rights, accepted immutable real artifacts, pricing eligibility, service behavior and production receiving acceptance remain separate gates. The ordinary fixture browser and visual suites retain their existing configuration.
 
 ## 6. Contract-change workflow
 

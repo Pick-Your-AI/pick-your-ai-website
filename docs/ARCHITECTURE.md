@@ -52,7 +52,7 @@ Build-derived results are keyed by `(build id, revision)`, and evaluation also i
 
 ## Compatibility integration boundary
 
-The website does **not** own compatibility policy. `src/domain/evaluator.ts` interprets the published `Ruleset` using the contract's three-valued semantics, and `tests/unit/evaluator-parity.test.ts` proves it matches the research reference interpreter: it reproduces `examples/evaluation-report.json` and matches `evaluate.py` output on 7 scenarios, running Python in CI. In `http` mode with the `v1` API surface, the API's `POST /builds/{id}/evaluate` result is used instead. The read-only `static` surface fetches the locked graph and ruleset and evaluates them locally; it does not create a resource-estimate service. The website adds presentation: lettering, grouping, wording, and "compatible-options" buckets, which run the same ruleset on hypothetical substitutions.
+The website does **not** own compatibility policy. `src/domain/evaluator.ts` interprets the published `Ruleset` using the contract's three-valued semantics, and `tests/unit/evaluator-parity.test.ts` proves it matches the research reference interpreter: it reproduces `examples/evaluation-report.json` and matches `evaluate.py` output on 7 scenarios, running Python in CI. In `http` mode with the `full` API surface, the API's `POST /builds/{id}/evaluate` result is used instead. The read-only `static` surface fetches the locked graph and ruleset and evaluates them locally; it does not create a resource-estimate service. The website adds presentation: lettering, grouping, wording, and "compatible-options" buckets, which run the same ruleset on hypothetical substitutions.
 
 ## State management
 
