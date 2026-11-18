@@ -218,7 +218,7 @@ export function PartList({
 
   const rows: Row[] = pool.map((item) => ({
     item,
-    verdict: verdictFor(compat.data, item.kind, item.id),
+    verdict: verdictFor(compat.data, item.kind, item.id, item.version),
     price: itemPrice(
       item,
       build,

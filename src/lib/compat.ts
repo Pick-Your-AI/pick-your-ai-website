@@ -15,7 +15,9 @@ import { useData } from '../app/data-context';
 export type CompatOption = CompatibleOption;
 export type VerdictMap = ReadonlyMap<string, CompatOption>;
 
-export const verdictKey = (kind: ComponentKind, itemId: string) => `${kind}|${itemId}`;
+// Tuple encoding keeps arbitrary response strings distinct, including separators in ids/versions.
+export const verdictKey = (kind: ComponentKind, itemId: string, itemVersion: string) =>
+  JSON.stringify([kind, itemId, itemVersion]);
 
 /** Independent kind queries retain successful verdicts while failed kinds can retry. */
 export function useCompatByKind(
@@ -42,7 +44,10 @@ export function useCompatByKind(
   const map = new Map<string, CompatOption>();
   queries.forEach((query, index) => {
     for (const option of query.data ?? []) {
-      map.set(verdictKey(unique[index]!, option.catalog_item_id), option);
+      map.set(
+        verdictKey(unique[index]!, option.catalog_item_id, option.catalog_item_version),
+        option,
+      );
     }
   });
   const failed = queries.filter((query) => query.isError);
@@ -55,12 +60,22 @@ export function useCompatByKind(
   };
 }
 
-/** Verdict for one item, defaulting to `unknown` while the evaluation is in flight. */
-export function verdictFor(map: VerdictMap | undefined, kind: ComponentKind, itemId: string) {
-  return map?.get(verdictKey(kind, itemId))?.verdict ?? 'unknown';
+/** Verdict for one exact item version, defaulting to `unknown` while the evaluation is in flight. */
+export function verdictFor(
+  map: VerdictMap | undefined,
+  kind: ComponentKind,
+  itemId: string,
+  itemVersion: string,
+) {
+  return optionFor(map, kind, itemId, itemVersion)?.verdict ?? 'unknown';
 }
 
 /** Full option (verdict + failing rule ids) for one item, if it has been evaluated. */
-export function optionFor(map: VerdictMap | undefined, kind: ComponentKind, itemId: string) {
-  return map?.get(verdictKey(kind, itemId));
+export function optionFor(
+  map: VerdictMap | undefined,
+  kind: ComponentKind,
+  itemId: string,
+  itemVersion: string,
+) {
+  return map?.get(verdictKey(kind, itemId, itemVersion));
 }

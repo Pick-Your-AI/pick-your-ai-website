@@ -242,3 +242,37 @@ it('prices replacement defaults instead of another slot using the same item', as
     instances: 3,
   });
 });
+
+it.each(['compatible', 'incompatible'] as const)(
+  'keeps a different version Unknown instead of applying its %s verdict',
+  async (verdict) => {
+    const exact = item('model', 'aurora-large');
+    const otherVersion = item('model', 'aurora-mini');
+    show(apiChat(), '/catalog/model?show=all', 'model', (providers) => {
+      vi.spyOn(providers.compatibility, 'compatibleOptions').mockResolvedValue([
+        {
+          catalog_item_id: exact.id,
+          catalog_item_version: exact.version,
+          verdict: 'compatible',
+          rule_ids: [],
+        },
+        {
+          catalog_item_id: otherVersion.id,
+          catalog_item_version: '0.9.0',
+          verdict,
+          rule_ids: ['rule.old-version'],
+        },
+      ]);
+    });
+    const exactRow = await screen.findByRole('row', { name: new RegExp(exact.name) });
+    await waitFor(() => expect(within(exactRow).getByText('Compatible')).toBeInTheDocument());
+    const otherRow = screen.getByRole('row', { name: new RegExp(otherVersion.name) });
+    expect(within(otherRow).getByText('Unknown', { exact: true })).toBeInTheDocument();
+    expect(otherRow).not.toHaveClass('is-blocked');
+    await userEvent.click(screen.getByRole('checkbox', { name: /Unknown/ }));
+    expect(
+      screen.queryByRole('row', { name: new RegExp(otherVersion.name) }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('row', { name: new RegExp(exact.name) })).toBeInTheDocument();
+  },
+);

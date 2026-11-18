@@ -40,6 +40,7 @@ import type {
   StoredBuild,
 } from '../types';
 import { estimateCost } from '../../domain/cost';
+import { hasConsistentCostCurrency } from '../../domain/cost-evidence';
 import { evaluateBuild } from '../../domain/evaluator';
 import { ContractHttpClient, type FetchLike, idempotencyKey } from './client';
 
@@ -259,6 +260,13 @@ export class HttpPricingProvider implements PricingProvider {
         { contract: 'CostEstimate' },
       );
     }
+    if (!hasConsistentCostCurrency(value)) {
+      throw new DataError(
+        'malformed',
+        'Cost estimate money currencies do not match its declared currency.',
+        { contract: 'CostEstimate' },
+      );
+    }
     return value;
   }
 }
@@ -398,7 +406,9 @@ export class StaticMirrorCompatibilityEvaluator implements CompatibilityEvaluato
     const pricebookId = build.locks.pricebook_id ?? this.catalog.defaultPricebookId;
     // A quote from another book cannot establish a budget result for this locked build.
     const costEstimate =
-      pricebookId && evidence.costEstimate?.pricebook_id === pricebookId
+      pricebookId &&
+      evidence.costEstimate?.pricebook_id === pricebookId &&
+      hasConsistentCostCurrency(evidence.costEstimate)
         ? evidence.costEstimate
         : null;
     const report = evaluateBuild({

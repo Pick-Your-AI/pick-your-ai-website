@@ -6,6 +6,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import type { BuildSnapshot, CatalogItem, ComponentKind } from '../contracts';
+import { hasConsistentCostCurrency } from '../domain/cost-evidence';
 import { useData } from './data-context';
 
 export function useCatalog() {
@@ -78,7 +79,8 @@ export function useBuildAnalysis(build: BuildSnapshot | null | undefined) {
     cost.data?.build_id === build.id &&
     cost.data.build_revision === build.revision &&
     Boolean(pricebookId) &&
-    cost.data.pricebook_id === pricebookId;
+    cost.data.pricebook_id === pricebookId &&
+    hasConsistentCostCurrency(cost.data);
   const resourceEstimate =
     build &&
     !resources.isError &&

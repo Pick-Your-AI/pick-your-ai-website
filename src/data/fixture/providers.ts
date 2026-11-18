@@ -15,6 +15,7 @@ import type {
 } from '../../contracts';
 import { BASELINE_GRAPH, BASELINE_RULESET, assertContract, validatorsReady } from '../../contracts';
 import { estimateCost } from '../../domain/cost';
+import { hasConsistentCostCurrency } from '../../domain/cost-evidence';
 import { evaluateBuild } from '../../domain/evaluator';
 import { DataError } from '../errors';
 import { LocalBuildRepository } from '../local-builds';
@@ -108,7 +109,10 @@ export class LocalCompatibilityEvaluator implements CompatibilityEvaluator {
       catalog: snapshot,
       ruleset,
       resourceEstimate: evidence.resourceEstimate ?? null,
-      costEstimate: evidence.costEstimate ?? null,
+      costEstimate:
+        evidence.costEstimate && hasConsistentCostCurrency(evidence.costEstimate)
+          ? evidence.costEstimate
+          : null,
       evaluatedAt: this.now(),
     });
     return assertContract('EvaluationReport', report);

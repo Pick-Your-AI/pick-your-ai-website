@@ -77,7 +77,10 @@ export default function ComponentDetailPage() {
 
   const verdict = options.isPlaceholderData
     ? undefined
-    : options.data?.find((option) => option.catalog_item_id === item.id);
+    : options.data?.find(
+        (option) =>
+          option.catalog_item_id === item.id && option.catalog_item_version === item.version,
+      );
   const conflicts = verdict?.verdict === 'incompatible' ? Math.max(verdict.rule_ids.length, 1) : 0;
   const unknown = !verdict || verdict.verdict === 'unknown';
 
