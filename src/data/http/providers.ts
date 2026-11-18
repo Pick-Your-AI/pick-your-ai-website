@@ -14,7 +14,7 @@
  */
 import type { BuildSnapshot, CatalogSnapshot, ComponentKind, ContractName } from '../../contracts';
 import { BASELINE_GRAPH, BASELINE_RULESET } from '../../contracts';
-import { DataError } from '../errors';
+import { DataError, isDataError } from '../errors';
 import { LocalBuildRepository } from '../local-builds';
 import { ProvenanceEvidenceProvider } from '../shared';
 import type {
@@ -305,7 +305,25 @@ export class HttpBuildRepository implements BuildRepository {
       });
     }
     const saved = { ...stored, build: value };
-    await this.local.save(saved, null);
+    // HTTP acknowledgments can arrive out of order across callers. Keep each
+    // caller's acknowledged revision, but do not regress the browser's head.
+    for (;;) {
+      let cachedRevision = 0;
+      try {
+        cachedRevision = (await this.local.get(id)).build.revision;
+      } catch (error) {
+        if (!isDataError(error) || error.kind !== 'not_found') throw error;
+      }
+      if (cachedRevision > revision) break;
+      try {
+        // The local CAS also checks for an intervening write after the read.
+        // Zero means no cached row was found; valid saved revisions start at 1.
+        await this.local.save(saved, cachedRevision);
+        break;
+      } catch (error) {
+        if (!isDataError(error) || error.kind !== 'conflict') throw error;
+      }
+    }
     return saved;
   }
   remove(buildId: string): Promise<void> {
