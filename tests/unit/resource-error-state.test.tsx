@@ -20,6 +20,7 @@ function Summary({ build }: { build: BuildSnapshot }) {
     ready: true,
     catalogById: BY_ID,
     startNew: vi.fn(),
+    remove: vi.fn(),
   } as unknown as ReturnType<typeof useBuilder>);
   return <BuildSummaryPage />;
 }

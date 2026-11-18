@@ -40,6 +40,7 @@ for (const detail of [false, true]) {
       saveState: { status: 'saved' },
       apply: vi.fn(),
       startNew: vi.fn(),
+      remove: vi.fn(),
       open: vi.fn(),
       restore: vi.fn(),
     }));

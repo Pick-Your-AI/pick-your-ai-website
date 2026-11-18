@@ -40,6 +40,7 @@ function show(
     saveState: { status: 'saved' },
     apply,
     startNew: vi.fn(),
+    remove: vi.fn(),
     open: vi.fn(),
     restore: vi.fn(),
   });

@@ -257,9 +257,25 @@ export class HttpBuildRepository implements BuildRepository {
   readonly storageKind = 'http' as const;
   private readonly client: ContractHttpClient;
   private readonly local: LocalBuildRepository;
+  private readonly cacheWork = new Map<string, Promise<void>>();
+  private readonly forgotten = new Map<string, object>();
   constructor(client: ContractHttpClient, local = new LocalBuildRepository()) {
     this.client = client;
     this.local = local;
+  }
+  /** Serialize only browser-cache work; HTTP requests remain independent. */
+  private withCache<T>(id: string, work: () => Promise<T>): Promise<T> {
+    const before = this.cacheWork.get(id) ?? Promise.resolve();
+    const current = before.then(work);
+    const settled = current.then(
+      () => {},
+      () => {},
+    );
+    this.cacheWork.set(id, settled);
+    void settled.then(() => {
+      if (this.cacheWork.get(id) === settled) this.cacheWork.delete(id);
+    });
+    return current;
   }
   list(): Promise<SavedBuildSummary[]> {
     // v1 has no list endpoint; the browser keeps an index of builds it created.
@@ -273,6 +289,7 @@ export class HttpBuildRepository implements BuildRepository {
   async save(stored: StoredBuild, expectedRevision: number | null): Promise<StoredBuild> {
     const b = stored.build;
     const { id, revision } = b;
+    const generation = this.forgotten.get(id);
     // A saved revision must permit an exact +1 step in JavaScript. Capture the
     // submitted identity before awaiting so caller mutation cannot retarget it.
     const nextRevision = expectedRevision === null ? 1 : expectedRevision + 1;
@@ -307,27 +324,35 @@ export class HttpBuildRepository implements BuildRepository {
     const saved = { ...stored, build: value };
     // HTTP acknowledgments can arrive out of order across callers. Keep each
     // caller's acknowledged revision, but do not regress the browser's head.
-    for (;;) {
-      let cachedRevision = 0;
-      try {
-        cachedRevision = (await this.local.get(id)).build.revision;
-      } catch (error) {
-        if (!isDataError(error) || error.kind !== 'not_found') throw error;
+    await this.withCache(id, async () => {
+      // A write dispatched before successful Forget still returns its API acknowledgement,
+      // but must not repopulate the browser copy after that removal.
+      if (this.forgotten.get(id) !== generation) return;
+      for (;;) {
+        let cachedRevision = 0;
+        try {
+          cachedRevision = (await this.local.get(id)).build.revision;
+        } catch (error) {
+          if (!isDataError(error) || error.kind !== 'not_found') throw error;
+        }
+        if (cachedRevision > revision) break;
+        try {
+          // The local CAS also checks for an intervening write after the read.
+          // Zero means no cached row was found; valid saved revisions start at 1.
+          await this.local.save(saved, cachedRevision);
+          break;
+        } catch (error) {
+          if (!isDataError(error) || error.kind !== 'conflict') throw error;
+        }
       }
-      if (cachedRevision > revision) break;
-      try {
-        // The local CAS also checks for an intervening write after the read.
-        // Zero means no cached row was found; valid saved revisions start at 1.
-        await this.local.save(saved, cachedRevision);
-        break;
-      } catch (error) {
-        if (!isDataError(error) || error.kind !== 'conflict') throw error;
-      }
-    }
+    });
     return saved;
   }
   remove(buildId: string): Promise<void> {
-    return this.local.remove(buildId); // v1 has no delete; forget locally only.
+    return this.withCache(buildId, async () => {
+      await this.local.remove(buildId); // v1 has no delete; forget locally only.
+      this.forgotten.set(buildId, {});
+    });
   }
 }
 

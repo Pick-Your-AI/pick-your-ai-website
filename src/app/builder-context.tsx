@@ -1,7 +1,7 @@
 /*
- * The working build ("current draft"). Every change is committed as a new revision, persisted to
- * the BuildRepository with compare-and-swap on the previous revision, and analysed for cross-tier
- * invalidation against the contract dependency graph.
+ * The working build ("current draft"). Valid changes enter an immutable save queue with
+ * compare-and-swap on the acknowledged revision; incomplete HTTP edits remain staged locally.
+ * The provider also coordinates current selection and forgetting with pending saves/navigation.
  */
 import {
   createContext,
@@ -22,9 +22,8 @@ import { affectedByChange, type InvalidationResult } from '../domain/invalidatio
 import { isDataError } from '../data/errors';
 import { useData } from './data-context';
 import { buildQueryKey } from './build-query-key';
+import { forgetCurrentId, readCurrentId, writeCurrentId } from './current-build-id';
 import { useCatalog, useGraph } from './queries';
-
-const CURRENT_KEY = 'pyai.currentBuildId';
 
 export interface LastChange extends InvalidationResult {
   revision: number;
@@ -34,6 +33,8 @@ export interface LastChange extends InvalidationResult {
 type SaveState = { status: 'idle' | 'saving' | 'saved' } | { status: 'error'; message: string };
 
 interface SaveSession {
+  buildId: string;
+  navigation: number;
   /** Only an HTTP draft with no dispatched creation may coalesce edits at revision 1. */
   preCreate: boolean;
   /** Invalid current content is staged outside the immutable write queue. */
@@ -54,7 +55,7 @@ interface BuilderApi {
   catalogById: ReadonlyMap<string, CatalogItem>;
   lastChange: LastChange | null;
   saveState: SaveState;
-  /** Commit a change as a new revision. */
+  /** Edit the draft; schema-valid HTTP snapshots enter the next immutable save revision. */
   apply: (
     change: (b: BuildSnapshot) => BuildSnapshot,
     summary: string,
@@ -63,26 +64,13 @@ interface BuilderApi {
   /** Start a new build (optionally from a template build) and make it current. */
   startNew: (template?: BuildSnapshot, name?: string) => void;
   open: (buildId: string) => Promise<void>;
+  /** Remove a browser entry and retire its pending client writes without deleting API data. */
+  remove: (buildId: string) => Promise<void>;
   /** Restore an older revision's content as a new revision. */
   restore: (revision: number) => void;
 }
 
 const BuilderContext = createContext<BuilderApi | null>(null);
-
-function readCurrentId(): string | null {
-  try {
-    return localStorage.getItem(CURRENT_KEY);
-  } catch {
-    return null;
-  }
-}
-function writeCurrentId(id: string) {
-  try {
-    localStorage.setItem(CURRENT_KEY, id);
-  } catch {
-    /* storage unavailable: draft lives in memory only */
-  }
-}
 
 export function BuilderProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
@@ -96,6 +84,7 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
   const [saveState, setSaveState] = useState<SaveState>({ status: 'idle' });
   const draftRef = useRef<BuildDraft | null>(null);
   const saveSession = useRef<SaveSession | null>(null);
+  const removedThrough = useRef(new Map<string, number>());
   const navigation = useRef(0);
   const rememberedBuild = useRef<{ id: string | null } | null>(null);
   // Set once the user starts, opens or changes a build, so a slow initial load never overwrites it.
@@ -104,8 +93,10 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
   const snapshotId = catalog.data?.id;
 
   const activate = useCallback(
-    (next: BuildDraft, revision: number | null) => {
+    (next: BuildDraft, revision: number | null, openedAt = navigation.current) => {
       saveSession.current = {
+        buildId: next.build.id,
+        navigation: openedAt,
         preCreate: builds.storageKind === 'http' && revision === null,
         stagedError: null,
         revision,
@@ -170,6 +161,9 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
     (next: BuildDraft) => {
       const session = saveSession.current;
       if (!session) return;
+      const retired = () =>
+        session.navigation <= (removedThrough.current.get(session.buildId) ?? -1);
+      if (retired()) return;
       if (builds.storageKind === 'http') {
         const result = validateContract('BuildSnapshot', next.build);
         if (!result.ok) {
@@ -196,8 +190,16 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
       void (async () => {
         try {
           while (session.queue.length) {
+            if (retired()) {
+              session.queue.length = 0;
+              break;
+            }
             const pending = session.queue[0]!;
             await builds.save(pending, session.revision);
+            if (retired()) {
+              session.queue.length = 0;
+              break;
+            }
             session.revision = pending.build.revision;
             session.queue.shift();
             if (builds.storageKind === 'http') {
@@ -227,7 +229,7 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
           };
         } finally {
           session.running = false;
-          if (saveSession.current === session) {
+          if (saveSession.current === session && !retired()) {
             setSaveState(session.error ?? session.stagedError ?? { status: 'saved' });
           }
         }
@@ -274,66 +276,112 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
     [catalogById, graph.data, persist],
   );
 
-  const startNew = useCallback<BuilderApi['startNew']>(
-    (template, name) => {
-      // Claim the draft immediately so a slower initial load cannot replace it.
-      touched.current = true;
-      const request = ++navigation.current;
-      void (async () => {
-        try {
-          if (builds.storageKind === 'http') await validatorsReady;
-        } catch (error) {
-          if (request !== navigation.current) return;
-          setLoadError(error ?? new Error('Could not load build validators.'));
-          setReady(true);
-          setSaveState({ status: 'error', message: 'Could not load build validators.' });
-          return;
-        }
-        if (request !== navigation.current) return;
-        const catalogSnapshotId = snapshotId ?? (await catalogRepo.getSnapshot()).id;
-        if (request !== navigation.current) return;
-        const base = createBuild({ catalogSnapshotId, name });
-        const build: BuildSnapshot = template
-          ? {
-              ...template,
-              id: base.id,
-              revision: 1,
-              created_at: base.created_at,
-              updated_at: base.updated_at,
-              lifecycle: 'draft',
-              owner_ref: base.owner_ref,
-              name: name ?? template.name,
-            }
-          : base;
-        const next = createDraft(
-          build,
-          template ? `Created from "${template.name}"` : 'Created build',
-        );
-        touched.current = true;
-        setLastChange(null);
-        activate(next, null);
+  const createNew = useCallback(
+    async (
+      request: number,
+      expectedSession: SaveSession | null | undefined,
+      ...[template, name]: Parameters<BuilderApi['startNew']>
+    ) => {
+      // A removal fallback must yield to a newer completed open, including the same request.
+      const canActivate = () =>
+        request === navigation.current &&
+        (expectedSession === undefined || saveSession.current === expectedSession);
+      try {
+        if (builds.storageKind === 'http') await validatorsReady;
+      } catch (error) {
+        if (!canActivate()) return;
+        setLoadError(error ?? new Error('Could not load build validators.'));
         setReady(true);
-        void persist(next);
-      })();
+        setSaveState({ status: 'error', message: 'Could not load build validators.' });
+        return;
+      }
+      if (!canActivate()) return;
+      const catalogSnapshotId = snapshotId ?? (await catalogRepo.getSnapshot()).id;
+      if (!canActivate()) return;
+      const base = createBuild({ catalogSnapshotId, name });
+      const build: BuildSnapshot = template
+        ? {
+            ...template,
+            id: base.id,
+            revision: 1,
+            created_at: base.created_at,
+            updated_at: base.updated_at,
+            lifecycle: 'draft',
+            owner_ref: base.owner_ref,
+            name: name ?? template.name,
+          }
+        : base;
+      const next = createDraft(
+        build,
+        template ? `Created from "${template.name}"` : 'Created build',
+      );
+      touched.current = true;
+      setLastChange(null);
+      activate(next, null, request);
+      // An unsaved HTTP draft must not leave the previous build selected on reload.
+      writeCurrentId(null);
+      setReady(true);
+      void persist(next);
     },
     [activate, persist, snapshotId, catalogRepo, builds.storageKind],
+  );
+
+  const startNew = useCallback<BuilderApi['startNew']>(
+    (...args) => {
+      // Claim the draft immediately so a slower initial load cannot replace it.
+      touched.current = true;
+      void createNew(++navigation.current, undefined, ...args);
+    },
+    [createNew],
   );
 
   const open = useCallback<BuilderApi['open']>(
     async (buildId) => {
       const request = ++navigation.current;
+      const superseded = () =>
+        request !== navigation.current || request <= (removedThrough.current.get(buildId) ?? -1);
       if (builds.storageKind === 'http') await validatorsReady;
-      if (request !== navigation.current) return;
+      if (superseded()) return;
       const stored = await builds.get(buildId);
-      if (request !== navigation.current) return;
+      if (superseded()) return;
       touched.current = true;
       setLastChange(null);
-      activate(stored, stored.build.revision);
+      activate(stored, stored.build.revision, request);
       setReady(true);
       writeCurrentId(buildId);
       setSaveState({ status: 'saved' });
     },
     [activate, builds],
+  );
+
+  const remove = useCallback<BuilderApi['remove']>(
+    async (buildId) => {
+      const request = navigation.current;
+      const remembered = rememberedBuild.current?.id ?? readCurrentId();
+      await builds.remove(buildId);
+      // Retire only actions at or before this removal; an explicit later reopen remains usable.
+      removedThrough.current.set(
+        buildId,
+        Math.max(request, removedThrough.current.get(buildId) ?? -1),
+      );
+      const current = draftRef.current;
+      const session = saveSession.current;
+      const reopened = current?.build.id === buildId && session && session.navigation > request;
+      const removedCurrent = !reopened && forgetCurrentId(buildId);
+      if (rememberedBuild.current?.id === buildId) rememberedBuild.current = { id: null };
+      if (
+        (current?.build.id === buildId && !reopened) ||
+        (!current && (removedCurrent || remembered === buildId))
+      ) {
+        touched.current = true;
+        // Preserve a newer pending navigation. If it fails, this fresh draft remains usable;
+        // if it completes before the fallback, expectedSession prevents replacing its result.
+        const fallbackRequest =
+          request === navigation.current ? ++navigation.current : navigation.current;
+        await createNew(fallbackRequest, session);
+      }
+    },
+    [builds, createNew],
   );
 
   const restore = useCallback<BuilderApi['restore']>(
@@ -368,6 +416,7 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
       apply,
       startNew,
       open,
+      remove,
       restore,
     }),
     [
@@ -381,6 +430,7 @@ export function BuilderProvider({ children }: { children: ReactNode }) {
       apply,
       startNew,
       open,
+      remove,
       restore,
     ],
   );

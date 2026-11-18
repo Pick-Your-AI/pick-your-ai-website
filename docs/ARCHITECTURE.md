@@ -15,7 +15,7 @@ Vite 8 · React 19 · TypeScript 6 (strict, `noUncheckedIndexedAccess`) · plain
 | Layer             | Path                                                     | Responsibility                                                                                                                                                                        |
 | ----------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Presentation      | `src/pages`, `src/features/*`, `src/components`          | Pages, builder UI, catalog UI, primitives (`status.tsx`, `feedback.tsx`, `layout.tsx`, `icon.tsx`) and the view helpers `lib/layers.ts`, `lib/item-cost.ts`, `lib/compat.ts`          |
-| Application       | `src/app`                                                | Routing, `BuilderProvider` (current draft, commit, persistence, invalidation), TanStack Query hooks keyed by build id and revision                                                    |
+| Application       | `src/app`                                                | Routing, `BuilderProvider` (current draft, save queue, current selection, removal and invalidation), TanStack Query hooks keyed by complete build snapshot content                    |
 | Domain / contract | `src/contracts`, `src/domain`                            | Generated types and validators, registry, baseline graph and ruleset, evaluator (port of `reference/evaluate.py`), activation, invalidation, build operations, cost, freshness, share |
 | Data access       | `src/data`                                               | Provider interfaces (`types.ts`), HTTP client and providers, local build repository, configuration (`config.ts`), `DataError`                                                         |
 | Fixtures          | `src/data/fixture`                                       | Synthetic catalog, pricebook, starter stacks, fixture providers                                                                                                                       |
@@ -27,22 +27,32 @@ The builder route includes a small loading shell in the initial bundle so its he
 
 ## Data flow for a change
 
-```text
-user action (Add / Replace / Configure / Remove / Objectives)
-  → BuilderProvider.apply(change, summary, changedKinds)
-      commit(): new immutable BuildSnapshot (revision + 1), history kept (last 50)
-      affectedByChange(graph, changedKinds, ctx before, ctx after)  → "re-checked" notices
-      BuildRepository.save(draft, expectedRevision)  (compare-and-swap; 409 on stale writer)
-  → React re-render with the new revision
-      useBuildAnalysis(build):
-        ['cost', id, rev]       PricingProvider.estimate
-        ['resources', id, rev]  ResourceEstimateProvider.estimate
-        ['evaluation', id, rev, costId, resourceId] CompatibilityEvaluator.evaluate(build, {cost, resources})
-      prior-evaluation metadata is labelled stale; findings, verdicts, counts and readiness await the current report
-  → current-report aria-live announcement: "Revision N evaluated: X failing, Y unknown"
-```
+1. A user action calls `BuilderProvider.apply(change, summary, changedKinds)`. The
+   dependency graph determines the affected kinds and the re-check notices.
+2. Local storage can retain incomplete drafts. HTTP storage requires a complete,
+   schema-valid `BuildSnapshot` before queueing it. Incomplete initial edits stay
+   at revision 1; an invalid later successor remains at the next staged revision
+   until corrected. Valid queued snapshots are immutable, and the saved history
+   remains bounded to the last 50 revisions.
+3. The save queue submits each valid snapshot after its predecessor is acknowledged,
+   using that acknowledged revision for compare-and-swap. A failed attempted write
+   stays ahead of dependent writes; a conflict requires recovery rather than an
+   unconditional overwrite.
+4. `useBuildAnalysis` and compatible-options hooks use `buildQueryKey`: build ID,
+   revision and canonical JSON snapshot content. Evaluation also includes the
+   admitted cost and resource evidence content. The canonical serializer uses an
+   explicit stack for deeply nested accepted JSON. Different staged/imported
+   snapshots cannot share findings just by declaring the same ID and revision.
+5. An HTTP acknowledgement resets queries for that exact saved snapshot, including
+   catalog compatibility and comparison analysis. Reset cancels pre-save reads
+   before refetching, so a late missing-build response cannot leave the saved
+   snapshot stuck. Other snapshots retain their independent query state.
 
-Build-derived results are keyed by `(build id, revision)`, and evaluation also includes the admitted immutable cost and resource evidence IDs. Late or replacement evidence triggers reevaluation. The query layer excludes evidence from another build or revision and marks previous reports as stale. The builder withholds previous findings, summary outcomes, counts, readiness and screen-reader announcements until the current report is available.
+The query layer excludes foreign, placeholder and failed-refresh evidence from
+current results. The builder withholds previous findings, summary outcomes,
+counts, readiness and screen-reader announcements until the report is current.
+Its live announcement then identifies the evaluated revision and result counts.
+Client query identity does not change the server's ID/revision wire protocol.
 
 ## Contracts and versioning
 
@@ -56,8 +66,9 @@ The website does **not** own compatibility policy. `src/domain/evaluator.ts` int
 
 ## State management
 
-- **Server/data state** lives in TanStack Query. Catalog, graph, ruleset and pricebook use `staleTime: Infinity` because they are immutable. Build-derived queries are keyed by revision.
-- **Current draft** lives in `BuilderProvider` (React state). The `pyai.currentBuildId` key points at the draft in `LocalBuildRepository` (`pyai.build.<id>`, `pyai.builds.index`).
+- **Server/data state** lives in TanStack Query. Catalog, graph, ruleset and pricebook use `staleTime: Infinity` because they are immutable. Build-derived queries include complete snapshot content.
+- **Current draft** lives in `BuilderProvider` (React state). `pyai.currentBuildId` remembers a successfully saved or explicitly opened build. Activating an unsaved new draft clears that pointer; a failed HTTP create does not silently select the previous build on reload. Local records and the HTTP browser index use `pyai.build.<id>` and `pyai.builds.index`. HTTP GET does not write that index.
+- **Removal** is coordinated by `BuilderProvider.remove`. A successful removal clears only the matching remembered identity, retires that build's older pending save queue and pending opens, while preserving a newer explicit start/open and its ability to save. If a newer pending open fails, the removed current build is replaced with a fresh draft. The fallback yields to a newer completed open. HTTP removal forgets the browser entry only: v1 has no DELETE endpoint. Within one `HttpBuildRepository` instance, per-build cache serialization and removal generations prevent pre-removal acknowledgements from recreating the forgotten entry. A later explicit save may index it again. This does not promise cross-process localStorage transactions or server-side deletion/retention.
 - **URL state** holds selection-page filters, sort, compatibility bucket and compare list (query string), compare targets (`?ids=`, `?builds=`, `?revisions=`) and share payloads (`/shared#b1.<base64url>`, never sent to the server).
 - **Theme** uses `pyai.theme`, applied before first paint by `public/theme-init.js`.
 

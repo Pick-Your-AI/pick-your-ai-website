@@ -24,6 +24,7 @@ async function showBuild(build: BuildSnapshot, current = false) {
     saveState: { status: 'saved' },
     apply: vi.fn(),
     startNew: vi.fn(),
+    remove: vi.fn(),
     open: vi.fn(),
     restore: vi.fn(),
   });
@@ -111,6 +112,7 @@ it.each(['loading', 'pricing failure', 'evaluation failure'])(
       saveState: { status: 'saved' },
       apply: vi.fn(),
       startNew: vi.fn(),
+      remove: vi.fn(),
       open: vi.fn(),
       restore: vi.fn(),
     });

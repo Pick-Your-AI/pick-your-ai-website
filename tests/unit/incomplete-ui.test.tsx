@@ -24,6 +24,7 @@ function show(build = buildWith([]), revisions = [build]) {
     saveState: { status: 'saved' },
     apply: vi.fn(),
     startNew: vi.fn(),
+    remove: vi.fn(),
     open: vi.fn(),
     restore: vi.fn(),
   });

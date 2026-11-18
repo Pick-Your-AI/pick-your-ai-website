@@ -82,6 +82,7 @@ async function harness(failure?: 'pricing' | 'evaluation' | 'get') {
     saveState: { status: 'idle' },
     apply: vi.fn(),
     startNew: vi.fn(),
+    remove: (id: string) => providers.builds.remove(id),
     open: vi.fn(),
     restore: vi.fn(),
   } as unknown as ReturnType<typeof useBuilder>);

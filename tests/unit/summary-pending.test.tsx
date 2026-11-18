@@ -37,6 +37,7 @@ describe.each(['summary', 'shared'] as const)('%s evaluation presentation', (pag
       saveState: { status: 'saved' },
       apply: vi.fn(),
       startNew: vi.fn(),
+      remove: vi.fn(),
       open: vi.fn(),
       restore: vi.fn(),
     });

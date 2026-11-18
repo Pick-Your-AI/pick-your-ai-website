@@ -71,7 +71,7 @@ const formatDate = (iso: string) =>
 export default function MyBuildsPage() {
   const { builds, mode, pricing, compatibility } = useData();
   const storage = builds.storageKind;
-  const { draft, open, startNew, loadError, retryLoad } = useBuilder();
+  const { draft, open, startNew, remove, loadError, retryLoad } = useBuilder();
   const navigate = useNavigate();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -192,8 +192,7 @@ export default function MyBuildsPage() {
   };
 
   const removeOne = async (summary: SavedBuildSummary) => {
-    await builds.remove(summary.id);
-    if (summary.id === draft?.build.id) startNew();
+    await remove(summary.id);
     await invalidate();
     toast(
       storage === 'http'

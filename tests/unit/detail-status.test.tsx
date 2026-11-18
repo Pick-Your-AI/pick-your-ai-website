@@ -26,6 +26,7 @@ describe('component detail compatibility presentation', () => {
         saveState: { status: 'saved' },
         apply: vi.fn(),
         startNew: vi.fn(),
+        remove: vi.fn(),
         open: vi.fn(),
         restore: vi.fn(),
       });

@@ -48,6 +48,7 @@ function show(
     saveState,
     apply,
     startNew: vi.fn(),
+    remove: vi.fn(),
     open: vi.fn(),
     restore,
   });

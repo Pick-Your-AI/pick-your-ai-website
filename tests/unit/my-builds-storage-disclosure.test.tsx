@@ -58,6 +58,7 @@ function showBuilds(providers: DataProviders) {
     draft: null,
     open: vi.fn(),
     startNew: vi.fn(),
+    remove: (id: string) => providers.builds.remove(id),
   } as unknown as ReturnType<typeof useBuilder>);
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },

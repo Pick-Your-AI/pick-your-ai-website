@@ -106,6 +106,7 @@ function SummaryView({ build }: { build: BuildSnapshot }) {
     saveState: { status: 'saved' },
     apply: vi.fn(),
     startNew: vi.fn(),
+    remove: vi.fn(),
     open: vi.fn(),
     restore: vi.fn(),
   });

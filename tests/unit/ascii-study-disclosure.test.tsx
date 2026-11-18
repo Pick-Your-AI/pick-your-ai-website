@@ -39,6 +39,7 @@ function providersWith(remoteBuilds: boolean) {
 function renderStudy(remoteBuilds: boolean) {
   vi.mocked(useBuilder).mockReturnValue({
     startNew: vi.fn(),
+    remove: vi.fn(),
   } as unknown as ReturnType<typeof useBuilder>);
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, retryDelay: 0, gcTime: 0 } },

@@ -35,6 +35,7 @@ describe('locked pricebook on component surfaces', () => {
       saveState: { status: 'saved' },
       apply: vi.fn(),
       startNew: vi.fn(),
+      remove: vi.fn(),
       open: vi.fn(),
       restore: vi.fn(),
     });
