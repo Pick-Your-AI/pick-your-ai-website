@@ -44,6 +44,7 @@ export interface FixtureOptions {
 const delay = (ms: number) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve());
 
 export class FixtureCatalogRepository implements CatalogRepository {
+  readonly defaultPricebookId: string;
   private readonly data: Promise<{
     snapshot: CatalogSnapshot;
     graph: DependencyGraph;
@@ -51,6 +52,7 @@ export class FixtureCatalogRepository implements CatalogRepository {
   }>;
   private readonly latency: number;
   constructor(opts: FixtureOptions = {}) {
+    this.defaultPricebookId = (opts.pricebook ?? DEMO_PRICEBOOK).id;
     // Validate fixtures exactly as live responses would be validated.
     this.data = validatorsReady.then(() => ({
       snapshot: assertContract('CatalogSnapshot', opts.catalog ?? DEMO_CATALOG),

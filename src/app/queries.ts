@@ -70,10 +70,19 @@ export function useBuildAnalysis(build: BuildSnapshot | null | undefined) {
     placeholderData: keepPreviousData,
     retry: 1,
   });
+  const pricebookId = build?.locks.pricebook_id ?? data.catalog.defaultPricebookId;
   const costReady =
-    build && cost.data?.build_id === build.id && cost.data.build_revision === build.revision;
+    build &&
+    !cost.isError &&
+    !cost.isPlaceholderData &&
+    cost.data?.build_id === build.id &&
+    cost.data.build_revision === build.revision &&
+    Boolean(pricebookId) &&
+    cost.data.pricebook_id === pricebookId;
   const resourceEstimate =
     build &&
+    !resources.isError &&
+    !resources.isPlaceholderData &&
     resources.data?.status === 'available' &&
     resources.data.estimate.build_id === build.id &&
     resources.data.estimate.build_revision === build.revision
@@ -83,8 +92,10 @@ export function useBuildAnalysis(build: BuildSnapshot | null | undefined) {
     queryKey: [
       'evaluation',
       ...buildKey(build),
-      costReady ? cost.data?.id : null,
-      resourceEstimate?.id ?? null,
+      // Local preview estimates can retain an ID while expiry changes their contents.
+      // Key by admitted evidence so replaced cost/capacity data cannot reuse an old verdict.
+      costReady ? cost.data : null,
+      resourceEstimate,
     ],
     queryFn: () =>
       data.compatibility.evaluate(build!, {
@@ -98,6 +109,9 @@ export function useBuildAnalysis(build: BuildSnapshot | null | undefined) {
   const report = evaluation.data;
   const reportIsCurrent = Boolean(
     !evaluation.isPlaceholderData &&
+    !evaluation.isError &&
+    !cost.isFetching &&
+    (!resources.isFetching || !resourceEstimate) &&
     report &&
     build &&
     report.build_id === build.id &&
@@ -114,6 +128,7 @@ export function useBuildAnalysis(build: BuildSnapshot | null | undefined) {
     resources:
       build &&
       !resources.isPlaceholderData &&
+      !resources.isError &&
       (resources.data?.status === 'unavailable' || resourceEstimate)
         ? resources.data
         : undefined,

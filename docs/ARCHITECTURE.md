@@ -37,12 +37,12 @@ user action (Add / Replace / Configure / Remove / Objectives)
       useBuildAnalysis(build):
         ['cost', id, rev]       PricingProvider.estimate
         ['resources', id, rev]  ResourceEstimateProvider.estimate
-        ['evaluation', id, rev, costId, resourceId] CompatibilityEvaluator.evaluate(build, {cost, resources})
+        ['evaluation', id, rev, costEvidence, resourceEvidence] CompatibilityEvaluator.evaluate(build, {cost, resources})
       prior-evaluation metadata is labelled stale; findings, verdicts, counts and readiness await the current report
   → current-report aria-live announcement: "Revision N evaluated: X failing, Y unknown"
 ```
 
-Build-derived results are keyed by `(build id, revision)`, and evaluation also includes the admitted immutable cost and resource evidence IDs. Late or replacement evidence triggers reevaluation. The query layer excludes evidence from another build or revision and marks previous reports as stale. The builder withholds previous findings, summary outcomes, counts, readiness and screen-reader announcements until the current report is available.
+Build-derived results are keyed by `(build id, revision)`, and evaluation also includes the admitted cost and resource evidence content. Replacement evidence can reuse an ID, so content changes still trigger reevaluation. The query layer excludes evidence from another build or revision, cost evidence from a different locked or configured default pricebook, and retained data from failed refreshes. Reports remain stale while admitted evidence refreshes. The builder withholds previous findings, summary outcomes, counts, readiness and screen-reader announcements until the current report is available.
 
 ## Contracts and versioning
 
@@ -52,7 +52,7 @@ Build-derived results are keyed by `(build id, revision)`, and evaluation also i
 
 ## Compatibility integration boundary
 
-The website does **not** own compatibility policy. `src/domain/evaluator.ts` interprets the published `Ruleset` using the contract's three-valued semantics, and `tests/unit/evaluator-parity.test.ts` proves it matches the research reference interpreter: it reproduces `examples/evaluation-report.json` and matches `evaluate.py` output on 7 scenarios, running Python in CI. In `http` mode the API's `POST /builds/{id}/evaluate` result is used instead. The website adds only presentation: lettering, grouping, wording, and "compatible-options" buckets, which run the same ruleset on hypothetical substitutions.
+The website does **not** own compatibility policy. `src/domain/evaluator.ts` interprets the published `Ruleset` using the contract's three-valued semantics, and `tests/unit/evaluator-parity.test.ts` proves it matches the research reference interpreter: it reproduces `examples/evaluation-report.json` and matches `evaluate.py` output on 7 scenarios, running Python in CI. In `http` mode with the `v1` API surface, the API's `POST /builds/{id}/evaluate` result is used instead. The read-only `static` surface fetches the locked graph and ruleset and evaluates them locally; it does not create a resource-estimate service. The website adds presentation: lettering, grouping, wording, and "compatible-options" buckets, which run the same ruleset on hypothetical substitutions.
 
 ## State management
 

@@ -41,7 +41,8 @@ import { LAYERS, itemLogo, layerOf } from '../../lib/layers';
 import { download } from './BuildToolbar';
 import { ObjectivesForm } from './ObjectivesForm';
 import { SettingsForm } from './SettingsForm';
-import { BuilderLoading, BUILDER_DESCRIPTION } from './BuilderLoading';
+import { BuilderLoading } from './BuilderLoading';
+import { SyntheticBadge } from '../../components/status';
 
 function GroupRow({
   tier,
@@ -94,6 +95,7 @@ function ComponentRow({
   price,
   enabled,
   addAnother,
+  labelSynthetic,
   onConfigure,
   onToggleEnabled,
   onRemove,
@@ -106,6 +108,7 @@ function ComponentRow({
   enabled: boolean;
   /** True on the last row of a `cardinality: many` kind, which may take another selection. */
   addAnother: boolean;
+  labelSynthetic: boolean;
   onConfigure: () => void;
   onToggleEnabled: () => void;
   onRemove: () => void;
@@ -132,6 +135,7 @@ function ComponentRow({
           {item ? (
             <span>
               <Link to={`${kindPath(kind)}/${item.id.replace(/\./g, '~')}`}>{item.name}</Link>
+              {labelSynthetic && item.tags?.includes('synthetic') ? <SyntheticBadge /> : null}
               {rowSubtitle(item) ? <span className="pt-sub">{rowSubtitle(item)}</span> : null}
               {enabled ? null : (
                 <span className="pchip pchip-unknown">Disabled — excluded from checks</span>
@@ -282,7 +286,7 @@ export default function BuilderPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const { draft, ready, apply, startNew, restore, saveState, lastChange } = useBuilder();
-  const { mode } = useData();
+  const { mode, catalog: catalogRepository } = useData();
   const catalog = useCatalog();
   const pricebook = usePricebook(draft?.build.locks.pricebook_id);
   const ruleset = useRuleset();
@@ -316,6 +320,20 @@ export default function BuilderPage() {
       </div>
     );
   if (!ready || !build || !catalog.data || !ctx || !cov) return <BuilderLoading />;
+
+  const syntheticCount = catalog.data.items.filter((item) =>
+    item.tags?.includes('synthetic'),
+  ).length;
+  const allSynthetic = syntheticCount > 0 && syntheticCount === catalog.data.items.length;
+  const mixedCatalog = syntheticCount > 0 && !allSynthetic;
+  // Transport mode says nothing about provenance. Use the book admitted for this build lock.
+  const pricebookId = build.locks.pricebook_id ?? catalogRepository.defaultPricebookId;
+  const lockedBook = pricebook.data?.id === pricebookId ? pricebook.data : undefined;
+  const syntheticPrices = lockedBook?.id.startsWith('prices.demo.') ?? false;
+  const description =
+    allSynthetic && syntheticPrices
+      ? 'One row per component slot, in dependency order. Prices and compatibility come from synthetic demo data; nothing here is a quote or a vendor specification.'
+      : `One row per component slot, in dependency order. ${allSynthetic ? 'Components are synthetic demo data.' : mixedCatalog ? 'Synthetic demo records are labelled; other component evidence is recorded per item.' : 'Component evidence is recorded per item.'} Estimates and compatibility checks are not quotes or vendor specifications.`;
 
   const report = analysis.reportIsCurrent ? analysis.report : undefined;
   const failed = report?.summary.failed ?? 0;
@@ -437,6 +455,7 @@ export default function BuilderPage() {
             }
             enabled={selection.enabled}
             addAnother={many && index === selections.length - 1}
+            labelSynthetic={mixedCatalog}
             onConfigure={() => setConfigure(selection.id)}
             onToggleEnabled={() => {
               const next = !selection.enabled;
@@ -469,7 +488,7 @@ export default function BuilderPage() {
             </>
           }
           title="Choose your parts"
-          description={BUILDER_DESCRIPTION}
+          description={description}
           actions={
             <>
               <button type="button" className="pbtn" onClick={() => setJsonOpen(true)}>
@@ -665,12 +684,21 @@ export default function BuilderPage() {
             <small>
               {total
                 ? total.coverage === 'complete'
-                  ? `/${total.period_days} days · synthetic estimate`
+                  ? `/${total.period_days} days · ${total.pricebook_id.startsWith('prices.demo.') ? 'synthetic estimate' : 'pricebook estimate'}`
                   : `/${total.period_days} days · lower bound, ${total.unpriced_selection_ids.length} unpriced`
                 : 'nothing priced yet'}
             </small>
           </div>
-          <span className="pbar-meta">Not a quote · synthetic demo pricebook</span>
+          <span className="pbar-meta">
+            Not a quote ·{' '}
+            {lockedBook
+              ? syntheticPrices
+                ? 'synthetic demo pricebook'
+                : build.locks.pricebook_id
+                  ? 'locked pricebook estimate'
+                  : 'configured pricebook estimate'
+              : 'pricebook unavailable'}
+          </span>
         </div>
 
         <div className="parts-sections">

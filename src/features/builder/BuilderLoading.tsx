@@ -3,7 +3,7 @@ import { PartsHead } from '../../components/PartsHead';
 import { Loading } from '../../components/feedback';
 
 export const BUILDER_DESCRIPTION =
-  'One row per component slot, in dependency order. Prices and compatibility come from synthetic demo data; nothing here is a quote or a vendor specification.';
+  'One row per component slot, in dependency order. Component evidence and locked pricebook estimates will appear when loaded; estimates and compatibility checks are not quotes or vendor specifications.';
 
 /** Keep the page identity visible while either editor code or build data loads. */
 export function BuilderLoading() {

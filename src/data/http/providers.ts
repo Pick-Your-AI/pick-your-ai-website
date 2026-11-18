@@ -395,12 +395,18 @@ export class StaticMirrorCompatibilityEvaluator implements CompatibilityEvaluato
   }
   async evaluate(build: BuildSnapshot, evidence: EvaluationEvidence = {}) {
     const { snapshot, ruleset } = await this.lockedArtifacts(build);
+    const pricebookId = build.locks.pricebook_id ?? this.catalog.defaultPricebookId;
+    // A quote from another book cannot establish a budget result for this locked build.
+    const costEstimate =
+      pricebookId && evidence.costEstimate?.pricebook_id === pricebookId
+        ? evidence.costEstimate
+        : null;
     const report = evaluateBuild({
       build,
       catalog: snapshot,
       ruleset,
       resourceEstimate: evidence.resourceEstimate ?? null,
-      costEstimate: evidence.costEstimate ?? null,
+      costEstimate,
       evaluatedAt: this.now(),
     });
     return assertContract('EvaluationReport', report);
