@@ -196,6 +196,7 @@ export function MiniBuild({
   conflicts,
   unknown,
   incomplete,
+  synthetic = true,
 }: {
   selected: number;
   required: { done: number; total: number };
@@ -205,6 +206,8 @@ export function MiniBuild({
   unknown: number;
   /** Presence-only incompleteness (#294): a missing required pick is not an incompatibility. */
   incomplete?: { chosen: number; total: number; remediation: string } | undefined;
+  /** Whether the catalog being presented is the synthetic fixture. Real sourced records say so. */
+  synthetic?: boolean;
 }) {
   // An empty stack has no cost yet — `$0.00` would read as a measured zero.
   const total = costShort(selected === 0 ? undefined : cost);
@@ -247,7 +250,9 @@ export function MiniBuild({
               : outcome === 'pass'
                 ? 'No published rule fails for this revision.'
                 : 'Not evaluated yet.'}{' '}
-        Estimates are synthetic demo data, not quotes.
+        {synthetic
+          ? 'Estimates are synthetic demo data, not quotes.'
+          : 'Estimates use the configured pricebook. An unknown cost is not zero or a quote.'}
       </p>
       <div style={{ padding: '0 10px 10px' }}>
         <Link className="pbtn" to="/builder" style={{ width: '100%' }}>

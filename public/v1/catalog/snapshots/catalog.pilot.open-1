@@ -1,0 +1,85 @@
+{
+  "schema_version": "1.0.0",
+  "id": "catalog.pilot.open-1",
+  "revision": 1,
+  "captured_at": "2026-11-05T14:30:00Z",
+  "items": [
+    {
+      "schema_version": "1.0.0",
+      "id": "cat.model_provider.qwen",
+      "kind": "model_provider",
+      "tier": "T1",
+      "name": "Qwen",
+      "version": "2026-11-05",
+      "status": "active",
+      "billing_class": "unknown",
+      "spec": {},
+      "description": "Publisher identity behind the Qwen2.5-0.5B-Instruct open-weight model. No provider-wide license, hosting commitment, SLA or pricing claim is made; the Apache-2.0 license recorded on the model is a property of that model artifact, not of the publisher.",
+      "provenance": [
+        {
+          "source_uri": "https://huggingface.co/Qwen",
+          "checked_at": "2026-11-05T14:30:00Z",
+          "verification_status": "unverified",
+          "notes": "Publisher identity read from the Qwen organization on the model hub and from the model card; not independently corroborated. Any provider-wide licensing, hosting, SLA or pricing terms are unestablished and omitted rather than inferred from one model artifact."
+        }
+      ],
+      "updated_at": "2026-11-05T14:30:00Z"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "cat.model.qwen25_05b_instruct",
+      "kind": "model",
+      "tier": "T1",
+      "name": "Qwen2.5-0.5B-Instruct",
+      "version": "7ae557604adf67be50417f59c2c2f167def9a775",
+      "status": "active",
+      "billing_class": "unknown",
+      "spec": {
+        "provider_ref": "cat.model_provider.qwen",
+        "model_type": "generative",
+        "modalities_in": [
+          "text"
+        ],
+        "modalities_out": [
+          "text"
+        ],
+        "context_window_tokens": 32768,
+        "max_output_tokens": 8192,
+        "access_modes": [
+          "weights"
+        ],
+        "weight_access": "open",
+        "model_formats": [
+          "safetensors"
+        ]
+      },
+      "description": "Open-weight instruction-tuned text model distributed under the Apache License 2.0, published as safetensors at this immutable revision. The version is the exact Hugging Face commit, not a consumer release label. Hosted inference availability, throughput, quality and cost are not established by these sources.",
+      "license": {
+        "spdx_id": "Apache-2.0",
+        "commercial_use_allowed": true,
+        "self_hosting_allowed": true
+      },
+      "provenance": [
+        {
+          "source_uri": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/blob/7ae557604adf67be50417f59c2c2f167def9a775/README.md",
+          "checked_at": "2026-11-05T14:30:00Z",
+          "verification_status": "unverified",
+          "notes": "Publisher model card at the immutable revision states 'Context Length: Full 32,768 tokens and generation 8192 tokens'. Hub metadata for this revision lists tags transformers, safetensors and 'license:apache-2.0', and declares 494,032,768 BF16 parameters. No pytorch format is published for this revision, so only safetensors is claimed. No independent task-quality or hosted-service measurement was performed."
+        },
+        {
+          "source_uri": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/blob/7ae557604adf67be50417f59c2c2f167def9a775/config.json",
+          "checked_at": "2026-11-05T14:30:00Z",
+          "verification_status": "unverified",
+          "notes": "Immutable-revision config.json reports max_position_embeddings=32768, model_type=qwen2, vocab_size=151936. Same publisher as the model card, so this grounds different fields rather than providing independent corroboration."
+        },
+        {
+          "source_uri": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/blob/7ae557604adf67be50417f59c2c2f167def9a775/LICENSE",
+          "checked_at": "2026-11-05T14:30:00Z",
+          "verification_status": "unverified",
+          "notes": "Publisher-distributed LICENSE at the immutable revision is the Apache License, Version 2.0 text. This is a property of this model artifact; it establishes no provider-wide licence, hosting terms, SLA or pricing."
+        }
+      ],
+      "updated_at": "2026-11-05T14:30:00Z"
+    }
+  ]
+}

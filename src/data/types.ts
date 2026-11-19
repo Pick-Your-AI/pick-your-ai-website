@@ -25,6 +25,8 @@ export interface CatalogRepository {
   getItem(id: string): Promise<CatalogItem>;
   getDependencyGraph(): Promise<DependencyGraph>;
   getRuleset(): Promise<Ruleset>;
+  /** Pricebook a brand-new build should lock. A static mirror publishes one specific artifact. */
+  defaultPricebookId?: string;
 }
 
 export interface SavedBuildSummary {

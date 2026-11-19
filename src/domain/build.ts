@@ -41,6 +41,8 @@ export interface NewBuildOptions {
   id?: string;
   name?: string;
   catalogSnapshotId: string;
+  /** Locks the pricebook this deployment actually publishes; omitted keeps the fixture default. */
+  pricebookId?: string | undefined;
   now?: string;
   objectives?: Partial<BuildObjectives>;
 }
@@ -76,7 +78,7 @@ export function createBuild(opts: NewBuildOptions): BuildSnapshot {
       ruleset_version: BASELINE_RULESET.version,
       dependency_graph_id: BASELINE_GRAPH.id,
       dependency_graph_revision: BASELINE_GRAPH.revision,
-      pricebook_id: DEFAULT_PRICEBOOK_ID,
+      pricebook_id: opts.pricebookId ?? DEFAULT_PRICEBOOK_ID,
     },
     selections: [],
     links: [],

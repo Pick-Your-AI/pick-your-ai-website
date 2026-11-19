@@ -92,6 +92,25 @@ function project(
         assumptions: ['Always-on instances.'],
       };
     }
+    /*
+     * license_month and one_time carry no quantity basis in contracts/v1.
+     *
+     * The schema lists both in the meter enum and stops there: it defines no unit, no
+     * proration rule and no period semantics for either. A monthly licence could be billed
+     * per seat, per month, as a minimum-term commitment or as a flat annual charge, and a
+     * one-time charge is not obviously per unit at all. Deriving "periodDays / 30" would be
+     * inventing the contract's arithmetic, and the current pilot rate is an explicitly
+     * unverified 0.00 estimate — a fabricated quantity would render that as a confident cost
+     * line. So these meters report that the rate exists without asserting a computed total.
+     */
+    case 'license_month':
+    case 'one_time':
+      return {
+        quantity: '1',
+        assumptions: [
+          'The published contract defines no quantity basis for this meter, so this is the recorded rate only — not a computed total. Treat the period cost as unknown.',
+        ],
+      };
     case 'storage_gb_month': {
       const gb = settings.provisioned_gb;
       if (gb === undefined) return 'Set provisioned GB on the storage selection.';
@@ -133,8 +152,24 @@ export function estimateCost(
   const currency = build.objectives.currency;
   const lines: Line[] = [];
   const unpriced = new Set<string>();
+  /*
+   * The preview caveat must describe the pricebook that was actually priced. The fixture demo
+   * pricebook is synthetic; a configured pricebook is not, even though its rates may be unverified
+   * estimates. The domain cannot see build configuration, so it reads the pricebook's own identity
+   * and rate provenance instead of assuming.
+   */
+  const syntheticPricebook = pricebook.id.startsWith('prices.demo.');
+  const unverifiedRates = pricebook.rates.some(
+    (r) => r.provenance.verification_status !== 'verified',
+  );
   const warnings: string[] = [
-    'Preview estimator: synthetic demo prices and a simplified usage model. Not a quote.',
+    syntheticPricebook
+      ? 'Preview estimator: synthetic demo prices and a simplified usage model. Not a quote.'
+      : `Preview estimator over the configured pricebook ${pricebook.id} and a simplified usage model. ${
+          unverifiedRates
+            ? 'Its rates are unverified estimates, not vendor quotes.'
+            : 'Rates are source-recorded, not vendor quotes.'
+        }`,
     'Taxes, network egress, caching, retries and minimum commitments are not modelled.',
   ];
   const unverifiedBypass: string[] = [];

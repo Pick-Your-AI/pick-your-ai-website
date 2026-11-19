@@ -12,11 +12,20 @@
  * There is no read endpoint for resource estimates or a "current snapshot" in v1; the snapshot id
  * and graph/ruleset ids are configuration (see docs/DATA_INTEGRATION.md).
  */
-import type { BuildSnapshot, CatalogSnapshot, ComponentKind, ContractName } from '../../contracts';
-import { BASELINE_GRAPH, BASELINE_RULESET } from '../../contracts';
+import type {
+  BuildSnapshot,
+  CatalogSnapshot,
+  ComponentKind,
+  ContractName,
+  CostEstimate,
+  Pricebook,
+  Ruleset,
+} from '../../contracts';
+import { assertContract, BASELINE_GRAPH, BASELINE_RULESET } from '../../contracts';
 import { DataError } from '../errors';
 import { LocalBuildRepository } from '../local-builds';
-import { ProvenanceEvidenceProvider } from '../shared';
+import { UnavailableResourceEstimateProvider } from '../fixture/providers';
+import { ProvenanceEvidenceProvider, compatibleOptionsLocal } from '../shared';
 import type {
   BuildRepository,
   CatalogRepository,
@@ -30,6 +39,8 @@ import type {
   SavedBuildSummary,
   StoredBuild,
 } from '../types';
+import { estimateCost } from '../../domain/cost';
+import { evaluateBuild } from '../../domain/evaluator';
 import { ContractHttpClient, type FetchLike, idempotencyKey } from './client';
 
 export interface HttpProviderConfig {
@@ -42,6 +53,12 @@ export interface HttpProviderConfig {
   fetch?: FetchLike;
   /** Store builds on the API instead of in this browser (VITE_BUILD_STORE=http). */
   remoteBuilds?: boolean;
+  /**
+   * The API serves immutable GET artifacts only (VITE_API_SURFACE=static): catalog snapshot,
+   * pricebook, ruleset and dependency graph. Everything else runs locally, exactly as it does
+   * against fixtures. Use this to consume real data without deploying a dynamic service.
+   */
+  staticMirror?: boolean;
 }
 
 const enc = encodeURIComponent;
@@ -73,6 +90,10 @@ export class HttpCatalogRepository implements CatalogRepository {
   constructor(client: ContractHttpClient, cfg: HttpProviderConfig) {
     this.client = client;
     this.cfg = cfg;
+  }
+  /** The configured pricebook, so a new build locks the artifact this deployment publishes. */
+  get defaultPricebookId(): string | undefined {
+    return this.cfg.pricebookId;
   }
   getSnapshot(snapshotId?: string) {
     const id = snapshotId ?? this.cfg.catalogSnapshotId;
@@ -312,11 +333,141 @@ export class HttpBuildRepository implements BuildRepository {
   }
 }
 
+/**
+ * Pricing over a static mirror: fetch the published immutable pricebook, then compute the estimate
+ * in the browser using the same local estimator the fixtures use. No dynamic endpoints involved.
+ */
+/**
+ * Static-mirror compatibility. The published ruleset is the only one this deployment serves, so a
+ * build locked to a different ruleset id/version must not receive a baseline verdict presented
+ * against its own revision. Returning an explicit unsupported result keeps "unknown" honest.
+ */
+export class StaticMirrorCompatibilityEvaluator implements CompatibilityEvaluator {
+  private readonly catalog: CatalogRepository;
+  private readonly now: () => string;
+  constructor(catalog: CatalogRepository, now: () => string = () => new Date().toISOString()) {
+    this.catalog = catalog;
+    this.now = now;
+  }
+  /**
+   * A report stamps the snapshot and ruleset ids from the build lock, so evaluating against this
+   * deployment's current artifacts would label findings with a revision they were not computed
+   * from. The snapshot is resolved *by the locked id* — `getSnapshot` validates it — so a lock this
+   * deployment does not publish fails here instead of being answered from the current revision.
+   */
+  private async lockedArtifacts(
+    build: BuildSnapshot,
+  ): Promise<{ snapshot: CatalogSnapshot; ruleset: Ruleset }> {
+    const { ruleset_id: id, ruleset_version: version } = build.locks;
+    const ruleset = await this.catalog.getRuleset();
+    if (id !== ruleset.id || version !== ruleset.version) {
+      throw new DataError(
+        'unsupported',
+        `Build locks ruleset ${id}@${version}, but this deployment publishes ${ruleset.id}@${ruleset.version}. Compatibility is not evaluated against a different ruleset.`,
+      );
+    }
+    const snapshotId = build.locks.catalog_snapshot_id;
+    const snapshot = await this.catalog.getSnapshot(snapshotId).catch(() => {
+      throw new DataError(
+        'unsupported',
+        `Build locks catalog snapshot ${snapshotId}, which this deployment does not publish. Compatibility is not evaluated against a different snapshot.`,
+      );
+    });
+    /*
+     * The report also carries the graph identity from the lock, while the builder's change-impact
+     * analysis reads this deployment's configured graph. A foreign graph lock would therefore be
+     * stamped on a report whose impact was computed elsewhere, so it is refused for the same
+     * reason as a foreign snapshot.
+     */
+    const graph = await this.catalog.getDependencyGraph();
+    // A revision is a distinct immutable artifact: the same id at a different revision is not the
+    // graph the build locked, and stamping it would misattribute the report.
+    if (
+      build.locks.dependency_graph_id !== graph.id ||
+      build.locks.dependency_graph_revision !== graph.revision
+    ) {
+      throw new DataError(
+        'unsupported',
+        `Build locks dependency graph ${build.locks.dependency_graph_id}@${build.locks.dependency_graph_revision}, but this deployment publishes ${graph.id}@${graph.revision}. Compatibility is not reported against a different graph.`,
+      );
+    }
+    return { snapshot, ruleset };
+  }
+  async evaluate(build: BuildSnapshot, evidence: EvaluationEvidence = {}) {
+    const { snapshot, ruleset } = await this.lockedArtifacts(build);
+    const report = evaluateBuild({
+      build,
+      catalog: snapshot,
+      ruleset,
+      resourceEstimate: evidence.resourceEstimate ?? null,
+      costEstimate: evidence.costEstimate ?? null,
+      evaluatedAt: this.now(),
+    });
+    return assertContract('EvaluationReport', report);
+  }
+  async compatibleOptions(build: BuildSnapshot, kind: ComponentKind, role = 'primary') {
+    const { snapshot, ruleset } = await this.lockedArtifacts(build);
+    return compatibleOptionsLocal(build, snapshot, ruleset, kind, role);
+  }
+}
+
+export class StaticMirrorPricingProvider implements PricingProvider {
+  private readonly client: ContractHttpClient;
+  private readonly cfg: HttpProviderConfig;
+  private readonly catalog: CatalogRepository;
+  private readonly now: () => string;
+  constructor(
+    client: ContractHttpClient,
+    cfg: HttpProviderConfig,
+    catalog: CatalogRepository,
+    now: () => string = () => new Date().toISOString(),
+  ) {
+    this.client = client;
+    this.cfg = cfg;
+    this.catalog = catalog;
+    this.now = now;
+  }
+  async getPricebook(pricebookId?: string): Promise<Pricebook> {
+    const id = pricebookId ?? this.cfg.pricebookId;
+    if (!id) throw new DataError('unsupported', 'No pricebook is configured.');
+    const { value } = await this.client.contract('Pricebook', 'GET', `/pricebooks/${enc(id)}`);
+    return requireArtifactId('Pricebook', value, id);
+  }
+  async estimate(build: BuildSnapshot, periodDays = 30): Promise<CostEstimate> {
+    const pricebook = await this.getPricebook(build.locks.pricebook_id);
+    // The estimate is labelled with the build's lock, so it must be priced from that revision.
+    const snapshotId = build.locks.catalog_snapshot_id;
+    const snapshot = await this.catalog.getSnapshot(snapshotId).catch(() => {
+      throw new DataError(
+        'unsupported',
+        `Build locks catalog snapshot ${snapshotId}, which this deployment does not publish. Cost is not estimated against a different snapshot.`,
+      );
+    });
+    const estimate = estimateCost(build, new Map(snapshot.items.map((i) => [i.id, i])), pricebook, {
+      periodDays,
+      now: this.now(),
+    });
+    return assertContract('CostEstimate', estimate);
+  }
+}
+
 export function createHttpProviders(cfg: HttpProviderConfig): DataProviders {
   const client = new ContractHttpClient({ baseUrl: cfg.baseUrl, fetch: cfg.fetch });
+  const catalog = new HttpCatalogRepository(client, cfg);
+  if (cfg.staticMirror) {
+    return {
+      mode: 'http',
+      catalog,
+      builds: new LocalBuildRepository(),
+      compatibility: new StaticMirrorCompatibilityEvaluator(catalog),
+      pricing: new StaticMirrorPricingProvider(client, cfg, catalog),
+      evidence: new ProvenanceEvidenceProvider(),
+      resources: new UnavailableResourceEstimateProvider(),
+    };
+  }
   return {
     mode: 'http',
-    catalog: new HttpCatalogRepository(client, cfg),
+    catalog,
     builds: cfg.remoteBuilds ? new HttpBuildRepository(client) : new LocalBuildRepository(),
     compatibility: new HttpCompatibilityEvaluator(client),
     pricing: new HttpPricingProvider(client, cfg),

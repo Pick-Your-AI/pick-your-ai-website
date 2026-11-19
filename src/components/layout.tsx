@@ -37,12 +37,21 @@ export function Brand({ className = 'brand' }: { className?: string }) {
 /** "INTERACTIVE DESIGN PREVIEW" strip: the site's standing synthetic-data disclosure. */
 export function DemoBanner() {
   const { mode } = useData();
+  /*
+   * The fixture provider is the synthetic demo catalog. An HTTP deployment may serve the sourced
+   * pilot snapshot, but `mode` alone cannot say so: the full API surface can return any catalog.
+   * The banner therefore stays neutral for HTTP rather than asserting provenance it has not read.
+   * Reading `mode` (not a catalog query) keeps the global banner off every route's critical path;
+   * per-record provenance and the catalog header carry the specific claims.
+   */
+  const synthetic = mode === 'fixture';
   return (
     <div className="demo-banner" role="note" aria-label="Demo mode">
       <strong>INTERACTIVE DESIGN PREVIEW</strong>{' '}
       <span>
-        · Components, costs and compatibility checks use synthetic illustrative demo data, not
-        verified vendor information.
+        {synthetic
+          ? ' · Components, costs and compatibility checks use synthetic illustrative demo data, not verified vendor information.'
+          : ' · Components come from a configured catalog source. Provenance is recorded per record; cost and compatibility are not vendor-confirmed unless stated.'}
         {mode === 'http' ? ' This deployment reads a configured API.' : ''}{' '}
         <Link to="/methodology#data" className="underline underline-offset-2">
           Why?
