@@ -93,21 +93,23 @@ function project(
       };
     }
     /*
-     * Flat periodic fees. A monthly licence or a one-time charge has an explicit basis: one unit per
-     * month (prorated over the period) or one unit in total. That is the meter's definition, not a
-     * guessed quantity, and the assumption is recorded on the line.
+     * license_month and one_time carry no quantity basis in contracts/v1.
+     *
+     * The schema lists both in the meter enum and stops there: it defines no unit, no
+     * proration rule and no period semantics for either. A monthly licence could be billed
+     * per seat, per month, as a minimum-term commitment or as a flat annual charge, and a
+     * one-time charge is not obviously per unit at all. Deriving "periodDays / 30" would be
+     * inventing the contract's arithmetic, and the current pilot rate is an explicitly
+     * unverified 0.00 estimate — a fabricated quantity would render that as a confident cost
+     * line. So these meters report that the rate exists without asserting a computed total.
      */
     case 'license_month':
-      return {
-        quantity: trimDecimal(periodDays / 30),
-        assumptions: [
-          `Flat licence fee for ${trimDecimal(periodDays / 30)} month(s); no minimum term, seat count or escalation modelled.`,
-        ],
-      };
     case 'one_time':
       return {
         quantity: '1',
-        assumptions: ['One-time charge, not prorated over the period.'],
+        assumptions: [
+          'The published contract defines no quantity basis for this meter, so this is the recorded rate only — not a computed total. Treat the period cost as unknown.',
+        ],
       };
     case 'storage_gb_month': {
       const gb = settings.provisioned_gb;
