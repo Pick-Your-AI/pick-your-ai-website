@@ -55,7 +55,7 @@ Set these at build time (Vite `VITE_*` variables, baked into the static bundle):
 | `VITE_DATA_MODE`        | `fixture` \| `http` | `fixture`  | Any other value fails the build (`scripts/version-plugin.ts`) and shows a configuration error at runtime |
 | `VITE_API_BASE_URL`     | URL ending in `/v1` | —          | Required in `http` mode                                                                                  |
 | `VITE_CATALOG_SNAPSHOT` | snapshot id         | —          | Required in `http` mode, because v1 has no "current snapshot" endpoint                                   |
-| `VITE_PRICEBOOK_ID`     | pricebook id        | build lock | Optional                                                                                                 |
+| `VITE_PRICEBOOK_ID`     | pricebook id        | build lock | Required for `http` + `static`; optional for `full`                                                      |
 | `VITE_BUILD_STORE`      | `local` \| `http`   | `local`    | Store builds on the API instead of in the browser                                                        |
 
 | `VITE_API_SURFACE` | `full` \| `static` | `full` | `static` consumes only immutable GET artifacts; compatibility and cost run locally. This is the path for published real records without deploying a dynamic API. |

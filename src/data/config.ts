@@ -3,7 +3,7 @@
  *   VITE_DATA_MODE        fixture (default) | http
  *   VITE_API_BASE_URL     contract API base, e.g. https://api.example/v1   (http mode)
  *   VITE_CATALOG_SNAPSHOT catalog snapshot id to load                    (http mode)
- *   VITE_PRICEBOOK_ID     pricebook id                                    (http mode, optional)
+ *   VITE_PRICEBOOK_ID     pricebook id                                    (required for http static; optional for full)
  *   VITE_BUILD_STORE      local (default) | http — where builds are saved
  *   VITE_API_SURFACE      full (default) | static — static consumes immutable GET artifacts
  *                         (catalog snapshot, pricebook, ruleset, dependencies) and evaluates
@@ -46,6 +46,14 @@ export function createProviders(env: DataEnv): DataProviders {
         'VITE_API_SURFACE=full with a dynamic API.',
     );
   }
+  if (surface === 'static' && !env.VITE_PRICEBOOK_ID?.trim())
+    throw new DataConfigError(
+      'VITE_PRICEBOOK_ID is required when VITE_API_SURFACE=static. Set it to a pricebook published by the mirror.',
+    );
+  if (surface === 'static' && env.VITE_PRICEBOOK_ID !== env.VITE_PRICEBOOK_ID?.trim())
+    throw new DataConfigError(
+      'VITE_PRICEBOOK_ID must not contain leading or trailing whitespace when VITE_API_SURFACE=static. Set it to the exact pricebook ID published by the mirror.',
+    );
   return createHttpProviders({
     baseUrl: env.VITE_API_BASE_URL,
     catalogSnapshotId: env.VITE_CATALOG_SNAPSHOT,
